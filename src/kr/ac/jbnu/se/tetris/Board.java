@@ -11,7 +11,7 @@ import java.awt.event.KeyEvent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.Timer;
-
+//보드 UI 배치 - 수완
 public class Board extends JPanel implements ActionListener {
 
 	final int BoardWidth = 10;
