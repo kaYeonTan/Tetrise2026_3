@@ -21,7 +21,6 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,9 +28,12 @@ import java.util.Random;
 import javax.imageio.ImageIO;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
 public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener {
+
+    private static final long serialVersionUID = 1L;
 
     // 0 타이틀 1 저장목록 2 인원선택 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
     int screen = 0;
@@ -48,7 +50,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     Font font;
     Font fontBold;
     Font fontSmall;
-    BufferedImage mapImg;
+    transient BufferedImage mapImg;
 
     public boolean isTwoPlayer = false;
     public int stage = 1;
@@ -137,6 +139,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     };
 
+    @SuppressWarnings("this-escape")
     public GamePanel() {
         setPreferredSize(new Dimension(1280, 720));
         setFocusable(true);
@@ -149,16 +152,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             in = getClass().getResourceAsStream("/fonts/Galmuri9.ttf");
             fontSmall = Font.createFont(Font.TRUETYPE_FONT, in);
             mapImg = ImageIO.read(getClass().getResourceAsStream("/images/worldmap.png"));
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (java.awt.FontFormatException | java.io.IOException e) {
+            System.out.println("font or image load error");
             font = new Font("Dialog", Font.PLAIN, 12);
             fontBold = new Font("Dialog", Font.BOLD, 12);
             fontSmall = font;
         }
-        addKeyListener(this);
-        addMouseListener(this);
-        addMouseMotionListener(this);
-        addFocusListener(this);
+        SwingUtilities.invokeLater(() -> {
+            addKeyListener(this);
+            addMouseListener(this);
+            addMouseMotionListener(this);
+            addFocusListener(this);
+        });
         setFocusTraversalKeysEnabled(false);
         FileManager.loadKeys();
         timer = new Timer(16, this);
@@ -876,7 +881,20 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     boolean in(int x, int y, int w, int h) {
-        return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        boolean a = mouseX >= x;
+        boolean b = mouseX < x + w;
+        boolean c = mouseY >= y;
+        boolean d = mouseY < y + h;
+        if (a) {
+            if (b) {
+                if (c) {
+                    if (d) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -1104,18 +1122,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
         }
         rankList = new ArrayList<>(best.values());
-        Collections.sort(rankList, new Comparator<String[]>() {
-            @Override
-            public int compare(String[] a, String[] b) {
-                if (rankTab == 1) {
-                    int s1 = Integer.parseInt(a[2]) * 10 + Integer.parseInt(a[4]);
-                    int s2 = Integer.parseInt(b[2]) * 10 + Integer.parseInt(b[4]);
-                    if (s1 != s2) {
-                        return s2 - s1;
-                    }
+        Collections.sort(rankList, (a, b) -> {
+            if (rankTab == 1) {
+                int s1 = Integer.parseInt(a[2]) * 10 + Integer.parseInt(a[4]);
+                int s2 = Integer.parseInt(b[2]) * 10 + Integer.parseInt(b[4]);
+                if (s1 != s2) {
+                    return s2 - s1;
                 }
-                return Integer.parseInt(b[1]) - Integer.parseInt(a[1]);
             }
+            return Integer.parseInt(b[1]) - Integer.parseInt(a[1]);
         });
     }
 
@@ -1163,29 +1178,43 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
         if (screen == 0) {
-            drawTitle(g);
-        } else if (screen == 1 || screen == 2) {
-            drawSaves(g);
-            if (screen == 2) {
-                drawModeSelect(g);
-            }
-        } else if (screen == 3) {
-            drawRanking(g);
-        } else if (screen == 4) {
-            if (settingFrom == 0) {
+            if (screen == 0) {
                 drawTitle(g);
-            } else {
-                drawGame(g);
             }
-            drawSettings(g);
-        } else if (screen == 5) {
-            drawGame(g);
-        } else if (screen == 6) {
-            drawGame(g);
-            drawPause(g);
-        } else if (screen == 7) {
-            drawGame(g);
-            drawResult(g);
+        } else {
+            if (screen == 1 || screen == 2) {
+                drawSaves(g);
+                if (screen == 2) {
+                    drawModeSelect(g);
+                }
+            } else {
+                if (screen == 3) {
+                    drawRanking(g);
+                } else {
+                    if (screen == 4) {
+                        if (settingFrom == 0) {
+                            drawTitle(g);
+                        } else {
+                            drawGame(g);
+                        }
+                        drawSettings(g);
+                    } else {
+                        if (screen == 5) {
+                            drawGame(g);
+                        } else {
+                            if (screen == 6) {
+                                drawGame(g);
+                                drawPause(g);
+                            } else {
+                                if (screen == 7) {
+                                    drawGame(g);
+                                    drawResult(g);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1214,15 +1243,19 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.fillRect(x, y, w, h);
         Color fill;
         Color textColor;
-        if (type == 1) {
-            fill = hover ? new Color(0xc24536) : new Color(0xa8352a);
-            textColor = new Color(0xfff4e6);
-        } else if (type == 2) {
-            fill = hover ? new Color(0x4a3f52) : new Color(0x3a3040);
-            textColor = new Color(0xf0e2c8);
-        } else {
-            fill = hover ? new Color(0xefe0bf) : new Color(0xd9c29a);
-            textColor = new Color(0x1a1216);
+        switch (type) {
+            case 1:
+                fill = hover ? new Color(0xc24536) : new Color(0xa8352a);
+                textColor = new Color(0xfff4e6);
+                break;
+            case 2:
+                fill = hover ? new Color(0x4a3f52) : new Color(0x3a3040);
+                textColor = new Color(0xf0e2c8);
+                break;
+            default:
+                fill = hover ? new Color(0xefe0bf) : new Color(0xd9c29a);
+                textColor = new Color(0x1a1216);
+                break;
         }
         g.setColor(fill);
         g.fillRect(x + 4, y + 4, w - 8, h - 8);
@@ -1298,7 +1331,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x9a8f9f));
-        g.drawString("3조 · v0.1", 1170, 30);
     }
 
     void drawSaves(Graphics2D g) {
@@ -1472,24 +1504,16 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     Color blockColor(int v) {
-        switch (v) {
-            case 1:
-                return new Color(0x4fc3d9);
-            case 2:
-                return new Color(0xf2c94c);
-            case 3:
-                return new Color(0xa45ad8);
-            case 4:
-                return new Color(0x5cc05a);
-            case 5:
-                return new Color(0xe0524a);
-            case 6:
-                return new Color(0x4a6ee0);
-            case 7:
-                return new Color(0xf0943a);
-            default:
-                return new Color(0x7a7280);
-        }
+        return switch (v) {
+            case 1 -> new Color(0x4fc3d9);
+            case 2 -> new Color(0xf2c94c);
+            case 3 -> new Color(0xa45ad8);
+            case 4 -> new Color(0x5cc05a);
+            case 5 -> new Color(0xe0524a);
+            case 6 -> new Color(0x4a6ee0);
+            case 7 -> new Color(0xf0943a);
+            default -> new Color(0x7a7280);
+        };
     }
 
     void drawCell(Graphics2D g, int x, int y, int size, int v) {

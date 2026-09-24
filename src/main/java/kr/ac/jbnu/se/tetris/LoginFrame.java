@@ -1,7 +1,6 @@
 package kr.ac.jbnu.se.tetris;
 
 import java.awt.Color;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -16,21 +15,24 @@ import javax.swing.SwingUtilities;
 
 public class LoginFrame extends JDialog {
 
+    private static final long serialVersionUID = 1L;
+
     GamePanel panel;
     boolean isSignUp;
-    JPanel content;
-    JTextField nickField;
-    JTextField emailField;
-    JPasswordField pwField;
-    JPasswordField pw2Field;
-    JLabel msgLabel;
+    JPanel p;
+    JTextField n;
+    JTextField e;
+    JPasswordField pw;
+    JPasswordField pw2;
+    JLabel msg;
 
+    @SuppressWarnings("this-escape")
     public LoginFrame(GamePanel panel, boolean isSignUp) {
         super(SwingUtilities.getWindowAncestor(panel), isSignUp ? "회원가입" : "로그인", ModalityType.APPLICATION_MODAL);
         this.panel = panel;
         this.isSignUp = isSignUp;
         setResizable(false);
-        content = new JPanel() {
+        p = new JPanel() {
             @Override
             protected void paintComponent(Graphics g0) {
                 Graphics2D g = (Graphics2D) g0;
@@ -53,71 +55,71 @@ public class LoginFrame extends JDialog {
                 g.drawString(title, (getWidth() - w) / 2, 56);
             }
         };
-        content.setLayout(null);
-        setContentPane(content);
+        p.setLayout(null);
+        setContentPane(p);
         build();
         setLocationRelativeTo(panel);
     }
 
-    void build() {
-        content.removeAll();
+    private void build() {
+        p.removeAll();
         int y = 110;
-        nickField = new JTextField();
-        emailField = new JTextField();
-        pwField = new JPasswordField();
-        pw2Field = new JPasswordField();
-        y = addRow(isSignUp ? "닉네임 (한글·영문·숫자 2~10자)" : "닉네임", nickField, y);
+        n = new JTextField();
+        e = new JTextField();
+        pw = new JPasswordField();
+        pw2 = new JPasswordField();
+        y = addRow(isSignUp ? "닉네임 (한글·영문·숫자 2~10자)" : "닉네임", n, y);
         if (isSignUp) {
-            y = addRow("이메일", emailField, y);
+            y = addRow("이메일", e, y);
         }
-        y = addRow(isSignUp ? "비밀번호 (8자 이상)" : "비밀번호", pwField, y);
+        y = addRow(isSignUp ? "비밀번호 (8자 이상)" : "비밀번호", pw, y);
         if (isSignUp) {
-            y = addRow("비밀번호 확인", pw2Field, y);
+            y = addRow("비밀번호 확인", pw2, y);
         }
-        msgLabel = new JLabel(" ");
-        msgLabel.setFont(panel.font.deriveFont(16.5f));
-        msgLabel.setForeground(new Color(0xa8352a));
-        msgLabel.setBounds(60, y, 400, 26);
-        content.add(msgLabel);
+        msg = new JLabel(" ");
+        msg.setFont(panel.font.deriveFont(16.5f));
+        msg.setForeground(new Color(0xa8352a));
+        msg.setBounds(60, y, 400, 26);
+        p.add(msg);
         y += 34;
 
         JButton ok = makeButton(isSignUp ? "가입하고 모험 시작" : "로그인", true);
         ok.setBounds(60, y, 400, 50);
-        ok.addActionListener(e -> submit());
-        content.add(ok);
+        ok.addActionListener(x -> submit());
+        p.add(ok);
         y += 66;
 
         JLabel ask = new JLabel(isSignUp ? "이미 계정이 있나요?" : "아직 용사가 아니신가요?");
         ask.setFont(panel.font.deriveFont(16.5f));
         ask.setForeground(new Color(0x1a1216));
         ask.setBounds(60, y, 230, 40);
-        content.add(ask);
+        p.add(ask);
         JButton change = makeButton(isSignUp ? "로그인" : "회원가입", false);
         change.setBounds(300, y, 160, 40);
-        change.addActionListener(e -> {
+        change.addActionListener(x -> {
             isSignUp = !isSignUp;
             setTitle(isSignUp ? "회원가입" : "로그인");
             build();
         });
-        content.add(change);
+        p.add(change);
         y += 90;
 
-        content.setPreferredSize(new java.awt.Dimension(520, y));
+        p.setPreferredSize(new java.awt.Dimension(520, y));
         pack();
         setLocationRelativeTo(panel);
-        content.revalidate();
-        content.repaint();
+        p.revalidate();
+        p.repaint();
 
-        nickField.addActionListener(e -> (isSignUp ? emailField : pwField).requestFocusInWindow());
-        emailField.addActionListener(e -> pwField.requestFocusInWindow());
-        pwField.addActionListener(e -> {
+        n.addActionListener(x -> (isSignUp ? e : pw).requestFocusInWindow());
+        e.addActionListener(x -> pw.requestFocusInWindow());
+        pw.addActionListener(x -> {
             if (isSignUp) {
-                pw2Field.requestFocusInWindow();
+                pw2.requestFocusInWindow();
             } else {
                 submit();
             }
         });
-        pw2Field.addActionListener(e -> submit());
+        pw2.addActionListener(x -> submit());
     }
 
     int addRow(String label, JTextField field, int y) {
@@ -125,14 +127,14 @@ public class LoginFrame extends JDialog {
         l.setFont(panel.font.deriveFont(16.5f));
         l.setForeground(new Color(0x1a1216));
         l.setBounds(60, y, 400, 24);
-        content.add(l);
+        p.add(l);
         field.setFont(panel.font.deriveFont(22f));
         field.setBackground(new Color(0xefe0bf));
         field.setForeground(new Color(0x1a1216));
         field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x1a1216), 3),
                 BorderFactory.createEmptyBorder(4, 10, 4, 10)));
         field.setBounds(60, y + 28, 400, 44);
-        content.add(field);
+        p.add(field);
         return y + 84;
     }
 
@@ -149,50 +151,53 @@ public class LoginFrame extends JDialog {
     }
 
     void submit() {
-        String nick = nickField.getText().trim();
-        String pw = new String(pwField.getPassword());
+        String nick = n.getText().trim();
+        String pass = new String(pw.getPassword());
         if (isSignUp) {
-            String email = emailField.getText().trim();
-            String pw2 = new String(pw2Field.getPassword());
-            if (!nick.matches("^[가-힣A-Za-z0-9]{2,10}$")) {
-                msgLabel.setText("닉네임은 한글·영문·숫자 2~10자로 입력해 주세요.");
-                return;
-            }
-            if (!email.matches("^[^@\\s,]+@[^@\\s,]+\\.[^@\\s,]+$")) {
-                msgLabel.setText("이메일 형식이 올바르지 않아요.");
-                return;
-            }
-            if (pw.length() < 8 || pw.length() > 64) {
-                msgLabel.setText("비밀번호는 8~64자로 입력해 주세요.");
-                return;
-            }
-            // 쉼표 들어가면 파일 읽을때 깨짐
-            if (pw.contains(",")) {
-                msgLabel.setText("비밀번호에 쉼표(,)는 쓸 수 없어요.");
-                return;
-            }
-            if (!pw.equals(pw2)) {
-                msgLabel.setText("비밀번호 확인이 일치하지 않아요.");
-                return;
-            }
-            String result = FileManager.addUser(nick, email, pw);
-            if (result != null) {
-                msgLabel.setText(result);
-                return;
-            }
-            panel.loginUser = nick;
-            dispose();
-        } else {
-            if (nick.length() == 0 || pw.length() == 0) {
-                msgLabel.setText("닉네임과 비밀번호를 모두 입력해 주세요.");
-                return;
-            }
-            if (FileManager.checkUser(nick, pw)) {
-                panel.loginUser = FileManager.getNick(nick);
-                dispose();
+            String mail = e.getText().trim();
+            String pass2 = new String(pw2.getPassword());
+            if (nick.matches("^[가-힣A-Za-z0-9]{2,10}$")) {
+                if (mail.matches("^[^@\\s,]+@[^@\\s,]+\\.[^@\\s,]+$")) {
+                    if (pass.length() >= 8 && pass.length() <= 64) {
+                        if (!pass.contains(",")) {
+                            if (pass.equals(pass2)) {
+                                String result = FileManager.addUser(nick, mail, pass);
+                                if (result != null) {
+                                    msg.setText(result);
+                                    return;
+                                }
+                                panel.loginUser = nick;
+                                dispose();
+                            } else {
+                                msg.setText("비밀번호 확인이 일치하지 않아요.");
+                            }
+                        } else {
+                            msg.setText("비밀번호에 쉼표(,)는 쓸 수 없어요.");
+                        }
+                    } else {
+                        msg.setText("비밀번호는 8~64자로 입력해 주세요.");
+                    }
+                } else {
+                    msg.setText("이메일 형식이 올바르지 않아요.");
+                }
             } else {
-                msgLabel.setText("닉네임 또는 비밀번호가 올바르지 않아요.");
-                pwField.setText("");
+                msg.setText("닉네임은 한글·영문·숫자 2~10자로 입력해 주세요.");
+            }
+        } else {
+            if (nick.length() == 0) {
+                msg.setText("닉네임과 비밀번호를 모두 입력해 주세요.");
+            } else {
+                if (pass.length() == 0) {
+                    msg.setText("닉네임과 비밀번호를 모두 입력해 주세요.");
+                } else {
+                    if (FileManager.checkUser(nick, pass)) {
+                        panel.loginUser = FileManager.getNick(nick);
+                        dispose();
+                    } else {
+                        msg.setText("닉네임 또는 비밀번호가 올바르지 않아요.");
+                        pw.setText("");
+                    }
+                }
             }
         }
     }

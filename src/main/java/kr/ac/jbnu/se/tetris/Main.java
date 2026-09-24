@@ -9,7 +9,7 @@ public class Main {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("TETRIS · 스테이지 보스 러시 (3조)");
+            JFrame frame = new JFrame("TETRIS · 스테이지 보스 러시");
             GamePanel panel = new GamePanel();
             // 알림창 글씨체
             Font f = panel.font.deriveFont(16.5f);

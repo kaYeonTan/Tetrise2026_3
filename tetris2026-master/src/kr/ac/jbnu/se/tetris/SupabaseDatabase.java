@@ -18,21 +18,29 @@ public class SupabaseDatabase {
 	public String accessToken;
 	public String userId;
 
-	// 데이터베이스 생성
 	public SupabaseDatabase() {
-		String url = System.getenv("SUPABASE_URL");
-		String key = System.getenv("SUPABASE_ANON_KEY");
-		if ((url == null || url.isEmpty()) || (key == null || key.isEmpty())) {
-			String[] env = loadDotEnv();
-			if (url == null || url.isEmpty()) {
-				url = env[0];
-			}
-			if (key == null || key.isEmpty()) {
-				key = env[1];
+		String u = System.getenv("SUPABASE_URL");
+		String k = System.getenv("SUPABASE_ANON_KEY");
+		if (u == null) {
+			u = "";
+		}
+		if (k == null) {
+			k = "";
+		}
+		if (u.isEmpty()) {
+			String[] a = loadDotEnv();
+			if (a != null) {
+				u = a[0];
 			}
 		}
-		supabaseUrl = url;
-		anonKey = key;
+		if (k.isEmpty()) {
+			String[] a = loadDotEnv();
+			if (a != null) {
+				k = a[1];
+			}
+		}
+		supabaseUrl = u;
+		anonKey = k;
 	}
 
 	public SupabaseDatabase(String supabaseUrl, String anonKey) {
@@ -40,37 +48,37 @@ public class SupabaseDatabase {
 		this.anonKey = anonKey;
 	}
 
-	// .env 파일 읽기
 	public String[] loadDotEnv() {
-		String[] result = { "", "" };
-		File envFile = new File(".env");
-		if (!envFile.exists()) {
-			return result;
-		}
-		try (FileInputStream fis = new FileInputStream(envFile);
-				InputStreamReader isr = new InputStreamReader(fis, StandardCharsets.UTF_8);
-				BufferedReader reader = new BufferedReader(isr)) {
-			String line;
-			while ((line = reader.readLine()) != null) {
-				if (line.startsWith("#") || line.trim().isEmpty()) {
-					continue;
+		String[] a = { "", "" };
+		File f = new File(".env");
+		if (f.exists()) {
+			try (FileInputStream fis = new FileInputStream(f);
+					InputStreamReader isr = new InputStreamReader(fis, StandardCharsets.UTF_8);
+					BufferedReader r = new BufferedReader(isr)) {
+				String line = "";
+				while ((line = r.readLine()) != null) {
+					if (!line.startsWith("#")) {
+						if (!line.trim().isEmpty()) {
+							int i = line.indexOf('=');
+							if (i >= 0) {
+								String n = line.substring(0, i).trim();
+								String v = line.substring(i + 1).trim();
+								if (n.equals("SUPABASE_URL")) {
+									a[0] = v;
+								} else {
+									if (n.equals("SUPABASE_ANON_KEY")) {
+										a[1] = v;
+									}
+								}
+							}
+						}
+					}
 				}
-				int index = line.indexOf('=');
-				if (index < 0) {
-					continue;
-				}
-				String key = line.substring(0, index).trim();
-				String value = line.substring(index + 1).trim();
-				if ("SUPABASE_URL".equals(key)) {
-					result[0] = value;
-				} else if ("SUPABASE_ANON_KEY".equals(key)) {
-					result[1] = value;
-				}
+			} catch (Exception x) {
+				System.out.println("env file read error");
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
 		}
-		return result;
+		return a;
 	}
 
 	// 로그인 정보 넣기
@@ -81,15 +89,17 @@ public class SupabaseDatabase {
 		this.userId = null;
 	}
 
-	// 준비됐는지
 	public boolean isReady() {
-		if (supabaseUrl == null || anonKey == null) {
-			return false;
+		if (supabaseUrl != null) {
+			if (anonKey != null) {
+				if (!supabaseUrl.isEmpty()) {
+					if (!anonKey.isEmpty()) {
+						return true;
+					}
+				}
+			}
 		}
-		if (supabaseUrl.isEmpty() || anonKey.isEmpty()) {
-			return false;
-		}
-		return true;
+		return false;
 	}
 
 	// 주소 가져오기
@@ -101,34 +111,37 @@ public class SupabaseDatabase {
 		return anonKey;
 	}
 
-	// 회원가입 호출
 	public boolean register(String email, String password) {
-		String body = "{\"email\":\"" + escape(email) + "\",\"password\":\"" + escape(password) + "\"}";
-		String result = request("/auth/v1/signup", "POST", body, false);
-		if (result.startsWith("{")) {
-			if (!result.contains("\"error\"")) {
-				if (!result.contains("\"msg\"")) {
-					return true;
+		String b = "{\"email\":\"" + escape(email) + "\",\"password\":\"" + escape(password) + "\"}";
+		String r = request("/auth/v1/signup", "POST", b, false);
+		if (r != null) {
+			if (r.startsWith("{")) {
+				if (!r.contains("\"error\"")) {
+					if (!r.contains("\"msg\"")) {
+						return true;
+					}
 				}
 			}
 		}
 		return false;
 	}
 
-	// 로그인 호출
 	public boolean login(String email, String password) {
-		String body = "{\"email\":\"" + escape(email) + "\",\"password\":\"" + escape(password) + "\"}";
-		String result = request("/auth/v1/token?grant_type=password", "POST", body, false);
-		accessToken = getJsonValue(result, "access_token");
-		if (accessToken == null || accessToken.isEmpty()) {
-			return false;
+		String b = "{\"email\":\"" + escape(email) + "\",\"password\":\"" + escape(password) + "\"}";
+		String r = request("/auth/v1/token?grant_type=password", "POST", b, false);
+		accessToken = getJsonValue(r, "access_token");
+		if (accessToken != null) {
+			if (!accessToken.isEmpty()) {
+				String u = getJsonValue(r, "user");
+				userId = getJsonValue(u, "id");
+				if (userId != null) {
+					if (!userId.isEmpty()) {
+						return true;
+					}
+				}
+			}
 		}
-		String temp = getJsonValue(result, "user");
-		userId = getJsonValue(temp, "id");
-		if (userId == null || userId.isEmpty()) {
-			return false;
-		}
-		return true;
+		return false;
 	}
 
 	// 키 세팅 저장
@@ -254,58 +267,71 @@ public class SupabaseDatabase {
 		}
 	}
 
-	// 통신용 함수
 	public String request(String path, String method, String body, boolean loginRequired) {
-		if (!isReady()) {
-			return "";
-		}
-		if (loginRequired) {
-			if (accessToken == null || userId == null) {
+		if (isReady()) {
+			if (loginRequired) {
+				if (accessToken != null) {
+					if (userId != null) {
+						return doRequest(path, method, body);
+					}
+				}
 				return "";
 			}
+			return doRequest(path, method, body);
 		}
+		return "";
+	}
+
+	private String doRequest(String path, String method, String body) {
 		try {
-			URL url = new URL(supabaseUrl + path);
-			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-			connection.setRequestMethod(method);
-			connection.setRequestProperty("apikey", anonKey);
-			connection.setRequestProperty("Content-Type", "application/json");
-			connection.setRequestProperty("Prefer", "resolution=merge-duplicates,return=representation");
+			URL u = new URL(supabaseUrl + path);
+			HttpURLConnection c = (HttpURLConnection) u.openConnection();
+			c.setRequestMethod(method);
+			c.setRequestProperty("apikey", anonKey);
+			c.setRequestProperty("Content-Type", "application/json");
+			c.setRequestProperty("Prefer", "resolution=merge-duplicates,return=representation");
 			if (accessToken != null) {
-				connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+				c.setRequestProperty("Authorization", "Bearer " + accessToken);
 			}
 			if (body != null) {
-				connection.setDoOutput(true);
-				OutputStream output = connection.getOutputStream();
-				output.write(body.getBytes(StandardCharsets.UTF_8));
-				output.close();
+				c.setDoOutput(true);
+				OutputStream o = c.getOutputStream();
+				o.write(body.getBytes(StandardCharsets.UTF_8));
+				o.close();
 			}
-			InputStream input = connection.getResponseCode() >= 400 ? connection.getErrorStream() : connection.getInputStream();
-			BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
-			String result = "";
-			String line;
-			while ((line = reader.readLine()) != null) {
-				result += line;
+			InputStream in;
+			if (c.getResponseCode() >= 400) {
+				in = c.getErrorStream();
+			} else {
+				in = c.getInputStream();
 			}
-			reader.close();
-			connection.disconnect();
-			return result;
-		} catch (Exception e) {
-			e.printStackTrace();
+			BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+			String a = "";
+			String line = "";
+			while (line != null) {
+				line = r.readLine();
+				if (line != null) {
+					a = a + line;
+				}
+			}
+			r.close();
+			c.disconnect();
+			return a;
+		} catch (Exception x) {
+			System.out.println("supabase request error");
 			return "";
 		}
 	}
 
-	// 보드 배열을 문자열로 바꾸기
 	public String boardToString(Tetrominoes[] board) {
-		String result = "";
+		String a = "";
 		for (int i = 0; i < board.length; i++) {
 			if (i > 0) {
-				result += ",";
+				a = a + ",";
 			}
-			result += board[i].name();
+			a = a + board[i].name();
 		}
-		return result;
+		return a;
 	}
 
 	public String escape(String value) {
