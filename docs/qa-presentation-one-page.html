@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>테트리스 Q&A (1~4) — 발표용 한 페이지</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #fff;
+      --text: #1a1a1a;
+      --muted: #555;
+      --accent: #2563eb;
+      --border: #e2e8f0;
+      --q-bg: #eff6ff;
+      --a-bg: #f0fdf4;
+      --script-bg: #fefce8;
+      --explain-bg: #faf5ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 1.5rem;
+      max-width: 900px;
+      margin-inline: auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+    }
+    header h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+    header p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    }
+    section h2 {
+      margin: 0 0 1rem;
+      font-size: 1.15rem;
+      color: var(--accent);
+      border-left: 4px solid var(--accent);
+      padding-left: 0.6rem;
+    }
+    .block { margin-bottom: 1rem; }
+    .block:last-child { margin-bottom: 0; }
+    .label {
+      font-weight: 700;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+    }
+    .q { background: var(--q-bg); padding: 0.75rem 1rem; border-radius: 8px; }
+    .a { background: var(--a-bg); padding: 0.75rem 1rem; border-radius: 8px; }
+    .script { background: var(--script-bg); padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.95rem; }
+    .explain { background: var(--explain-bg); padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.92rem; }
+    .diagram {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 0.75rem 0 0;
+    }
+    ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    li { margin: 0.25rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+    }
+    th { background: #f1f5f9; }
+    code {
+      background: #e2e8f0;
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>테트리스 코드 Q&amp;A (질문 1~4)</h1>
+  <p>기준: <strong>코드 변경 전</strong> 튜토리얼 베이스 · 학부 1학년 톤 · 피피티 1~2장/문항</p>
+</header>
+
+<!-- ========== 1 ========== -->
+<section id="q1">
+  <h2>질문 1 — Board 클래스 분리</h2>
+
+  <div class="block">
+    <div class="label">질문</div>
+    <div class="q">
+      현재는 Board 클래스가 게임의 메인 시스템들을 모두 담당하고 있는데, 이것들을 분리하면 유지보수성이나 확장성이 얼마나 좋아지는지?
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">답변</div>
+    <div class="a">
+      단일 화면이고, 앞으로 기능을 더 붙이지 않는 테트리스라면 파일을 나누기보다 <strong>지금처럼 Board 하나</strong>로 두는 편이 단순하고 관리하기 쉽다.<br><br>
+      반면 <strong>키 입력 변경</strong>, <strong>줄 삭제·클리어 규칙 변경</strong>(예: 3조 보스마다 패턴·클리어 조건·줄 처리 방식이 다름), <strong>화면 UI 교체</strong>처럼 바뀌는 부분이 많아지면, Board에 모든 걸 두기보다 <strong>기능별로 클래스를 나누는 쪽이</strong> 수정 범위가 줄고 확장하기 <strong>훨씬</strong> 유리하다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">대본 (30초~1분)</div>
+    <div class="script">
+      우리 게임은 Tetris.java가 창만 열고, 진짜 게임은 Board 한 클래스에서 돌아갑니다. 규칙, 키, 타이머, 그림이 전부 Board 안에 있어요. 과제만 빨리 끝낼 거면 이대로도 충분히 괜찮습니다. 다만 3조처럼 보스마다 줄 지우는 방식이나 클리어 조건이 다르면, 한 파일에서 고치기 힘들어져서 규칙·입력·화면을 나누는 게 낫다고 정리했습니다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">이해용 설명 · 구조 (UML/피피티용)</div>
+    <div class="explain">
+      <strong>실행 흐름 (변경 전):</strong>
+      <div class="diagram">Tetris.main
+    └── new Tetris()  ← 창, 점수 라벨
+            └── new Board()  ← 여기서 게임 거의 전부
+                    ├── Timer → 블록 자동 낙하
+                    ├── TAdapter → 키 입력
+                    ├── tryMove / pieceDropped / removeFullLines → 규칙
+                    └── paint → 화면 그리기
+
+Shape.java → 블록 모양·회전만 (이미 Board 밖)</div>
+      <strong>Board 안 역할 (큰 박스 하나에 칸 나눠 그리기):</strong>
+      <table>
+        <tr><th>구역</th><th>하는 일 (쉬운 말)</th></tr>
+        <tr><td>게임 규칙</td><td>이동·충돌, 떨어뜨리기, 블록 고정, 줄 삭제, 게임 오버</td></tr>
+        <tr><td>입력</td><td>방향키, 회전, 스페이스, P(일시정지)</td></tr>
+        <tr><td>타이머</td><td>0.4초마다 한 칸 아래</td></tr>
+        <tr><td>화면</td><td>보드·블록 그리기, statusbar 글자</td></tr>
+      </table>
+      <strong>분리 후 (발표용 그림):</strong> GameRules(규칙) · Input(키) · View(그림) — 지금은 전부 Board.
+    </div>
+  </div>
+</section>
+
+<!-- ========== 2 ========== -->
+<section id="q2">
+  <h2>질문 2 — 블록 자동 배치 (AI)</h2>
+
+  <div class="block">
+    <div class="label">질문</div>
+    <div class="q">
+      블록을 배치할 위치를 자동으로 결정하는 기능을 만든다면, 가능한 모든 위치와 회전을 탐색한 뒤 높이·빈 공간·완성 가능한 줄 수 등을 점수화하는 방식이 일반적인지, 더 효율적인 탐색 방법도 있는지?
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">답변</div>
+    <div class="a">
+      테트리스 AI에서는 보통 <strong>여러 회전과 가로 위치</strong>에 대해 블록을 <strong>가상으로 떨어뜨려 착지</strong>시킨 뒤, <strong>줄 수·높이·구멍</strong> 같은 기준으로 <strong>점수</strong>를 매기고, 가장 좋은 후보를 고른다. 이 방식은 <strong>일반적인 기본 방법</strong>이다.<br><br>
+      상용 게임에서는 착지 위치를 <strong>고스트(반투명 미리보기)</strong>로 보여 주기도 한다. <strong>변경 전 우리 코드에는 고스트 UI는 없지만</strong>, <code>dropDown</code>이 <code>tryMove</code>를 반복해 “어디까지 떨어지는지” 구하는 것과 <strong>같은 종류의 계산</strong>이다. AI는 이를 <strong>회전 × 열(x)마다</strong> 반복한다.<br><br>
+      보드가 가로 <strong>10칸</strong>이라 블록 하나당 떨어질 수 있는 후보가 많지 않아, <strong>전부 탐색해도</strong> 충분히 빠르게 계산할 수 있다. 더 고급 AI는 다음 블록까지 보는 등 탐색을 늘리지만, 이 규모에서는 <strong>전수 탐색 + 점수</strong>로 충분하다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">대본 (30초~1분)</div>
+    <div class="script">
+      컴퓨터가 알아서 두려면, 사람이 여러 번 시험해 보는 걸 자동으로 합니다. 회전을 바꾸고, 왼쪽 오른쪽 위치를 바꾸고, 그 자리에서 끝까지 떨어뜨린 다음 점수를 매깁니다. 줄 많이 지우면 플러스, 구멍 생기면 마이너스 같은 식이에요. 일반 테트리스의 고스트는 “한 번에 한 위치의 착지”를 보여 주는 개념이고, 우리 원본 코드는 dropDown이 그 역할과 비슷합니다. 가로 10칸이라 후보가 적어서 전부 다 봐도 빠릅니다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">이해용 설명 · 구조</div>
+    <div class="explain">
+      <strong>AI 한 번의 생각 (흐름도):</strong>
+      <div class="diagram">현재 보드 + 지금 블록
+        │
+        ▼
+[후보 만들기]  회전(0~3) × 가로 위치(x) × 「아래로 떨군 착지 Y」
+        │              ↑ 변경 전: dropDown / tryMove 반복과 같은 계산
+        ▼
+[가상 배치]  진짜 게임은 안 건드림 (메모리만 복사)
+        ▼
+[점수]  + 지울 줄  /  − 높이·구멍 …
+        ▼
+최고 점수 후보 → 실제로 그렇게 둠</div>
+      <strong>1번과 연결:</strong> AI는 화면 안 그려도 됨 → 규칙만 따로 빼 두면 붙이기 쉽다.
+    </div>
+  </div>
+</section>
+
+<!-- ========== 3 ========== -->
+<section id="q3">
+  <h2>질문 3 — setRandomShape() 랜덤 방식</h2>
+
+  <div class="block">
+    <div class="label">질문</div>
+    <div class="q">
+      Shape.setRandomShape()에서 <code>Math.abs(r.nextInt()) % 7 + 1</code> 방식으로 블록을 선택하는데, <code>r.nextInt(7) + 1</code>을 사용하는 것과 어떤 차이가 있는지, 현재 방식에서 문제가 발생할 가능성은 없는지?
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">답변</div>
+    <div class="a">
+      둘 다 <code>Tetrominoes</code>에서 <strong>1~7번</strong>(실제 블록 7종)만 고르기 위해 <strong>1~7</strong>을 만드는 코드이다. <code>r.nextInt(7) + 1</code>은 Java가 <strong>0~6만</strong> 줘서 의미가 분명하고, 특수한 값 때문에 <strong>0번(NoShape)</strong>이 나올 여지가 없다.<br><br>
+      현재 방식은 옛 튜토리얼 스타일이며, <strong>평소 플레이에서는 7종이 랜덤으로 잘 동작</strong>한다. 다만 이론상 <code>nextInt()</code>가 <code>Integer.MIN_VALUE</code>일 때 <code>Math.abs</code>·<code>% 7 + 1</code>이 <strong>0</strong>이 되어 <strong>NoShape</strong>가 나올 수 있다(확률 극히 낮음). <strong>안전하고 읽기 좋은 쪽은 <code>r.nextInt(7) + 1</code></strong>이다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">대본 (20~40초)</div>
+    <div class="script">
+      enum 0번은 블록 없음, 1~7이 진짜 블록이에요. % 7 더하기 1은 1부터 7만 나오게 하는 코드입니다. nextInt(7) 더하기 1도 같은 목적인데 더 짧고 안전합니다. 지금 방식도 거의 문제없지만, 아주 특별한 int 값 하나에서 이론상 블록 없음이 나올 수 있어서, 바꾸면 더 깔끔하다고 설명하면 됩니다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">이해용 설명 · 구조</div>
+    <div class="explain">
+      <strong>Tetrominoes (변경 전):</strong>
+      <div class="diagram">0 = NoShape     ← 새 블록으로 쓰면 안 됨
+1 = ZShape
+2 = SShape
+3 = LineShape
+4 = TShape
+5 = SquareShape
+6 = LShape
+7 = MirroredLShape</div>
+      <table>
+        <tr><th>방식</th><th>결과</th><th>비고</th></tr>
+        <tr><td><code>Math.abs(r.nextInt()) % 7 + 1</code></td><td>보통 1~7</td><td>튜토리얼 흔한 패턴</td></tr>
+        <tr><td><code>r.nextInt(7) + 1</code></td><td>항상 1~7</td><td>권장, 의도 명확</td></tr>
+      </table>
+      <strong>언제 호출?</strong> Board의 <code>newPiece()</code> → <code>setRandomShape()</code> (새 블록 나올 때마다)
+    </div>
+  </div>
+</section>
+
+<!-- ========== 4 ========== -->
+<section id="q4">
+  <h2>질문 4 — Tetris.main vs Main.java</h2>
+
+  <div class="block">
+    <div class="label">질문</div>
+    <div class="q">
+      Tetris.java에 이미 main 메서드가 존재하는데 별도의 Main.java는 현재 프로그램 구조에서 필요한 클래스인가? 만약 필요하지 않은 클래스라면 Main.java는 어떻게 활용하면 좋은가?
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">답변</div>
+    <div class="a">
+      <strong>변경 전 테트리스 구조에서는 Main.java는 필요하지 않다.</strong> 게임 진입점은 <strong>Tetris.main</strong>이고, Main.java는 IDE 기본 예제라 Board·Shape 등을 쓰지 않고 콘솔에 Hello만 출력한다.<br><br>
+      <strong>활용:</strong> (1) 안 쓰면 <strong>삭제</strong>하거나 Run 설정을 <strong>Tetris만</strong> 사용해 헷갈림 방지. (2) 진입점을 한 이름으로 통일하고 싶으면 Main의 main에서 <code>new Tetris()</code>만 호출하는 <strong>런처</strong>로 바꿀 수 있다. (3) 나중에 메뉴·로그인을 먼저 띄우는 <strong>앱 시작 클래스</strong>나 콘솔 테스트용으로 쓸 수 있다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">대본 (20~40초)</div>
+    <div class="script">
+      Java는 main이 있는 클래스를 실행해서 프로그램이 시작됩니다. 테트리스는 Tetris.java의 main이 창을 띄웁니다. Main.java도 main이 있지만 테트리스랑 연결 안 된 IntelliJ 예제예요. 그래서 게임 돌릴 때 Main은 필요 없고, Tetris만 실행하면 됩니다. Main은 지우거나, Tetris를 호출하는 시작 버튼 역할로 바꿀 수 있습니다.
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="label">이해용 설명 · 구조</div>
+    <div class="explain">
+      <div class="diagram">실행 설정: Tetris  ──►  Tetris.main  ──►  게임 O
+
+실행 설정: Main     ──►  Main.main     ──►  Hello만 (테트리스 X)
+
+패키지:
+  kr.ac.jbnu.se.tetris.Tetris  ← 우리 게임
+  Main (기본 패키지, src 바로 아래)  ← 예제 파일</div>
+      <strong>헷갈리지 않게:</strong> main이 <strong>두 개</strong> 있는 것뿐, <strong>플레이는 Tetris</strong>만 보면 됨.
+    </div>
+  </div>
+</section>
+
+<footer>
+  tetris2026 · 발표용 요약 · 코드 변경 전 베이스 기준
+</footer>
+
+</body>
+</html>
