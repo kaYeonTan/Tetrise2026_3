@@ -30,4 +30,5 @@ bin/
 .vscode/
 
 ### Mac OS ###
-.DS_Store
+.DS_Storedata/users.txt
+data/keys.txt
