@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/Tetrise2026_3-main (1).iml" filepath="$PROJECT_DIR$/.idea/Tetrise2026_3-main (1).iml" />
+      <module fileurl="file://$PROJECT_DIR$/tetris2026-master.iml" filepath="$PROJECT_DIR$/tetris2026-master.iml" />
     </modules>
   </component>
 </project>
