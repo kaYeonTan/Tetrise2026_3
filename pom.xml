@@ -37,7 +37,7 @@
                         </goals>
                         <configuration>
                             <sources>
-                                <source>${project.basedir}/src/kr</source>
+                                <source>${project.basedir}/src</source>
                             </sources>
                         </configuration>
                     </execution>
@@ -57,6 +57,18 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>17</release>
+                    <excludes>
+                        <exclude>main/java/**</exclude>
+                        <exclude>test/java/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
                 <configuration>
@@ -70,7 +82,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>kr.ac.jbnu.se.tetris.Main</mainClass>
+                            <mainClass>kr.ac.jbnu.se.tetris.app.GameWindow</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -80,7 +92,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
                 <configuration>
-                    <mainClass>kr.ac.jbnu.se.tetris.Main</mainClass>
+                    <mainClass>kr.ac.jbnu.se.tetris.app.GameWindow</mainClass>
                 </configuration>
             </plugin>
         </plugins>

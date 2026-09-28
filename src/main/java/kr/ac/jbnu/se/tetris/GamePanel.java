@@ -31,6 +31,8 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
+import kr.ac.jbnu.se.tetris.integration.ASinglePlayerBridge;
+
 public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener {
 
     private static final long serialVersionUID = 1L;
@@ -47,7 +49,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     public String loginUser = null;
 
-    Font font;
+    public Font font;
     Font fontBold;
     Font fontSmall;
     transient BufferedImage mapImg;
@@ -111,6 +113,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     ArrayList<String[]> saveList = new ArrayList<>();
 
     Random random = new Random();
+
+    /** 1인: A GameEngine + Board (B UI 위에 올림) */
+    transient ASinglePlayerBridge aEngineBridge;
 
     // I O T S Z J L
     static int[][][] SHAPES = {
@@ -223,9 +228,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     pressed.clear();
                     msg = "STAGE " + stage + " 시작!";
                     msgTimer = 90;
-                    spawnP1();
-                    if (isTwoPlayer) {
-                        spawnP2();
+                    if (!isTwoPlayer && aEngineBridge != null) {
+                        aEngineBridge.startStage(stage);
+                    } else {
+                        spawnP1();
+                        if (isTwoPlayer) {
+                            spawnP2();
+                        }
                     }
                 }
             }
@@ -233,25 +242,49 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         gameTime += 16;
         int[] k = isTwoPlayer ? keyP1 : keySingle;
-        if (pressed.contains(k[0])) {
-            p1LeftCount += 16;
-            if (p1LeftCount >= 170) {
-                moveP1(-1);
-                p1LeftCount -= 50;
+        if (!useAEngine()) {
+            if (pressed.contains(k[0])) {
+                p1LeftCount += 16;
+                if (p1LeftCount >= 170) {
+                    moveP1(-1);
+                    p1LeftCount -= 50;
+                }
             }
-        }
-        if (pressed.contains(k[1])) {
-            p1RightCount += 16;
-            if (p1RightCount >= 170) {
-                moveP1(1);
-                p1RightCount -= 50;
+            if (pressed.contains(k[1])) {
+                p1RightCount += 16;
+                if (p1RightCount >= 170) {
+                    moveP1(1);
+                    p1RightCount -= 50;
+                }
             }
-        }
-        if (pressed.contains(k[2])) {
-            p1DownCount += 16;
-            if (p1DownCount >= 50) {
-                softDropP1();
-                p1DownCount = 0;
+            if (pressed.contains(k[2])) {
+                p1DownCount += 16;
+                if (p1DownCount >= 50) {
+                    softDropP1();
+                    p1DownCount = 0;
+                }
+            }
+        } else if (screen == 5 && !stageClear) {
+            if (pressed.contains(k[0])) {
+                p1LeftCount += 16;
+                if (p1LeftCount >= 170) {
+                    aEngineBridge.handleKey(k[0], k);
+                    p1LeftCount -= 50;
+                }
+            }
+            if (pressed.contains(k[1])) {
+                p1RightCount += 16;
+                if (p1RightCount >= 170) {
+                    aEngineBridge.handleKey(k[1], k);
+                    p1RightCount -= 50;
+                }
+            }
+            if (pressed.contains(k[2])) {
+                p1DownCount += 16;
+                if (p1DownCount >= 50) {
+                    aEngineBridge.handleKey(k[2], k);
+                    p1DownCount = 0;
+                }
             }
         }
         if (isTwoPlayer) {
@@ -286,14 +319,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (gameTime < blizzardEnd) {
             speed = speed / 2;
         }
-        p1DropCount += 16;
-        if (p1DropCount >= speed) {
-            p1DropCount = 0;
-            if (canPlace(board1, p1Type, p1Rot, p1X, p1Y + 1)) {
-                p1Y++;
-            } else {
-                lockP1();
+        if (!useAEngine()) {
+            p1DropCount += 16;
+            if (p1DropCount >= speed) {
+                p1DropCount = 0;
+                if (canPlace(board1, p1Type, p1Rot, p1X, p1Y + 1)) {
+                    p1Y++;
+                } else {
+                    lockP1();
+                }
             }
+        } else {
+            aEngineBridge.syncHud();
         }
         if (screen != 5) {
             return;
@@ -389,8 +426,51 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    boolean useAEngine() {
+        return !isTwoPlayer && aEngineBridge != null && aEngineBridge.isAttached();
+    }
+
+    void ensureAEngineBridge() {
+        if (aEngineBridge == null) {
+            aEngineBridge = new ASinglePlayerBridge(this);
+        }
+        if (!aEngineBridge.isAttached()) {
+            aEngineBridge.attach();
+        }
+    }
+
+    /** A 엔진 줄 클리어 → B 보스 HP (기존 B 데미지表) */
+    public void applyBossLineDamage(int count) {
+        if (count <= 0 || stageClear) {
+            return;
+        }
+        int damage = switch (count) {
+            case 1 -> 10;
+            case 2 -> 25;
+            case 3 -> 40;
+            default -> 60;
+        };
+        bossHp -= damage;
+        hitEffect = 12;
+        if (bossHp <= 0) {
+            bossHp = 0;
+            stageClear = true;
+            clearTimer = 2000;
+            pressed.clear();
+        }
+    }
+
+    public void notifyEngineGameOver() {
+        if (screen == 5 && !stageClear) {
+            gameEnd(false);
+        }
+    }
+
     public void newGame(boolean two) {
         isTwoPlayer = two;
+        if (isTwoPlayer && aEngineBridge != null) {
+            aEngineBridge.stopAndHide();
+        }
         stage = 1;
         p1Score = 0;
         p1Lines = 0;
@@ -437,8 +517,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2HoldUsed = false;
         p1DropCount = 0;
         p2DropCount = 0;
-        spawnP1();
-        if (isTwoPlayer) {
+        if (!isTwoPlayer) {
+            ensureAEngineBridge();
+            aEngineBridge.startStage(stage);
+        } else {
+            spawnP1();
             spawnP2();
         }
     }
@@ -801,6 +884,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     screen = 6;
                     msg = "";
                     pressed.clear();
+                    if (useAEngine()) {
+                        aEngineBridge.pauseEngine();
+                    }
                 }
                 return;
             }
@@ -809,7 +895,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
             pressed.add(code);
             int[] k = isTwoPlayer ? keyP1 : keySingle;
-            if (code == k[0]) {
+            if (useAEngine()) {
+                aEngineBridge.handleKey(code, k);
+            } else if (code == k[0]) {
                 moveP1(-1);
                 p1LeftCount = 0;
             } else if (code == k[1]) {
@@ -853,6 +941,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             if (screen == 6) {
                 screen = 5;
                 pressed.clear();
+                if (useAEngine()) {
+                    aEngineBridge.resumeEngine();
+                }
             } else if (screen == 2) {
                 screen = 1;
             } else if (screen == 1 || screen == 3) {
@@ -1024,6 +1115,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             if (in(490, 210, 300, 54)) {
                 screen = 5;
                 pressed.clear();
+                if (useAEngine()) {
+                    aEngineBridge.resumeEngine();
+                }
             } else if (in(490, 282, 300, 54)) {
                 if (loginUser == null) {
                     msg = "게스트는 저장할 수 없어요. 로그인 후 이용해 주세요.";
@@ -1587,25 +1681,31 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         for (int r = 1; r < 20; r++) {
             g.fillRect(bx, by + r * 30, 300, 1);
         }
-        for (int r = 4; r < 24; r++) {
-            for (int c = 0; c < 10; c++) {
-                if (board1[r][c] != 0) {
-                    drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board1[r][c]);
+        if (!useAEngine()) {
+            for (int r = 4; r < 24; r++) {
+                for (int c = 0; c < 10; c++) {
+                    if (board1[r][c] != 0) {
+                        drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board1[r][c]);
+                    }
                 }
             }
-        }
-        if (screen != 7 && !stageClear) {
-            for (int i = 0; i < 4; i++) {
-                int cx = p1X + SHAPES[p1Type][p1Rot][i * 2];
-                int cy = p1Y + SHAPES[p1Type][p1Rot][i * 2 + 1];
-                if (cy >= 4) {
-                    drawCell(g, bx + cx * 30, by + (cy - 4) * 30, 30, p1Type + 1);
+            if (screen != 7 && !stageClear) {
+                for (int i = 0; i < 4; i++) {
+                    int cx = p1X + SHAPES[p1Type][p1Rot][i * 2];
+                    int cy = p1Y + SHAPES[p1Type][p1Rot][i * 2 + 1];
+                    if (cy >= 4) {
+                        drawCell(g, bx + cx * 30, by + (cy - 4) * 30, 30, p1Type + 1);
+                    }
                 }
             }
+        } else {
+            aEngineBridge.setVisible(screen == 5 || screen == 6 || screen == 7);
         }
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
-        drawMini(g, p1Hold, hx + 22, 150);
+        if (!useAEngine()) {
+            drawMini(g, p1Hold, hx + 22, 150);
+        }
         if (isTwoPlayer) {
             drawBox(g, 56, 226, 116, 280, "다음");
             for (int i = 0; i < 3; i++) {
@@ -1614,8 +1714,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             drawBox(g, 40, 524, 132, 176, null);
         } else {
             drawBox(g, 808, 104, 116, 400, "다음");
-            for (int i = 0; i < 5; i++) {
-                drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+            if (!useAEngine()) {
+                for (int i = 0; i < 5; i++) {
+                    drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+                }
             }
             drawBox(g, 336, 530, 136, 170, null);
         }

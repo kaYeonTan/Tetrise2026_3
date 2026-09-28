@@ -14,7 +14,8 @@ public enum Route {
 	SAVE_SLOTS("/saves", RouteType.OVERLAY),
 	SETTINGS("/settings", RouteType.OVERLAY),
 	RESULT("/result", RouteType.SCREEN),
-	RECORDS("/records", RouteType.SCREEN);
+	RECORDS("/records", RouteType.SCREEN),
+	STAGE_RUSH("/stage-rush", RouteType.SCREEN);
 
 	public final String path;
 	public final RouteType type;

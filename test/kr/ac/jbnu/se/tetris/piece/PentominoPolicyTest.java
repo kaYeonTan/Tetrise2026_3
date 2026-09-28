@@ -2,6 +2,8 @@ package kr.ac.jbnu.se.tetris.piece;
 
 import org.junit.jupiter.api.Test;
 
+import kr.ac.jbnu.se.tetris.Tetrominoes;
+
 import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
