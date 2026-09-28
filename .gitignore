@@ -30,5 +30,12 @@ bin/
 .vscode/
 
 ### Mac OS ###
-.DS_Storedata/users.txt
+.DS_Store
+
+### Local secrets / user data ###
+.env
+data/users.txt
 data/keys.txt
+
+### IntelliJ (personal) ###
+.idea/workspace.xml
