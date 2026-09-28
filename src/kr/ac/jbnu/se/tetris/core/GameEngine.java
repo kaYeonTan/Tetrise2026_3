@@ -4,6 +4,8 @@ import java.util.ArrayList;
 
 import kr.ac.jbnu.se.tetris.Shape;
 import kr.ac.jbnu.se.tetris.Tetrominoes;
+import kr.ac.jbnu.se.tetris.boss.BossBrainController;
+import kr.ac.jbnu.se.tetris.boss.brain.PieceType;
 import kr.ac.jbnu.se.tetris.event.GameEvent;
 import kr.ac.jbnu.se.tetris.event.GameEventBus;
 import kr.ac.jbnu.se.tetris.event.GameEventType;
@@ -30,12 +32,15 @@ public class GameEngine {
 	boolean lineClearAnim = false;
 	long lineClearAnimStartMs = 0;
 	int pendingLineClearCount = 0;
+	int pieceLockSequence = 0;
+	BossBrainController bossBrainController;
 
 	public GameEngine(GameEventBus bus) {
 		this.bus = bus;
 		this.mode = GameMode.SINGLE;
 		sessions = new ArrayList<>();
 		sessions.add(new GameSession(0));
+		bossBrainController = new BossBrainController(this);
 	}
 
 	public GameEngine() {
@@ -87,6 +92,7 @@ public class GameEngine {
 		gameOverSent = false;
 		lineClearAnim = false;
 		pendingLineClearCount = 0;
+		pieceLockSequence++;
 		currentStage = 1;
 		GameSession s = sessions.get(0);
 		s.clearBoard();
@@ -117,6 +123,10 @@ public class GameEngine {
 	public int getStage() {
 		return currentStage;
 	}
+
+	public int getPieceLockSequence() {
+		return pieceLockSequence;
+	}
 
 	public void pause() {
 		if (!isStarted)
@@ -152,7 +162,8 @@ public class GameEngine {
 	void onPieceLanded(GameSession s) {
 		s.unlockHold();
 		s.lockPieceToBoard();
-		bus.publish(new GameEvent(GameEventType.PIECE_LOCKED, s.playerIndex, 0));
+		pieceLockSequence++;
+		bus.publish(new GameEvent(GameEventType.PIECE_LOCKED, s.playerIndex, 0));
 
 		int toClear = s.prepareLineClearAnimation();
 		if (toClear > 0) {
@@ -191,6 +202,18 @@ public class GameEngine {
 			gameOverSent = true;
 			bus.publish(new GameEvent(GameEventType.GAME_OVER, 0, 0));
 		}
+
+		public void endByBossAttack() {
+			handleGameOver();
+		}
+
+		public void replaceCurrentPiece(PieceType type) {
+			if (!isStarted || type == null)
+				return;
+			GameSession session = sessions.get(0);
+			if (!session.spawnShape(type.toTetrominoes()))
+				handleGameOver();
+		}
 	}
 
 	public boolean moveLeft() {
