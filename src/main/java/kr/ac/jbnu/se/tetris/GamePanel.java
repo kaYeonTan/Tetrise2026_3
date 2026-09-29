@@ -1013,6 +1013,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 if (r == 0) {
                     System.exit(0);
                 }
+            } else if (in(88, 530, 300, 44)) {
+                new LobbyFrame(this).setVisible(true);
             } else if (loginUser == null && in(88, 600, 150, 44)) {
                 new LoginFrame(this, false).setVisible(true);
             } else if (loginUser == null && in(250, 600, 150, 44)) {
@@ -1414,6 +1416,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawButton(g, "랭킹", 88, 332, 300, 54, 0, 22f);
         drawButton(g, "환경설정", 88, 402, 300, 54, 0, 22f);
         drawButton(g, "게임 종료", 88, 472, 300, 54, 0, 22f);
+        drawButton(g, "온라인 협동", 88, 530, 300, 44, 0, 18f);
         g.setFont(font.deriveFont(22f));
         if (loginUser != null) {
             shadowText(g, loginUser + " 용사님, 모험을 떠나요!", 88, 585, new Color(0xe9c98f), new Color(0x0c090d), 2);
