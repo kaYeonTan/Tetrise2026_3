@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
+import java.util.Random;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -78,5 +79,61 @@ class GamePanelTest {
         assertEquals(5, q.board2[23][3]);
         assertTrue(q.isTwoPlayer);
         FileManager.deleteSave(p.saveFile);
+    }
+
+    @Test
+    void risingPatternMovesBothTwoPlayerBoardsImmediately() {
+        p.newGame(true);
+        int p1Y = p.p1Y;
+        int p2Y = p.p2Y;
+        p.raiseBlocks();
+        int p1GarbageBlocks = 0;
+        int p2GarbageBlocks = 0;
+        for (int c = 0; c < 10; c++) {
+            if (p.board1[23][c] != 0) p1GarbageBlocks++;
+            if (p.board2[23][c] != 0) p2GarbageBlocks++;
+        }
+        assertEquals(9, p1GarbageBlocks);
+        assertEquals(9, p2GarbageBlocks);
+        assertEquals(p1Y - 1, p.p1Y);
+        assertEquals(p2Y - 1, p.p2Y);
+    }
+
+    @Test
+    void twoPlayerStageThreeBagCanContainPentomino() {
+        p.newGame(true);
+        p.stage = 3;
+        p.random = new Random(7);
+        boolean found = false;
+        for (int n = 0; n < 100 && !found; n++) {
+            p.p1Next.clear();
+            p.p1Bag.clear();
+            p.fillNext(p.p1Next, p.p1Bag);
+            for (int type : p.p1Next) {
+                if (type >= 7) found = true;
+            }
+            for (int type : p.p1Bag) {
+                if (type >= 7) found = true;
+            }
+        }
+        assertTrue(found);
+    }
+
+    @Test
+    void twoPlayerPentominoLocksFiveCells() {
+        p.newGame(true);
+        p.board1 = new int[24][10];
+        p.p1Type = 10;
+        p.p1Rot = 0;
+        p.p1X = 3;
+        p.p1Y = 10;
+        p.lockP1();
+        int cells = 0;
+        for (int[] row : p.board1) {
+            for (int cell : row) {
+                if (cell == 9) cells++;
+            }
+        }
+        assertEquals(5, cells);
     }
 }

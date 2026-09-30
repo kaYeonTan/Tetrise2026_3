@@ -48,6 +48,29 @@ public class GameSession {
 			lineClearBlinkRows[i] = false;
 	}
 
+	public boolean raiseGarbageLine(int hole) {
+		for (int x = 0; x < WIDTH; x++) {
+			if (shapeAt(x, HEIGHT - 1) != Tetrominoes.NoShape)
+				return false;
+		}
+		if (curPiece.getShape() != Tetrominoes.NoShape) {
+			for (int i = 0; i < curPiece.blockCount(); i++) {
+				int y = curY - curPiece.y(i) + 1;
+				if (y >= HEIGHT)
+					return false;
+			}
+		}
+		for (int y = HEIGHT - 1; y > 0; y--) {
+			for (int x = 0; x < WIDTH; x++)
+				cells[y * WIDTH + x] = cells[(y - 1) * WIDTH + x];
+		}
+		for (int x = 0; x < WIDTH; x++)
+			cells[x] = x == hole ? Tetrominoes.NoShape : Tetrominoes.SquareShape;
+		if (curPiece.getShape() != Tetrominoes.NoShape)
+			curY++;
+		return true;
+	}
+
 	public void unlockHold() {
 		holdLocked = false;
 	}

@@ -30,4 +30,12 @@ public class GameEngineEventTest {
 		assertTrue(!engine.isStarted());
 		assertEquals(1, overCount[0]);
 	}
+
+	@Test
+	void requestedStageSurvivesStart() {
+		GameEngine engine = new GameEngine();
+		engine.setStage(4);
+		engine.start();
+		assertEquals(4, engine.getStage());
+	}
 }

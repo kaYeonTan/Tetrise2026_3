@@ -56,6 +56,9 @@ public class Board extends JPanel implements ActionListener {
 	HoldPreviewPanel holdPreview;
 
 	Runnable pauseOverlayHandler;
+	int gravityMultiplier = 1;
+	int activePieceGravityMultiplier = 1;
+	int nextPieceGravityMultiplier = 1;
 
 
 
@@ -81,7 +84,12 @@ public class Board extends JPanel implements ActionListener {
 
 		engine.getBus().subscribe(GameEventType.LINE_CLEAR_ANIM_START, e -> timer.setDelay(100));
 
-		engine.getBus().subscribe(GameEventType.LINE_CLEAR_ANIM_END, e -> timer.setDelay(400));
+		engine.getBus().subscribe(GameEventType.LINE_CLEAR_ANIM_END, e -> updateTimerDelay());
+		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> {
+			activePieceGravityMultiplier = nextPieceGravityMultiplier;
+			nextPieceGravityMultiplier = 1;
+			updateTimerDelay();
+		});
 
 
 
@@ -106,6 +114,29 @@ public class Board extends JPanel implements ActionListener {
 
 	public GameEngine getEngine() {
 		return engine;
+	}
+
+	public void setGravityMultiplier(int multiplier) {
+		gravityMultiplier = Math.max(1, multiplier);
+		updateTimerDelay();
+	}
+
+	public void setNextPieceGravityMultiplier(int multiplier) {
+		nextPieceGravityMultiplier = Math.max(1, multiplier);
+	}
+
+	public void resetBossGravity() {
+		gravityMultiplier = 1;
+		activePieceGravityMultiplier = 1;
+		nextPieceGravityMultiplier = 1;
+		updateTimerDelay();
+	}
+
+	private void updateTimerDelay() {
+		if (engine.isLineClearAnim())
+			return;
+		int multiplier = Math.max(gravityMultiplier, activePieceGravityMultiplier);
+		timer.setDelay(Math.max(1, 400 / multiplier));
 	}
 
 	public void setNextPreview(NextPreviewPanel panel) {

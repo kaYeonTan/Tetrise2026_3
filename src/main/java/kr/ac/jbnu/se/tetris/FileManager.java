@@ -245,7 +245,7 @@ public class FileManager {
             p.stage = stage;
             p.startStage();
             p.bossHp = bossHp;
-            p.bossTimer = bossTimer;
+            p.restoreBossPatternTimer(bossTimer);
             p.gameTime = gameTime;
             int[] a = split(p1);
             p.p1Type = a[0];
@@ -288,6 +288,7 @@ public class FileManager {
             return true;
         } catch (Exception e) {
             e.printStackTrace();
+            p.resetTemporaryBossEffects();
             return false;
         }
     }

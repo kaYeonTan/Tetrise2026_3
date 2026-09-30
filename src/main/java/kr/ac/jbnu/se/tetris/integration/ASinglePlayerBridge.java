@@ -103,6 +103,29 @@ public final class ASinglePlayerBridge {
 		syncHud();
 	}
 
+	public boolean raiseGarbageLine(int hole) {
+		if (!attached || board == null)
+			return false;
+		boolean raised = board.getEngine().raiseGarbageLine(hole);
+		board.repaint();
+		return raised;
+	}
+
+	public void setGravityMultiplier(int multiplier) {
+		if (attached && board != null)
+			board.setGravityMultiplier(multiplier);
+	}
+
+	public void setNextPieceGravityMultiplier(int multiplier) {
+		if (attached && board != null)
+			board.setNextPieceGravityMultiplier(multiplier);
+	}
+
+	public void resetBossEffects() {
+		if (attached && board != null)
+			board.resetBossGravity();
+	}
+
 	public void syncHud() {
 		if (!attached || board == null) {
 			return;
