@@ -19,7 +19,7 @@ public final class AccelerationPattern implements BossPattern {
 
     @Override
     public void attack(BossPatternTarget target) {
-        target.startAcceleration(5_000, 4, 10);
-        target.showBossMessage("눈보라! 5초 동안 중력이 4배로 빨라진다");
+        target.startAcceleration(5_000, 3, 10);
+        target.showBossMessage("눈보라! 5초 동안 중력이 3배로 빨라진다");
     }
 }

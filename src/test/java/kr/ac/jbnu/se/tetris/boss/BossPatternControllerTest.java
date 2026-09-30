@@ -43,7 +43,7 @@ class BossPatternControllerTest {
         controller.startStage(4, target);
         controller.tick(30_000, target);
         assertEquals(5_000, target.accelerationDuration);
-        assertEquals(4, target.gravityMultiplier);
+        assertEquals(3, target.gravityMultiplier);
         assertEquals(10, target.nextPieceMultiplier);
     }
 
