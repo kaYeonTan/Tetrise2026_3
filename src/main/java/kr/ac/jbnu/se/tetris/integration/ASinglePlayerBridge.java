@@ -66,13 +66,14 @@ public final class ASinglePlayerBridge {
 				&& board.getEngine().isBlinkPhaseOn();
 	}
 
-	public void startStage(int stage) {
+	public void startStage(int stage, int baseGravityDelayMillis) {
 		if (!attached) {
 			attach();
 		}
 		setVisible(true);
 		GameEngine engine = board.getEngine();
 		engine.setStage(stage);
+		board.setBaseGravityDelay(baseGravityDelayMillis);
 		board.start();
 		syncHud();
 	}

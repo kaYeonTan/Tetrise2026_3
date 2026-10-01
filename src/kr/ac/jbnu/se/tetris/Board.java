@@ -59,6 +59,7 @@ public class Board extends JPanel implements ActionListener {
 	int gravityMultiplier = 1;
 	int activePieceGravityMultiplier = 1;
 	int nextPieceGravityMultiplier = 1;
+	int baseGravityDelayMillis = 400;
 
 
 
@@ -124,6 +125,11 @@ public class Board extends JPanel implements ActionListener {
 		updateTimerDelay();
 	}
 
+	public void setBaseGravityDelay(int delayMillis) {
+		baseGravityDelayMillis = Math.max(1, delayMillis);
+		updateTimerDelay();
+	}
+
 	public void setNextPieceGravityMultiplier(int multiplier) {
 		nextPieceGravityMultiplier = Math.max(1, multiplier);
 	}
@@ -139,7 +145,9 @@ public class Board extends JPanel implements ActionListener {
 		if (engine.isLineClearAnim())
 			return;
 		int multiplier = Math.max(gravityMultiplier, activePieceGravityMultiplier);
-		timer.setDelay(Math.max(1, 400 / multiplier));
+		int delay = Math.max(1, baseGravityDelayMillis / multiplier);
+		timer.setDelay(delay);
+		timer.setInitialDelay(delay);
 	}
 
 	public void setNextPreview(NextPreviewPanel panel) {
@@ -223,6 +231,7 @@ public class Board extends JPanel implements ActionListener {
 	public void start() {
 
 		engine.start();
+		updateTimerDelay();
 
 		timer.start();
 

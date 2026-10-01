@@ -312,7 +312,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
 
         // 블록 내리기
-        int speed = 1000 - (stage - 1) * 150;
+        int speed = baseDropIntervalMillis(stage);
         int p1Speed = Math.max(1, speed / (p1FastCurrent ? 10 : gravityMultiplier));
         if (!useAEngine()) {
             p1DropCount += 16;
@@ -355,6 +355,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     boolean useAEngine() {
         return !isTwoPlayer && aEngineBridge != null && aEngineBridge.isAttached();
+    }
+
+    static int baseDropIntervalMillis(int stage) {
+        return Math.max(1, 1000 - (stage - 1) * 150);
     }
 
     int[] currentPrimaryKeys() {
@@ -661,7 +665,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             // 저장 호환용 GamePanel 상태도 A 엔진과 함께 초기화한다.
             spawnP1();
             ensureAEngineBridge();
-            aEngineBridge.startStage(stage);
+            aEngineBridge.startStage(stage, baseDropIntervalMillis(stage));
         } else {
             spawnP1();
             spawnP2();

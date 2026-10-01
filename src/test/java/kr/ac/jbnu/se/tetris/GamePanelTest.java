@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
 import java.util.Random;
+import javax.swing.JLabel;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,22 @@ class GamePanelTest {
             set.add(p.p1Next.get(i));
         }
         assertEquals(7, set.size());
+    }
+
+    @Test
+    void singlePlayerGravityUsesTwoPlayerStageSpeed() {
+        Board board = new Board(new JLabel());
+        int[] expectedDelays = {1000, 850, 700, 550, 400};
+
+        for (int stage = 1; stage <= expectedDelays.length; stage++) {
+            int delay = GamePanel.baseDropIntervalMillis(stage);
+            board.setBaseGravityDelay(delay);
+            assertEquals(expectedDelays[stage - 1], board.timer.getDelay());
+        }
+
+        board.setBaseGravityDelay(GamePanel.baseDropIntervalMillis(4));
+        board.setGravityMultiplier(3);
+        assertEquals(550 / 3, board.timer.getDelay());
     }
 
     @Test
