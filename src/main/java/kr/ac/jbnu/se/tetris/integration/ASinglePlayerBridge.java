@@ -4,9 +4,8 @@ import javax.swing.JLabel;
 
 import kr.ac.jbnu.se.tetris.Board;
 import kr.ac.jbnu.se.tetris.GamePanel;
-import kr.ac.jbnu.se.tetris.HoldPreviewPanel;
-import kr.ac.jbnu.se.tetris.NextPreviewPanel;
 import kr.ac.jbnu.se.tetris.core.GameEngine;
+import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.event.GameEventType;
 
 /**
@@ -14,25 +13,11 @@ import kr.ac.jbnu.se.tetris.event.GameEventType;
  */
 public final class ASinglePlayerBridge {
 
-	private static final int BOARD_X = 490;
-	private static final int BOARD_Y = 104;
-	private static final int BOARD_W = 300;
-	private static final int BOARD_H = 600;
-	private static final int HOLD_X = 356;
-	private static final int HOLD_Y = 104;
-	private static final int HOLD_W = 116;
-	private static final int HOLD_H = 104;
-	private static final int NEXT_X = 808;
-	private static final int NEXT_Y = 104;
-	private static final int NEXT_W = 116;
-	private static final int NEXT_H = 400;
-
 	private final GamePanel host;
 	private final JLabel hiddenStatus = new JLabel(" ");
 	private Board board;
-	private HoldPreviewPanel holdPreview;
-	private NextPreviewPanel nextPreview;
 	private boolean attached;
+	private boolean active;
 
 	public ASinglePlayerBridge(GamePanel host) {
 		this.host = host;
@@ -49,24 +34,18 @@ public final class ASinglePlayerBridge {
 		}
 		board = new Board(hiddenStatus);
 		board.setFocusable(false);
-		holdPreview = new HoldPreviewPanel(board.getEngine());
-		nextPreview = new NextPreviewPanel(board.getEngine());
-		board.setNextPreview(nextPreview);
-		board.setHoldPreview(holdPreview);
 
 		GameEngine engine = board.getEngine();
+		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> host.notifyBossBoardChanged());
 		engine.getBus().subscribe(GameEventType.LINES_CLEARED, e -> {
 			if (e.value > 0) {
 				host.applyBossLineDamage(e.value);
 			}
 			syncHud();
+			host.notifyBossBoardChanged();
 		});
 		engine.getBus().subscribe(GameEventType.GAME_OVER, e -> host.notifyEngineGameOver());
 
-		host.add(board);
-		host.add(holdPreview);
-		host.add(nextPreview);
-		layoutComponents();
 		attached = true;
 		setVisible(false);
 	}
@@ -75,32 +54,51 @@ public final class ASinglePlayerBridge {
 		if (!attached) {
 			return;
 		}
-		board.setVisible(visible);
-		holdPreview.setVisible(visible);
-		nextPreview.setVisible(visible);
-		if (visible) {
-			layoutComponents();
-			host.setComponentZOrder(board, 0);
-			host.setComponentZOrder(holdPreview, 0);
-			host.setComponentZOrder(nextPreview, 0);
-		}
+		active = visible;
 	}
 
-	private void layoutComponents() {
-		board.setBounds(BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
-		holdPreview.setBounds(HOLD_X, HOLD_Y, HOLD_W, HOLD_H);
-		nextPreview.setBounds(NEXT_X, NEXT_Y, NEXT_W, NEXT_H);
+	public GameSession session() {
+		return attached && board != null ? board.getEngine().getSession(0) : null;
 	}
 
-	public void startStage(int stage) {
+	public boolean isLineClearBlinkOn() {
+		return attached && board != null && board.getEngine().isLineClearAnim()
+				&& board.getEngine().isBlinkPhaseOn();
+	}
+
+	public void startStage(int stage, int baseGravityDelayMillis) {
 		if (!attached) {
 			attach();
 		}
 		setVisible(true);
 		GameEngine engine = board.getEngine();
 		engine.setStage(stage);
+		board.setBaseGravityDelay(baseGravityDelayMillis);
 		board.start();
 		syncHud();
+	}
+
+	public boolean raiseGarbageLine(int hole) {
+		if (!attached || board == null)
+			return false;
+		boolean raised = board.getEngine().raiseGarbageLine(hole);
+		board.repaint();
+		return raised;
+	}
+
+	public void setGravityMultiplier(int multiplier) {
+		if (attached && board != null)
+			board.setGravityMultiplier(multiplier);
+	}
+
+	public void setNextPieceGravityMultiplier(int multiplier) {
+		if (attached && board != null)
+			board.setNextPieceGravityMultiplier(multiplier);
+	}
+
+	public void resetBossEffects() {
+		if (attached && board != null)
+			board.resetBossGravity();
 	}
 
 	public void syncHud() {
@@ -129,7 +127,7 @@ public final class ASinglePlayerBridge {
 	}
 
 	public void handleKey(int code, int[] keys) {
-		if (!attached || !board.isVisible()) {
+		if (!attached || !active) {
 			return;
 		}
 		GameEngine engine = board.getEngine();

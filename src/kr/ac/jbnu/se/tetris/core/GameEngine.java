@@ -30,6 +30,7 @@ public class GameEngine {
 	boolean lineClearAnim = false;
 	long lineClearAnimStartMs = 0;
 	int pendingLineClearCount = 0;
+	int pendingBossGarbageHole = -1;
 	int pieceLockSequence = 0;
 
 	public GameEngine(GameEventBus bus) {
@@ -88,8 +89,8 @@ public class GameEngine {
 		gameOverSent = false;
 		lineClearAnim = false;
 		pendingLineClearCount = 0;
+		pendingBossGarbageHole = -1;
 		pieceLockSequence++;
-		currentStage = 1;
 		GameSession s = sessions.get(0);
 		s.clearBoard();
 		bagSeed = System.currentTimeMillis();
@@ -186,6 +187,14 @@ public class GameEngine {
 		lineClearAnim = false;
 		pendingLineClearCount = 0;
 		bus.publish(new GameEvent(GameEventType.LINE_CLEAR_ANIM_END, s.playerIndex, cleared));
+		if (pendingBossGarbageHole >= 0) {
+			int hole = pendingBossGarbageHole;
+			pendingBossGarbageHole = -1;
+			if (!s.raiseGarbageLine(hole)) {
+				handleGameOver();
+				return;
+			}
+		}
 
 		if (!s.spawnPiece())
 			handleGameOver();
@@ -203,6 +212,20 @@ public class GameEngine {
 	/** C파트 보스 연동용 (추후 BossBrain에서 호출) */
 	public void endByBossAttack() {
 		handleGameOver();
+	}
+
+	public boolean raiseGarbageLine(int hole) {
+		if (!isStarted)
+			return false;
+		if (lineClearAnim) {
+			pendingBossGarbageHole = hole;
+			return true;
+		}
+		if (!sessions.get(0).raiseGarbageLine(hole)) {
+			handleGameOver();
+			return false;
+		}
+		return true;
 	}
 
 	public void replaceCurrentPiece(Tetrominoes type) {

@@ -56,12 +56,19 @@ public class Board extends JPanel implements ActionListener {
 	HoldPreviewPanel holdPreview;
 
 	Runnable pauseOverlayHandler;
+	int gravityMultiplier = 1;
+	int activePieceGravityMultiplier = 1;
+	int nextPieceGravityMultiplier = 1;
+	int baseGravityDelayMillis = 400;
 
 
 
 	public Board(JLabel statusbar) {
 
 		this.statusbar = statusbar;
+		// GamePanel already paints the board background and grid.  The single-player
+		// board is layered on top of it, so it must not erase that shared artwork.
+		setOpaque(false);
 
 		setFocusable(true);
 
@@ -81,7 +88,12 @@ public class Board extends JPanel implements ActionListener {
 
 		engine.getBus().subscribe(GameEventType.LINE_CLEAR_ANIM_START, e -> timer.setDelay(100));
 
-		engine.getBus().subscribe(GameEventType.LINE_CLEAR_ANIM_END, e -> timer.setDelay(400));
+		engine.getBus().subscribe(GameEventType.LINE_CLEAR_ANIM_END, e -> updateTimerDelay());
+		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> {
+			activePieceGravityMultiplier = nextPieceGravityMultiplier;
+			nextPieceGravityMultiplier = 1;
+			updateTimerDelay();
+		});
 
 
 
@@ -106,6 +118,36 @@ public class Board extends JPanel implements ActionListener {
 
 	public GameEngine getEngine() {
 		return engine;
+	}
+
+	public void setGravityMultiplier(int multiplier) {
+		gravityMultiplier = Math.max(1, multiplier);
+		updateTimerDelay();
+	}
+
+	public void setBaseGravityDelay(int delayMillis) {
+		baseGravityDelayMillis = Math.max(1, delayMillis);
+		updateTimerDelay();
+	}
+
+	public void setNextPieceGravityMultiplier(int multiplier) {
+		nextPieceGravityMultiplier = Math.max(1, multiplier);
+	}
+
+	public void resetBossGravity() {
+		gravityMultiplier = 1;
+		activePieceGravityMultiplier = 1;
+		nextPieceGravityMultiplier = 1;
+		updateTimerDelay();
+	}
+
+	private void updateTimerDelay() {
+		if (engine.isLineClearAnim())
+			return;
+		int multiplier = Math.max(gravityMultiplier, activePieceGravityMultiplier);
+		int delay = Math.max(1, baseGravityDelayMillis / multiplier);
+		timer.setDelay(delay);
+		timer.setInitialDelay(delay);
 	}
 
 	public void setNextPreview(NextPreviewPanel panel) {
@@ -189,6 +231,7 @@ public class Board extends JPanel implements ActionListener {
 	public void start() {
 
 		engine.start();
+		updateTimerDelay();
 
 		timer.start();
 
@@ -326,28 +369,17 @@ public class Board extends JPanel implements ActionListener {
 	private void drawSquare(Graphics g, int x, int y, Tetrominoes shape, boolean grayscale) {
 
 		Color color = RenderOptions.pieceColor(PieceColors.of(shape), grayscale);
+		int width = squareWidth();
+		int height = squareHeight();
 
-
-
-		g.setColor(color);
-
-		g.fillRect(x + 1, y + 1, squareWidth() - 2, squareHeight() - 2);
-
-
-
-		g.setColor(color.brighter());
-
-		g.drawLine(x, y + squareHeight() - 1, x, y);
-
-		g.drawLine(x, y, x + squareWidth() - 1, y);
-
-
-
+		// Match GamePanel.drawCell(): dark outer cell, inset body, bright top/left.
 		g.setColor(color.darker());
-
-		g.drawLine(x + 1, y + squareHeight() - 1, x + squareWidth() - 1, y + squareHeight() - 1);
-
-		g.drawLine(x + squareWidth() - 1, y + squareHeight() - 1, x + squareWidth() - 1, y + 1);
+		g.fillRect(x, y, width, height);
+		g.setColor(color);
+		g.fillRect(x + 2, y + 2, width - 4, height - 4);
+		g.setColor(color.brighter());
+		g.fillRect(x + 2, y + 2, width - 4, 3);
+		g.fillRect(x + 2, y + 2, 3, height - 4);
 
 	}
 

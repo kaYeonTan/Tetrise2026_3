@@ -7,11 +7,15 @@ public class PieceColors {
 
 	static final Color[] COLORS = {
 			new Color(0, 0, 0),
-			new Color(204, 102, 102), new Color(102, 204, 102), new Color(102, 102, 204),
-			new Color(204, 204, 102), new Color(204, 102, 204), new Color(102, 204, 204),
-			new Color(218, 170, 0),
-			new Color(180, 120, 220), new Color(255, 160, 80), new Color(80, 200, 180),
-			new Color(200, 200, 80), new Color(160, 100, 200)
+			new Color(0xe0524a), // Z
+			new Color(0x5cc05a), // S
+			new Color(0x4fc3d9), // I
+			new Color(0xa45ad8), // T
+			new Color(0xf2c94c), // O
+			new Color(0xf0943a), // L
+			new Color(0x4a6ee0), // J
+			new Color(0xc06be8), new Color(0xc06be8), new Color(0xc06be8),
+			new Color(0xc06be8), new Color(0xc06be8)
 	};
 
 	public static Color of(Tetrominoes shape) {
