@@ -65,6 +65,9 @@ public class Board extends JPanel implements ActionListener {
 	public Board(JLabel statusbar) {
 
 		this.statusbar = statusbar;
+		// GamePanel already paints the board background and grid.  The single-player
+		// board is layered on top of it, so it must not erase that shared artwork.
+		setOpaque(false);
 
 		setFocusable(true);
 
@@ -357,28 +360,17 @@ public class Board extends JPanel implements ActionListener {
 	private void drawSquare(Graphics g, int x, int y, Tetrominoes shape, boolean grayscale) {
 
 		Color color = RenderOptions.pieceColor(PieceColors.of(shape), grayscale);
+		int width = squareWidth();
+		int height = squareHeight();
 
-
-
-		g.setColor(color);
-
-		g.fillRect(x + 1, y + 1, squareWidth() - 2, squareHeight() - 2);
-
-
-
-		g.setColor(color.brighter());
-
-		g.drawLine(x, y + squareHeight() - 1, x, y);
-
-		g.drawLine(x, y, x + squareWidth() - 1, y);
-
-
-
+		// Match GamePanel.drawCell(): dark outer cell, inset body, bright top/left.
 		g.setColor(color.darker());
-
-		g.drawLine(x + 1, y + squareHeight() - 1, x + squareWidth() - 1, y + squareHeight() - 1);
-
-		g.drawLine(x + squareWidth() - 1, y + squareHeight() - 1, x + squareWidth() - 1, y + 1);
+		g.fillRect(x, y, width, height);
+		g.setColor(color);
+		g.fillRect(x + 2, y + 2, width - 4, height - 4);
+		g.setColor(color.brighter());
+		g.fillRect(x + 2, y + 2, width - 4, 3);
+		g.fillRect(x + 2, y + 2, 3, height - 4);
 
 	}
 

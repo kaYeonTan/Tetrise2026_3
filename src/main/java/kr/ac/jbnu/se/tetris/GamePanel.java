@@ -33,6 +33,7 @@ import javax.swing.Timer;
 
 import kr.ac.jbnu.se.tetris.boss.BossPatternController;
 import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
+import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.integration.ASinglePlayerBridge;
 
 public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener, BossPatternTarget {
@@ -205,7 +206,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (screen == 5) {
             update();
         }
+        syncSinglePlayerUiVisibility();
         repaint();
+    }
+
+    void syncSinglePlayerUiVisibility() {
+        if (aEngineBridge == null || !aEngineBridge.isAttached()) {
+            return;
+        }
+        // Swing children are painted after GamePanel, so they would otherwise
+        // cover pause/settings/result overlays and remain visible on menus.
+        aEngineBridge.setVisible(screen == 5 && !stageClear);
     }
 
     void update() {
@@ -633,6 +644,32 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     static int blockValue(int type) {
         // 저장 포맷이 셀 하나를 숫자 한 글자로 기록하므로 펜토미노 고정 셀은 9로 통일한다.
         return type >= 7 ? 9 : type + 1;
+    }
+
+    static int engineType(Tetrominoes shape) {
+        if (shape == null) {
+            return -1;
+        }
+        return switch (shape) {
+            case LineShape -> 0;
+            case SquareShape -> 1;
+            case TShape -> 2;
+            case SShape -> 3;
+            case ZShape -> 4;
+            case MirroredLShape -> 5;
+            case LShape -> 6;
+            case P5_P -> 7;
+            case P5_U -> 8;
+            case P5_V -> 9;
+            case P5_X -> 10;
+            case P5_F -> 11;
+            default -> -1;
+        };
+    }
+
+    static int engineBlockValue(Tetrominoes shape) {
+        int type = engineType(shape);
+        return type < 0 ? 0 : blockValue(type);
     }
 
     boolean canPlace(int[][] board, int type, int rot, int x, int y) {
@@ -1756,6 +1793,47 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    void drawSingleEngineBoard(Graphics2D g, int boardX, int boardY) {
+        GameSession session = aEngineBridge.session();
+        if (session == null) {
+            return;
+        }
+
+        // Match the two-player 20x10 playfield; the engine's top two rows are
+        // spawn rows and stay outside the visible board.
+        boolean blinkOn = aEngineBridge.isLineClearBlinkOn();
+        for (int screenRow = 0; screenRow < 20; screenRow++) {
+            int engineY = 19 - screenRow;
+            boolean blinkRow = blinkOn && session.lineClearBlinkRows[engineY];
+            for (int column = 0; column < 10; column++) {
+                Tetrominoes shape = session.shapeAt(column, engineY);
+                if (shape == Tetrominoes.NoShape) {
+                    continue;
+                }
+                int x = boardX + column * 30;
+                int y = boardY + screenRow * 30;
+                if (blinkRow) {
+                    g.setColor(Color.WHITE);
+                    g.fillRect(x + 2, y + 2, 26, 26);
+                } else {
+                    drawCell(g, x, y, 30, engineBlockValue(shape));
+                }
+            }
+        }
+
+        if (screen == 7 || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
+            return;
+        }
+        for (int i = 0; i < session.curPiece.blockCount(); i++) {
+            int x = session.curX + session.curPiece.x(i);
+            int y = session.curY - session.curPiece.y(i);
+            if (x >= 0 && x < 10 && y >= 0 && y < 20) {
+                drawCell(g, boardX + x * 30, boardY + (19 - y) * 30, 30,
+                        engineBlockValue(session.curPiece.getShape()));
+            }
+        }
+    }
+
     void drawGame(Graphics2D g) {
         g.drawImage(Art.background(stage), 0, 0, null);
         BufferedImage m = Art.monster(stage);
@@ -1807,12 +1885,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         } else {
-            aEngineBridge.setVisible(screen == 5 || screen == 6 || screen == 7);
+            drawSingleEngineBoard(g, bx, by);
         }
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
         if (!useAEngine()) {
             drawMini(g, p1Hold, hx + 22, 150);
+        } else {
+            GameSession session = aEngineBridge.session();
+            if (session != null && !session.hold.isEmpty()) {
+                drawMini(g, engineType(session.hold.getStored()), hx + 22, 150);
+            }
         }
         if (isTwoPlayer) {
             drawBox(g, 56, 226, 116, 280, "다음");
@@ -1825,6 +1908,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             if (!useAEngine()) {
                 for (int i = 0; i < 5; i++) {
                     drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+                }
+            } else {
+                GameSession session = aEngineBridge.session();
+                if (session != null && session.randomizer != null) {
+                    for (int i = 0; i < 3; i++) {
+                        drawMini(g, engineType(session.randomizer.peekAt(i)), 808 + 22, 146 + i * 70);
+                    }
                 }
             }
             drawBox(g, 336, 530, 136, 170, null);
