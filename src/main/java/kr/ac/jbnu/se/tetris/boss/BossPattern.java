@@ -9,4 +9,23 @@ public interface BossPattern {
     String warningMessage();
 
     void attack(BossPatternTarget target);
+
+    default void onBoardChanged(BossPatternTarget target) {
+    }
+
+    default boolean usesCustomVictory() {
+        return false;
+    }
+
+    default double progress(BossPatternTarget target) {
+        return 0.0;
+    }
+
+    default int violationCount(BossPatternTarget target) {
+        return 0;
+    }
+
+    default Blueprint blueprint() {
+        return null;
+    }
 }

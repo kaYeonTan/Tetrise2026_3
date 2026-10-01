@@ -33,6 +33,7 @@ import javax.swing.Timer;
 
 import kr.ac.jbnu.se.tetris.boss.BossPatternController;
 import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
+import kr.ac.jbnu.se.tetris.boss.Blueprint;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.integration.ASinglePlayerBridge;
 
@@ -514,6 +515,44 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    @Override
+    public boolean isBlueprintCellOccupied(int row, int column) {
+        if (row < 0 || row >= Blueprint.ROWS || column < 0 || column >= Blueprint.COLUMNS) {
+            return false;
+        }
+        if (useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            int engineY = Blueprint.ROWS - 1 - row;
+            return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
+        }
+        int boardRow = 18 + row;
+        boolean occupied = board1[boardRow][column] != 0;
+        if (isTwoPlayer) {
+            occupied |= board2[boardRow][column] != 0;
+        }
+        return occupied;
+    }
+
+    @Override
+    public void completeBlueprintPattern() {
+        if (stage != 3 || stageClear) {
+            return;
+        }
+        bossHp = 0;
+        stageClear = true;
+        clearTimer = 2000;
+        pressed.clear();
+        msg = "BLUEPRINT COMPLETE!";
+        msgTimer = 120;
+        bossPattern.stop(this);
+    }
+
+    public void notifyBossBoardChanged() {
+        if (stage == 3 && !stageClear) {
+            bossPattern.onBoardChanged(this);
+        }
+    }
+
     public void restoreBossPatternTimer(int elapsedMillis) {
         bossPattern.restoreElapsed(elapsedMillis, this);
         bossTimer = bossPattern.elapsedMillis();
@@ -530,7 +569,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     /** A 엔진 줄 클리어 → B 보스 HP (기존 B 데미지表) */
     public void applyBossLineDamage(int count) {
-        if (count <= 0 || stageClear) {
+        if (count <= 0 || stageClear || stage == 3) {
             return;
         }
         int damage = switch (count) {
@@ -582,6 +621,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void startStage() {
+        startStage(-1);
+    }
+
+    void startStage(int restoredBlueprintIndex) {
         if (stage == 1) {
             bossMax = 100;
         } else if (stage == 2) {
@@ -608,7 +651,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2HoldUsed = false;
         p1DropCount = 0;
         p2DropCount = 0;
-        bossPattern.startStage(stage, this);
+        if (stage == 3 && restoredBlueprintIndex >= 0) {
+            bossPattern.startStage(stage, this, restoredBlueprintIndex);
+        } else {
+            bossPattern.startStage(stage, this);
+        }
         pressed.clear();
         if (!isTwoPlayer) {
             // 저장 호환용 GamePanel 상태도 A 엔진과 함께 초기화한다.
@@ -860,6 +907,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 return;
             }
         }
+        notifyBossBoardChanged();
         if (stageClear) {
             return;
         }
@@ -886,6 +934,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 return;
             }
         }
+        notifyBossBoardChanged();
         if (stageClear) {
             return;
         }
@@ -912,7 +961,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 r++;
             }
         }
-        if (count > 0 && !stageClear) {
+        if (count > 0 && !stageClear && stage != 3) {
             int damage = 0;
             if (count == 1) damage = 10;
             if (count == 2) damage = 25;
@@ -1834,6 +1883,78 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    boolean isPlayerBlueprintCellOccupied(int player, int row, int column) {
+        if (!isTwoPlayer && useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            int engineY = Blueprint.ROWS - 1 - row;
+            return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
+        }
+        int[][] board = player == 0 ? board1 : board2;
+        return board[18 + row][column] != 0;
+    }
+
+    boolean isBlueprintCellFilledByOtherPlayer(int player, int row, int column) {
+        return isTwoPlayer
+                && !isPlayerBlueprintCellOccupied(player, row, column)
+                && isPlayerBlueprintCellOccupied(1 - player, row, column);
+    }
+
+    void drawBlueprintGuide(Graphics2D g, int boardX, int boardY) {
+        Blueprint blueprint = bossPattern.blueprint();
+        if (stage != 3 || blueprint == null) {
+            return;
+        }
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                int x = boardX + column * 30;
+                int y = boardY + (14 + row) * 30;
+                if (blueprint.isTarget(row, column)) {
+                    g.setColor(new Color(233, 201, 143, 58));
+                    g.fillRect(x + 3, y + 3, 24, 24);
+                    g.setColor(new Color(233, 201, 143, 150));
+                    g.drawRect(x + 3, y + 3, 23, 23);
+                } else if (blueprint.mustBeEmpty(row, column)) {
+                    g.setColor(new Color(190, 65, 55, 115));
+                    g.drawRect(x + 4, y + 4, 21, 21);
+                    g.drawLine(x + 7, y + 7, x + 22, y + 22);
+                    g.drawLine(x + 22, y + 7, x + 7, y + 22);
+                }
+            }
+        }
+    }
+
+    void drawBlueprintStatus(Graphics2D g, int boardX, int boardY, int player) {
+        Blueprint blueprint = bossPattern.blueprint();
+        if (stage != 3 || blueprint == null) {
+            return;
+        }
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                boolean occupied = isPlayerBlueprintCellOccupied(player, row, column);
+                boolean filledByOther = isBlueprintCellFilledByOtherPlayer(player, row, column);
+                int x = boardX + column * 30;
+                int y = boardY + (14 + row) * 30;
+                if (blueprint.mustBeEmpty(row, column) && occupied) {
+                    g.setColor(new Color(220, 55, 45, 150));
+                    g.fillRect(x + 1, y + 1, 28, 28);
+                    g.setColor(new Color(255, 225, 210));
+                    g.drawLine(x + 6, y + 6, x + 23, y + 23);
+                    g.drawLine(x + 23, y + 6, x + 6, y + 23);
+                } else if (blueprint.isTarget(row, column) && occupied) {
+                    g.setColor(new Color(100, 220, 120, 210));
+                    g.drawRect(x + 2, y + 2, 25, 25);
+                } else if (blueprint.isTarget(row, column) && filledByOther) {
+                    g.setColor(new Color(115, 135, 165, 105));
+                    g.fillRect(x + 3, y + 3, 24, 24);
+                    g.setColor(new Color(205, 220, 235, 175));
+                    g.drawRect(x + 3, y + 3, 23, 23);
+                    g.drawLine(x + 5, y + 20, x + 14, y + 27);
+                    g.drawLine(x + 14, y + 4, x + 27, y + 14);
+                }
+            }
+        }
+    }
+
     void drawGame(Graphics2D g) {
         g.drawImage(Art.background(stage), 0, 0, null);
         BufferedImage m = Art.monster(stage);
@@ -1867,6 +1988,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         for (int r = 1; r < 20; r++) {
             g.fillRect(bx, by + r * 30, 300, 1);
         }
+        drawBlueprintGuide(g, bx, by);
         if (!useAEngine()) {
             for (int r = 4; r < 24; r++) {
                 for (int c = 0; c < 10; c++) {
@@ -1887,6 +2009,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else {
             drawSingleEngineBoard(g, bx, by);
         }
+        drawBlueprintStatus(g, bx, by, 0);
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
         if (!useAEngine()) {
@@ -1950,6 +2073,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             for (int r = 1; r < 20; r++) {
                 g.fillRect(bx, by + r * 30, 300, 1);
             }
+            drawBlueprintGuide(g, bx, by);
             for (int r = 4; r < 24; r++) {
                 for (int c = 0; c < 10; c++) {
                     if (board2[r][c] != 0) {
@@ -1966,6 +2090,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     }
                 }
             }
+            drawBlueprintStatus(g, bx, by, 1);
             drawBox(g, 1108, 104, 116, 104, "홀드");
             drawMini(g, p2Hold, 1108 + 22, 150);
             drawBox(g, 1108, 226, 116, 280, "다음");
@@ -2007,8 +2132,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.drawString(bossNames[stage], barX + 504 - g.getFontMetrics().stringWidth(bossNames[stage]), 38);
         g.setColor(new Color(0x1a1216));
         g.fillRect(barX + 16, 50, 488, 24);
-        int filled = (int) (482.0 * bossHp / bossMax);
-        g.setColor(new Color(0xc9432f));
+        boolean customVictory = bossPattern.usesCustomVictory();
+        double progress = customVictory ? bossPattern.progress(this) : (double) bossHp / bossMax;
+        int violations = customVictory ? bossPattern.violationCount(this) : 0;
+        int filled = (int) (482.0 * Math.max(0.0, Math.min(1.0, progress)));
+        g.setColor(customVictory ? (violations > 0 ? new Color(0xc9432f) : new Color(0x4fa65a)) : new Color(0xc9432f));
         g.fillRect(barX + 19, 53, filled, 18);
         g.setColor(new Color(255, 255, 255, 60));
         g.fillRect(barX + 19, 53, filled, 4);
@@ -2018,7 +2146,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         g.setFont(font.deriveFont(13.5f));
         g.setColor(new Color(0xf0e2c8));
-        String hp = bossHp + " / " + bossMax;
+        String hp = customVictory
+                ? "BLUEPRINT " + Math.round(progress * 100) + "%" + (violations > 0 ? "  MISPLACED " + violations : "")
+                : bossHp + " / " + bossMax;
         g.drawString(hp, barX + 260 - g.getFontMetrics().stringWidth(hp) / 2, 67);
 
         if (bossWarning && screen == 5 && (tick / 10) % 2 == 0) {

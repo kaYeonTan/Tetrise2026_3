@@ -36,11 +36,13 @@ public final class ASinglePlayerBridge {
 		board.setFocusable(false);
 
 		GameEngine engine = board.getEngine();
+		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> host.notifyBossBoardChanged());
 		engine.getBus().subscribe(GameEventType.LINES_CLEARED, e -> {
 			if (e.value > 0) {
 				host.applyBossLineDamage(e.value);
 			}
 			syncHud();
+			host.notifyBossBoardChanged();
 		});
 		engine.getBus().subscribe(GameEventType.GAME_OVER, e -> host.notifyEngineGameOver());
 

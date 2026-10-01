@@ -21,4 +21,8 @@ public interface BossPatternTarget {
     void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis);
 
     void resetTemporaryBossEffects();
+
+    boolean isBlueprintCellOccupied(int row, int column);
+
+    void completeBlueprintPattern();
 }
