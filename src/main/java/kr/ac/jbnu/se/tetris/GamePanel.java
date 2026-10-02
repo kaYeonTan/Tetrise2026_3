@@ -1613,8 +1613,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawButton(g, "온라인 협동", 88, 530, 300, 44, 0, 18f);
         g.setFont(font.deriveFont(22f));
         if (loginUser != null) {
-            shadowText(g, loginUser + " 용사님, 모험을 떠나요!", 88, 585, new Color(0xe9c98f), new Color(0x0c090d), 2);
             drawButton(g, "로그아웃", 88, 600, 150, 44, 2, 16.5f);
+            shadowText(g, loginUser + " 용사님, 모험을 떠나요!", 88, 672, new Color(0xe9c98f), new Color(0x0c090d), 2);
         } else {
             drawButton(g, "로그인", 88, 600, 150, 44, 2, 16.5f);
             drawButton(g, "회원가입", 250, 600, 150, 44, 2, 16.5f);
