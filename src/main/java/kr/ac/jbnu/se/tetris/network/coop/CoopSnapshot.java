@@ -7,7 +7,7 @@ public class CoopSnapshot {
 	public int stage;
 	public int bossHp;
 	public int bossMax;
-	public long bossTimer;
+	public int bossTimer;
 	public long gameTime;
 	public boolean stageClear;
 	public long blizzardEnd;
