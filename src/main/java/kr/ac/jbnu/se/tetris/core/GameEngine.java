@@ -81,6 +81,10 @@ public class GameEngine {
 	}
 
 	public void start() {
+		startWithSeed(System.currentTimeMillis());
+	}
+
+	public void startWithSeed(long seed) {
 		if (isPaused)
 			return;
 
@@ -93,7 +97,7 @@ public class GameEngine {
 		pieceLockSequence++;
 		GameSession s = sessions.get(0);
 		s.clearBoard();
-		bagSeed = System.currentTimeMillis();
+		bagSeed = seed;
 		s.randomizer = new SevenBagRandomizer(bagSeed, PentominoPolicy.defaults());
 		s.randomizer.setStage(currentStage);
 		s.curPiece = new Shape();

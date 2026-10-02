@@ -48,7 +48,20 @@
 - 타이틀 **「온라인 협동」** → `LobbyFrame` (임시 다이얼로그)
 - 스타일 통합 시 `LobbyFrame`만 교체하고 `LobbyClient` API는 유지
 
-## 다음 세션 (예정)
+## in-game (협동 2PC)
 
-- in-game: 서버 권위 `CoopRunState` + 입력 릴레이
-- coop 저장: `coopId` + 슬롯 2개 (별도 문서)
+| type | 방향 | 필드 | 설명 |
+|------|------|------|------|
+| `START_GAME` | C→S | — | 방장, 2/2일 때 시작 |
+| `START_GAME_OK` | S→C | `roomId`, `coopId`, `seed`, `playerIndex`, `role` | 방장 응답 |
+| `GAME_STARTED` | S→C (push) | 위와 동일 | 게스트 푸시 |
+| `PLAYER_ACTION` | C→S / push | `playerIndex`, `action` | 입력 릴레이 (응답 없음) |
+| `COOP_SNAPSHOT` | C→S (방장) | `coopId`, `snapshotJson` | 스냅샷 (응답 없음) |
+| `COOP_SNAPSHOT_PUSH` | S→C (push) | `coopId`, `snapshotJson` | 게스트 동기화 |
+| `COOP_SAVE` | C→S (방장) | `coopId`, `snapshotJson`, `saveSlot` | 저장 확인 |
+| `COOP_SAVE_OK` | S→C | `coopId`, `saveSlot` | |
+| `PEER_DISCONNECTED` | S→C (push) | `message` | 상대 disconnect |
+
+`action`: `PlayerAction` enum — `MOVE_LEFT`, `MOVE_RIGHT`, `SOFT_DROP`, `HARD_DROP`, `ROTATE_CW`, `ROTATE_CCW`, `HOLD`
+
+저장 파일: `data/coop/{coopId}.json`, 유저 포인터 `data/saves/coop_slots/{userId}/slot{n}.txt`

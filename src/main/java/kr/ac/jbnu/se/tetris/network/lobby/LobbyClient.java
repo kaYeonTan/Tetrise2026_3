@@ -2,6 +2,7 @@ package kr.ac.jbnu.se.tetris.network.lobby;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Consumer;
 
 /** 게임 클라이언트용 로비 API (UI·GamePanel과 분리). */
 public class LobbyClient implements AutoCloseable {
@@ -9,6 +10,12 @@ public class LobbyClient implements AutoCloseable {
 	private LobbyClientConnection conn;
 	private String clientId;
 	private String nick;
+
+	public void setPushHandler(Consumer<LobbyMessage> handler) {
+		if (conn != null) {
+			conn.setPushHandler(handler);
+		}
+	}
 
 	public void connect(String host, int port, String displayNick) throws IOException {
 		closeQuietly();
@@ -79,6 +86,48 @@ public class LobbyClient implements AutoCloseable {
 
 	public boolean isConnected() {
 		return conn != null;
+	}
+
+	public LobbyMessage startGame() throws IOException {
+		return startGameInternal(LobbyMessage.of(LobbyMessageType.START_GAME));
+	}
+
+	public LobbyMessage resumeCoop(String coopId, long seed, String snapshotJson) throws IOException {
+		LobbyMessage req = LobbyMessage.of(LobbyMessageType.RESUME_COOP);
+		req.coopId = coopId;
+		req.seed = seed;
+		req.snapshotJson = snapshotJson;
+		return startGameInternal(req);
+	}
+
+	private LobbyMessage startGameInternal(LobbyMessage req) throws IOException {
+		LobbyMessage resp = conn.request(req);
+		if (LobbyMessageType.ERROR.name().equals(resp.type)) {
+			return resp;
+		}
+		expect(resp, LobbyMessageType.START_GAME_OK);
+		return resp;
+	}
+
+	public void sendPlayerAction(LobbyMessage req) throws IOException {
+		conn.sendFireAndForget(req);
+	}
+
+	public void sendCoopSnapshot(LobbyMessage req) throws IOException {
+		conn.sendFireAndForget(req);
+	}
+
+	public LobbyMessage requestCoopSave(LobbyMessage req) throws IOException {
+		LobbyMessage resp = conn.request(req);
+		if (LobbyMessageType.ERROR.name().equals(resp.type)) {
+			return resp;
+		}
+		expect(resp, LobbyMessageType.COOP_SAVE_OK);
+		return resp;
+	}
+
+	public LobbyClientConnection getConnection() {
+		return conn;
 	}
 
 	private static void expect(LobbyMessage resp, LobbyMessageType type) throws IOException {

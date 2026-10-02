@@ -20,6 +20,8 @@ public class LobbyServer implements AutoCloseable {
 
 	private final RoomRegistry registry = new RoomRegistry();
 	private final Map<String, String> clientNicks = new ConcurrentHashMap<>();
+	private final Map<String, ClientLink> clientLinks = new ConcurrentHashMap<>();
+	private final Map<String, InGameRoom> ingameByRoom = new ConcurrentHashMap<>();
 	private ServerSocket serverSocket;
 	private ExecutorService pool;
 	private volatile boolean running;
@@ -54,24 +56,79 @@ public class LobbyServer implements AutoCloseable {
 
 	private void handleClient(Socket socket) {
 		String clientId = UUID.randomUUID().toString();
+		ClientLink link = null;
 		try (Socket s = socket;
 				BufferedReader in = new BufferedReader(
 						new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
 				BufferedWriter out = new BufferedWriter(
 						new OutputStreamWriter(s.getOutputStream(), StandardCharsets.UTF_8))) {
+			link = new ClientLink(clientId, out);
+			clientLinks.put(clientId, link);
 			String line;
 			while ((line = in.readLine()) != null) {
 				LobbyMessage req = LobbyCodec.decode(line);
 				LobbyMessage resp = dispatch(clientId, req);
-				out.write(LobbyCodec.encode(resp));
-				out.newLine();
-				out.flush();
+				if (resp != null) {
+					link.write(resp);
+				}
 			}
 		} catch (IOException e) {
 			// disconnect
 		} finally {
-			registry.leave(clientId);
-			clientNicks.remove(clientId);
+			onClientDisconnect(clientId);
+			if (link != null) {
+				clientLinks.remove(clientId, link);
+			}
+		}
+	}
+
+	private void onClientDisconnect(String clientId) {
+		registry.roomOfClient(clientId).ifPresent(room -> {
+			notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.PEER_DISCONNECTED), m -> {
+				m.message = "상대 연결이 끊어졌어요.";
+			});
+			ingameByRoom.remove(room.roomId);
+		});
+		registry.leave(clientId);
+		clientNicks.remove(clientId);
+	}
+
+	static final class ClientLink {
+		final String clientId;
+		final BufferedWriter out;
+
+		ClientLink(String clientId, BufferedWriter out) {
+			this.clientId = clientId;
+			this.out = out;
+		}
+
+		synchronized void write(LobbyMessage msg) throws IOException {
+			out.write(LobbyCodec.encode(msg));
+			out.newLine();
+			out.flush();
+		}
+	}
+
+	void pushTo(String clientId, LobbyMessage msg) {
+		ClientLink link = clientLinks.get(clientId);
+		if (link == null) {
+			return;
+		}
+		try {
+			link.write(msg);
+		} catch (IOException ignored) {
+		}
+	}
+
+	void notifyPeer(LobbyRoom room, String fromClientId, LobbyMessage template,
+			java.util.function.Consumer<LobbyMessage> fill) {
+		for (String member : room.memberClientIds) {
+			if (member.equals(fromClientId)) {
+				continue;
+			}
+			LobbyMessage push = LobbyMessage.of(LobbyMessageType.valueOf(template.type));
+			fill.accept(push);
+			pushTo(member, push);
 		}
 	}
 
@@ -98,6 +155,16 @@ public class LobbyServer implements AutoCloseable {
 				return handleLeaveRoom(clientId);
 			case MY_ROOM:
 				return handleMyRoom(clientId);
+			case START_GAME:
+				return handleStartGame(clientId, req);
+			case RESUME_COOP:
+				return handleResumeCoop(clientId, req);
+			case PLAYER_ACTION:
+				return handlePlayerAction(clientId, req);
+			case COOP_SNAPSHOT:
+				return handleCoopSnapshot(clientId, req);
+			case COOP_SAVE:
+				return handleCoopSave(clientId, req);
 			default:
 				return error("INVALID", "로비에서 지원하지 않는 요청이에요.");
 		}
@@ -115,6 +182,108 @@ public class LobbyServer implements AutoCloseable {
 		LobbyMessage ok = LobbyMessage.of(LobbyMessageType.HELLO_OK);
 		ok.clientId = clientId;
 		ok.nick = nick;
+		return ok;
+	}
+
+	private LobbyMessage handleStartGame(String clientId, LobbyMessage req) {
+		return beginInGame(clientId, req, false);
+	}
+
+	private LobbyMessage handleResumeCoop(String clientId, LobbyMessage req) {
+		if (req.coopId == null || req.coopId.isBlank() || req.snapshotJson == null || req.snapshotJson.isBlank()) {
+			return error("INVALID", "저장 데이터가 없어요.");
+		}
+		return beginInGame(clientId, req, true);
+	}
+
+	private LobbyMessage beginInGame(String clientId, LobbyMessage req, boolean resume) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null) {
+			return error("NOT_IN_ROOM", "방에 들어가 있지 않아요.");
+		}
+		if (!clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 게임을 시작할 수 있어요.");
+		}
+		if (room.memberClientIds.size() < LobbyConfig.MAX_PLAYERS_PER_ROOM) {
+			return error("NOT_READY", "2명이 모여야 시작할 수 있어요.");
+		}
+		InGameRoom game;
+		if (resume) {
+			long seed = req.seed > 0 ? req.seed : System.currentTimeMillis();
+			game = new InGameRoom(room.roomId, room.hostClientId, req.coopId.trim(), seed);
+			game.pendingSnapshotJson = req.snapshotJson;
+			ingameByRoom.put(room.roomId, game);
+		} else {
+			game = ingameByRoom.computeIfAbsent(room.roomId, id -> new InGameRoom(room.roomId, room.hostClientId));
+		}
+		game.started = true;
+
+		for (String member : room.memberClientIds) {
+			if (member.equals(clientId)) {
+				continue;
+			}
+			LobbyMessage push = LobbyMessage.of(LobbyMessageType.GAME_STARTED);
+			push.roomId = room.roomId;
+			push.coopId = game.coopId;
+			push.seed = game.seed;
+			push.playerIndex = member.equals(room.hostClientId) ? 0 : 1;
+			push.role = member.equals(room.hostClientId) ? "HOST" : "GUEST";
+			push.resumeGame = resume;
+			if (resume) {
+				push.snapshotJson = game.pendingSnapshotJson;
+			}
+			pushTo(member, push);
+		}
+
+		LobbyMessage ok = LobbyMessage.of(LobbyMessageType.START_GAME_OK);
+		ok.roomId = room.roomId;
+		ok.coopId = game.coopId;
+		ok.seed = game.seed;
+		ok.playerIndex = 0;
+		ok.role = "HOST";
+		ok.resumeGame = resume;
+		if (resume) {
+			ok.snapshotJson = game.pendingSnapshotJson;
+		}
+		return ok;
+	}
+
+	private LobbyMessage handlePlayerAction(String clientId, LobbyMessage req) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		int expected = clientId.equals(room.hostClientId) ? 0 : 1;
+		if (req.playerIndex != expected) {
+			return error("INVALID_PLAYER", "플레이어 번호가 맞지 않아요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.PLAYER_ACTION), push -> {
+			push.playerIndex = req.playerIndex;
+			push.action = req.action;
+		});
+		return null;
+	}
+
+	private LobbyMessage handleCoopSnapshot(String clientId, LobbyMessage req) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 스냅샷을 보낼 수 있어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT_PUSH), push -> {
+			push.coopId = req.coopId;
+			push.snapshotJson = req.snapshotJson;
+		});
+		return null;
+	}
+
+	private LobbyMessage handleCoopSave(String clientId, LobbyMessage req) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 저장을 요청할 수 있어요.");
+		}
+		LobbyMessage ok = LobbyMessage.of(LobbyMessageType.COOP_SAVE_OK);
+		ok.coopId = req.coopId;
+		ok.saveSlot = req.saveSlot;
 		return ok;
 	}
 

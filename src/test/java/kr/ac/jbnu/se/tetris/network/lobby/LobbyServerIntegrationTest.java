@@ -49,6 +49,22 @@ class LobbyServerIntegrationTest {
 	}
 
 	@Test
+	void startGameWhenFull() throws Exception {
+		try (LobbyClient host = new LobbyClient()) {
+			host.connect("127.0.0.1", port, "Host");
+			LobbyMessage created = host.createRoom("Coop", RoomVisibility.PUBLIC);
+			try (LobbyClient guest = new LobbyClient()) {
+				guest.connect("127.0.0.1", port, "Guest");
+				guest.joinRoom(created.roomId, null);
+				LobbyMessage started = host.startGame();
+				assertEquals(LobbyMessageType.START_GAME_OK.name(), started.type);
+				assertNotNull(started.coopId);
+				assertEquals(0, started.playerIndex);
+			}
+		}
+	}
+
+	@Test
 	void roomCapOnServer() throws Exception {
 		for (int i = 0; i < LobbyConfig.MAX_ROOMS; i++) {
 			try (LobbyClient c = new LobbyClient()) {
