@@ -52,7 +52,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     private static final long serialVersionUID = 1L;
 
     // 0 타이틀 1 저장목록 2 인원선택 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
-    int screen = 0;
+    public int screen = 0;
     int settingFrom = 0;
 
     Timer timer;
@@ -73,10 +73,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public boolean isOnlineCoop = false;
     public int localPlayerIndex = 0;
     public String onlineCoopId;
-    transient CoopNetworkBridge coopBridge;
-    transient LobbyClient onlineLobbyClient;
+    public transient CoopNetworkBridge coopBridge;
+    public transient LobbyClient onlineLobbyClient;
     transient LobbyFrame onlineLobbyFrame;
-    transient CoopEngineBridge coopEngineBridge;
+    public transient CoopEngineBridge coopEngineBridge;
     public String lastOnlineRoomId;
     public CoopGameMemento pendingCoopResume;
     java.util.List<SaveSlotMeta> coopSlotList = new ArrayList<>();
@@ -87,16 +87,16 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public int bossMax;
     public int bossTimer;
     public long gameTime;
-    boolean bossWarning = false;
-    String bossWarningText = "";
-    long blizzardEnd = 0;
-    boolean stageClear = false;
+    public boolean bossWarning = false;
+    public String bossWarningText = "";
+    public long blizzardEnd = 0;
+    public boolean stageClear = false;
     int clearTimer = 0;
     boolean allClear = false;
-    int hitEffect = 0;
+    public int hitEffect = 0;
     public String saveFile = null;
-    String msg = "";
-    int msgTimer = 0;
+    public String msg = "";
+    public int msgTimer = 0;
     String resultMsg = "";
 
     public int[][] board1 = new int[24][10];
@@ -141,7 +141,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     ArrayList<String[]> saveList = new ArrayList<>();
 
     Random random = new Random();
-    final BossPatternController bossPattern = new BossPatternController(random);
+    public final BossPatternController bossPattern = new BossPatternController(random);
     int gravityMultiplier = 1;
     boolean p1FastNext;
     boolean p2FastNext;
@@ -430,7 +430,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         return playerIndex == 1;
     }
 
-    boolean useCoopEngineHost() {
+    public boolean useCoopEngineHost() {
         return coopEngineBridge != null && coopEngineBridge.isDrivingHost();
     }
 
@@ -700,7 +700,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         startStage(-1);
     }
 
-    void startStage(int restoredBlueprintIndex) {
+    public void startStage(int restoredBlueprintIndex) {
         if (stage == 1) {
             bossMax = 100;
         } else if (stage == 2) {
@@ -769,7 +769,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         return type >= 7 ? 9 : type + 1;
     }
 
-    static int engineType(Tetrominoes shape) {
+    public static int engineType(Tetrominoes shape) {
         if (shape == null) {
             return -1;
         }
@@ -790,7 +790,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         };
     }
 
-    static int engineBlockValue(Tetrominoes shape) {
+    public static int engineBlockValue(Tetrominoes shape) {
         int type = engineType(shape);
         return type < 0 ? 0 : blockValue(type);
     }
@@ -2485,7 +2485,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         closeOnlineLobbyUi();
     }
 
-    void closeOnlineLobbyUi() {
+    public void closeOnlineLobbyUi() {
         if (onlineLobbyFrame != null) {
             onlineLobbyFrame.disposeKeepConnection();
             onlineLobbyFrame = null;
