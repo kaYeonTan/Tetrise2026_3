@@ -48,6 +48,9 @@ import javax.swing.Timer;
 
 
 
+import com.google.gson.Gson;
+
+import kr.ac.jbnu.se.tetris.network.coop.CoopNetworkBridge;
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
 
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyConfig;
@@ -108,6 +111,8 @@ public class LobbyFrame extends JDialog {
 	/** 방장 비밀방 코드 — MY_ROOM 응답에 없을 때 화면 유지용 */
 	private String rememberedJoinCode;
 	private String rememberedRoomId;
+	private JButton startGameBtn;
+	private boolean retainConnectionOnClose;
 
 
 
@@ -302,6 +307,10 @@ public class LobbyFrame extends JDialog {
 		actions.add(actionButton("목록 새로고침", false, this::refreshRooms));
 		actions.add(Box.createVerticalStrut(6));
 		actions.add(actionButton("방 나가기", false, this::leaveRoom));
+		actions.add(Box.createVerticalStrut(6));
+		startGameBtn = actionButton("게임 시작 (방장)", true, this::startCoopGame);
+		startGameBtn.setEnabled(false);
+		actions.add(startGameBtn);
 
 		right.add(actions, BorderLayout.CENTER);
 
@@ -360,6 +369,11 @@ public class LobbyFrame extends JDialog {
 		rememberedJoinCode = null;
 
 		rememberedRoomId = null;
+
+		if (startGameBtn != null) {
+			startGameBtn.setEnabled(false);
+			startGameBtn.setText("게임 시작 (방장)");
+		}
 
 	}
 
@@ -486,6 +500,16 @@ public class LobbyFrame extends JDialog {
 		myRoomPanel.setText(sb.toString());
 
 		waitingLabel.setText("대기 중 · " + resp.roomName + " · " + resp.players.size() + "/2");
+		boolean isHostRole = "HOST".equals(resp.role);
+		boolean full = resp.players.size() >= 2;
+		if (startGameBtn != null) {
+			startGameBtn.setEnabled(isHostRole && full && client != null && client.isConnected());
+			if (isHostRole && panel.pendingCoopResume != null) {
+				startGameBtn.setText("저장 이어하기 (방장)");
+			} else {
+				startGameBtn.setText(isHostRole ? "게임 시작 (방장)" : "방장이 시작할 때까지 대기");
+			}
+		}
 
 	}
 
@@ -645,6 +669,10 @@ public class LobbyFrame extends JDialog {
 
 		normalizeHostPortFields();
 
+		if (panel.coopBridge != null) {
+			panel.coopBridge.detach();
+			panel.coopBridge = null;
+		}
 		disconnectClient();
 
 		String host = hostField.getText().trim();
@@ -678,6 +706,10 @@ public class LobbyFrame extends JDialog {
 			client = new LobbyClient();
 
 			client.connect(host, port, displayNick());
+			CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
+			bridge.attach(client);
+			panel.coopBridge = bridge;
+			panel.onlineLobbyClient = client;
 
 			statusLabel.setText("연결됨 · " + client.getNick() + " · 방 만들기/입장 가능");
 
@@ -901,6 +933,51 @@ public class LobbyFrame extends JDialog {
 
 
 
+	private void startCoopGame() {
+		if (!ensureConnected()) {
+			return;
+		}
+		try {
+			LobbyMessage resp;
+			if (panel.pendingCoopResume != null) {
+				Gson gson = new Gson();
+				String json = gson.toJson(panel.pendingCoopResume);
+				resp = client.resumeCoop(panel.pendingCoopResume.coopId, panel.pendingCoopResume.seed, json);
+				panel.pendingCoopResume = null;
+				startGameBtn.setText("게임 시작 (방장)");
+			} else {
+				resp = client.startGame();
+			}
+			if (LobbyMessageType.ERROR.name().equals(resp.type)) {
+				JOptionPane.showMessageDialog(this, resp.message);
+				return;
+			}
+			CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
+			bridge.attach(client);
+			panel.coopBridge = bridge;
+			panel.onlineLobbyClient = client;
+			client = null;
+			retainConnectionOnClose = true;
+			bridge.beginFromStartMessage(resp);
+			if (refreshTimer != null) {
+				refreshTimer.stop();
+			}
+			setVisible(false);
+			dispose();
+		} catch (Exception ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage());
+		}
+	}
+
+	public void disposeKeepConnection() {
+		retainConnectionOnClose = true;
+		if (refreshTimer != null) {
+			refreshTimer.stop();
+		}
+		setVisible(false);
+		dispose();
+	}
+
 	private void leaveRoom() {
 
 		if (client == null) {
@@ -953,7 +1030,13 @@ public class LobbyFrame extends JDialog {
 
 	public void dispose() {
 
-		disconnectClient();
+		if (!retainConnectionOnClose) {
+			if (panel.coopBridge != null && panel.onlineLobbyClient == null) {
+				panel.coopBridge.detach();
+				panel.coopBridge = null;
+			}
+			disconnectClient();
+		}
 
 		super.dispose();
 

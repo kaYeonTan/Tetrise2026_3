@@ -24,6 +24,15 @@ public class LobbyMessage {
 	public List<String> players = new ArrayList<>();
 	public List<RoomSnapshot> rooms = new ArrayList<>();
 
+	/** in-game */
+	public int playerIndex;
+	public String action;
+	public String coopId;
+	public long seed;
+	public String snapshotJson;
+	public int saveSlot;
+	public boolean resumeGame;
+
 	public static LobbyMessage of(LobbyMessageType t) {
 		LobbyMessage m = new LobbyMessage();
 		m.type = t.name();

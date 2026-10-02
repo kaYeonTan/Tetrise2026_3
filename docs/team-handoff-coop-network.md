@@ -124,8 +124,10 @@ java -cp "target/classes;lib/gson-2.11.0.jar" kr.ac.jbnu.se.tetris.app.GameWindo
 
 | Done | Not done (다른 담당 + 후속) |
 |------|-----------------------------|
-| TCP 로비, 방 최대 **5**, 정원 **2** | in-game 동기화 (보드·보스·입력) |
-| 공개 방 / 비밀 방 (코드 **서버 6자**) | coop 저장 (`coopId`, 슬롯 2개) |
+| TCP 로비, 방 최대 **5**, 정원 **2** | B팀 UI 스킨 통합 |
+| in-game: 입력 릴레이 + 방장 스냅샷 + `START_GAME` | |
+| coop 저장 MVP (`CoopSaveService`, 슬롯 1·방장) | 계정 슬롯 UI 연동 |
+| 공개 방 / 비밀 방 (코드 **서버 6자**) | |
 | 목록·생성·입장·퇴장·`MY_ROOM` | AI 대전 (없음 — **실제 2인 협동만**) |
 | 클라 UI: `LobbyFrame` + `LobbyClient` | B팀 UI 스킨 통합 |
 
