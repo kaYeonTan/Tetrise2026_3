@@ -39,3 +39,8 @@ data/keys.txt
 
 ### IntelliJ (personal) ###
 .idea/workspace.xml
+
+.idea/
+*.iml
+out/
+target/

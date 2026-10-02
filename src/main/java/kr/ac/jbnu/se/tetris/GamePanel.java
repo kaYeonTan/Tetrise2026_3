@@ -1616,9 +1616,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             shadowText(g, loginUser + " 용사님, 모험을 떠나요!", 88, 585, new Color(0xe9c98f), new Color(0x0c090d), 2);
             drawButton(g, "로그아웃", 88, 600, 150, 44, 2, 16.5f);
         } else {
-            shadowText(g, "게스트로 플레이 중", 88, 585, new Color(0xd9c29a), new Color(0x0c090d), 2);
             drawButton(g, "로그인", 88, 600, 150, 44, 2, 16.5f);
             drawButton(g, "회원가입", 250, 600, 150, 44, 2, 16.5f);
+            g.setFont(font.deriveFont(22f));
+            shadowText(g, "게스트로 플레이 중", 88, 672, new Color(0xd9c29a), new Color(0x0c090d), 2);
         }
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x9a8f9f));
