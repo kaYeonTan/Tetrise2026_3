@@ -8,6 +8,8 @@ import java.util.HashSet;
 import java.util.Random;
 import javax.swing.JLabel;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
+import kr.ac.jbnu.se.tetris.core.GameSession;
+import kr.ac.jbnu.se.tetris.integration.CoopEngineBridge;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -131,6 +133,45 @@ class GamePanelTest {
         assertEquals(9, p2GarbageBlocks);
         assertEquals(p1Y - 1, p.p1Y);
         assertEquals(p2Y - 1, p.p2Y);
+    }
+
+    @Test
+    void onlineHostTicksRisingPatternAndRaisesBothAuthoritativeBoards() {
+        p.newGame(true);
+        p.isOnlineCoop = true;
+        p.localPlayerIndex = 0;
+        p.stage = 2;
+        p.startStage();
+        p.coopEngineBridge = new CoopEngineBridge(p);
+        p.coopEngineBridge.startOnlineHost(2, 7L);
+        p.coopEngineBridge.getEngine().engine(0).softDropOnce();
+        p.coopEngineBridge.getEngine().engine(1).softDropOnce();
+        p.coopEngineBridge.getEngine().engine(0).pause();
+        p.coopEngineBridge.getEngine().engine(1).pause();
+
+        p.update();
+        assertEquals(16, p.bossTimer);
+
+        GameSession player0 = p.coopEngineBridge.session(0);
+        GameSession player1 = p.coopEngineBridge.session(1);
+        int player0Y = player0.curY;
+        int player1Y = player1.curY;
+        p.raiseBlocks();
+
+        assertEquals(9, occupiedCells(player0, 0));
+        assertEquals(9, occupiedCells(player1, 0));
+        assertEquals(player0Y + 1, player0.curY);
+        assertEquals(player1Y + 1, player1.curY);
+    }
+
+    private static int occupiedCells(GameSession session, int y) {
+        int occupied = 0;
+        for (int x = 0; x < GameSession.WIDTH; x++) {
+            if (session.shapeAt(x, y) != Tetrominoes.NoShape) {
+                occupied++;
+            }
+        }
+        return occupied;
     }
 
     @Test

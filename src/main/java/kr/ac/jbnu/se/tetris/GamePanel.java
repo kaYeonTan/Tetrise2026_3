@@ -34,6 +34,9 @@ import javax.swing.Timer;
 import kr.ac.jbnu.se.tetris.boss.BossPatternController;
 import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
+import kr.ac.jbnu.se.tetris.audio.BgmType;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
+import kr.ac.jbnu.se.tetris.audio.SoundManager;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.core.PlayerAction;
 import kr.ac.jbnu.se.tetris.integration.ASinglePlayerBridge;
@@ -91,6 +94,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public String bossWarningText = "";
     public long blizzardEnd = 0;
     public boolean stageClear = false;
+    boolean stageClearSoundPlayed;
     int clearTimer = 0;
     boolean allClear = false;
     public int hitEffect = 0;
@@ -142,6 +146,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     Random random = new Random();
     public final BossPatternController bossPattern = new BossPatternController(random);
+    private final transient SoundManager soundManager;
     int gravityMultiplier = 1;
     boolean p1FastNext;
     boolean p2FastNext;
@@ -188,6 +193,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @SuppressWarnings("this-escape")
     public GamePanel() {
+        this(new SoundManager());
+    }
+
+    @SuppressWarnings("this-escape")
+    public GamePanel(SoundManager soundManager) {
+        this.soundManager = soundManager == null ? new SoundManager() : soundManager;
         setPreferredSize(new Dimension(1280, 720));
         setFocusable(true);
         setLayout(null);
@@ -215,6 +226,35 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         FileManager.loadKeys();
         timer = new Timer(16, this);
         timer.start();
+    }
+
+    public void playButtonClickSound() {
+        soundManager.playSfx(SfxType.BUTTON_CLICK);
+    }
+
+    public void playBlockLockSound() {
+        soundManager.playSfx(SfxType.BLOCK_LOCK);
+    }
+
+    public void playLineClearSound(int lines) {
+        if (lines == 1) {
+            soundManager.playSfx(SfxType.LINE_CLEAR_SINGLE);
+        } else if (lines >= 2) {
+            soundManager.playSfx(SfxType.LINE_CLEAR_MULTI);
+        }
+    }
+
+    public void startBattleBgm() {
+        soundManager.playBgm(BgmType.BATTLE);
+    }
+
+    private void playStageClearSound() {
+        if (stageClearSoundPlayed) {
+            return;
+        }
+        stageClearSoundPlayed = true;
+        soundManager.stopBgm();
+        soundManager.playSfx(SfxType.STAGE_CLEAR);
     }
 
     @Override
@@ -373,7 +413,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
         if (useCoopEngineHost()) {
             coopEngineBridge.tickHost();
-        } else if (!isOnlineCoop || localPlayerIndex == 0) {
+        }
+        if (!isOnlineCoop || localPlayerIndex == 0) {
             bossPattern.tick(16, this);
             bossTimer = bossPattern.elapsedMillis();
         }
@@ -447,6 +488,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     void updateTemporaryBossEffects() {
         if (gravityMultiplier > 1 && gameTime >= blizzardEnd) {
             gravityMultiplier = 1;
+            soundManager.stopManagedSfx(SfxType.STAGE_4_PATTERN);
             if (useAEngine()) {
                 aEngineBridge.setGravityMultiplier(1);
             }
@@ -514,6 +556,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     @Override
+    public void onBossPatternActivated() {
+        if (stage == 2) {
+            soundManager.playSfx(SfxType.STAGE_2_PATTERN);
+        } else if (stage == 4) {
+            soundManager.playManagedSfx(SfxType.STAGE_4_PATTERN);
+        } else if (stage == 5) {
+            soundManager.playSfx(SfxType.STAGE_5_PATTERN);
+        }
+    }
+
+    @Override
     public void showBossMessage(String message) {
         msg = message;
         msgTimer = 120;
@@ -521,6 +574,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public void raiseBlocks() {
+        if (useCoopEngineHost()) {
+            if (!coopEngineBridge.raiseGarbageLines(random.nextInt(10), random.nextInt(10))) {
+                gameEnd(false);
+            }
+            return;
+        }
         if (useAEngine()) {
             if (!aEngineBridge.raiseGarbageLine(random.nextInt(10))) {
                 gameEnd(false);
@@ -578,6 +637,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public void resetTemporaryBossEffects() {
         gravityMultiplier = 1;
         blizzardEnd = 0;
+        soundManager.stopManagedSfx(SfxType.STAGE_4_PATTERN);
         p1FastNext = false;
         p2FastNext = false;
         p1FastCurrent = false;
@@ -621,6 +681,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         msg = "BLUEPRINT COMPLETE!";
         msgTimer = 120;
         bossPattern.stop(this);
+        playStageClearSound();
     }
 
     public void notifyBossBoardChanged() {
@@ -662,6 +723,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             clearTimer = 2000;
             pressed.clear();
             bossPattern.stop(this);
+            playStageClearSound();
         }
     }
 
@@ -718,6 +780,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         bossWarningText = "";
         blizzardEnd = 0;
         stageClear = false;
+        stageClearSoundPlayed = false;
         hitEffect = 0;
         board1 = new int[24][10];
         board2 = new int[24][10];
@@ -742,6 +805,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             spawnP1();
             spawnP2();
         }
+        startBattleBgm();
     }
 
     void fillNext(ArrayList<Integer> next, ArrayList<Integer> bag) {
@@ -962,6 +1026,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void lockP1() {
+        playBlockLockSound();
         for (int i = 0; i < blockCount(p1Type); i++) {
             board1[p1Y + SHAPES[p1Type][p1Rot][i * 2 + 1]][p1X + SHAPES[p1Type][p1Rot][i * 2]] = blockValue(p1Type);
         }
@@ -991,6 +1056,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void lockP2() {
+        playBlockLockSound();
         for (int i = 0; i < blockCount(p2Type); i++) {
             board2[p2Y + SHAPES[p2Type][p2Rot][i * 2 + 1]][p2X + SHAPES[p2Type][p2Rot][i * 2]] = blockValue(p2Type);
         }
@@ -1051,8 +1117,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 clearTimer = 2000;
                 pressed.clear();
                 bossPattern.stop(this);
+                playStageClearSound();
             }
         }
+        playLineClearSound(count);
         return count;
     }
 
@@ -1083,6 +1151,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         screen = 7;
         pressed.clear();
         bossPattern.stop(this);
+        soundManager.stopBgm();
         int total = p1Score + (isTwoPlayer ? p2Score : 0);
         if (loginUser != null) {
             FileManager.addRecord(loginUser, total, stage, isTwoPlayer ? 2 : 1, clear);
@@ -1152,6 +1221,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     if (useAEngine()) {
                         aEngineBridge.pauseEngine();
                     }
+                    soundManager.pauseBgm();
                 }
                 return;
             }
@@ -1212,6 +1282,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 if (useAEngine()) {
                     aEngineBridge.resumeEngine();
                 }
+                soundManager.resumeBgm();
             } else if (screen == 2) {
                 screen = 1;
             } else if (screen == 1 || screen == 3) {
@@ -1256,41 +1327,49 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         return false;
     }
 
+    boolean clicked(int x, int y, int w, int h) {
+        if (!in(x, y, w, h)) {
+            return false;
+        }
+        playButtonClickSound();
+        return true;
+    }
+
     @Override
     public void mousePressed(MouseEvent e) {
         mouseX = e.getX();
         mouseY = e.getY();
         requestFocusInWindow();
         if (screen == 0) {
-            if (in(88, 262, 300, 54)) {
+            if (clicked(88, 262, 300, 54)) {
                 saveList = loginUser == null ? new ArrayList<>() : FileManager.getSaveList(loginUser);
                 screen = 1;
-            } else if (in(88, 332, 300, 54)) {
+            } else if (clicked(88, 332, 300, 54)) {
                 loadRanking();
                 screen = 3;
-            } else if (in(88, 402, 300, 54)) {
+            } else if (clicked(88, 402, 300, 54)) {
                 settingFrom = 0;
                 editKeys = new int[][]{keySingle.clone(), keyP1.clone(), keyP2.clone(), {keyPause}};
                 setTab = 0;
                 captureRow = -1;
                 setMsg = "";
                 screen = 4;
-            } else if (in(88, 472, 300, 54)) {
+            } else if (clicked(88, 472, 300, 54)) {
                 int r = JOptionPane.showOptionDialog(this, "모험을 마치고 게임을 종료할까요?", "게임 종료",
                         JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"종료", "취소"}, "취소");
                 if (r == 0) {
                     System.exit(0);
                 }
-            } else if (in(88, 530, 300, 44)) {
+            } else if (clicked(88, 530, 300, 44)) {
                 onlineLobbyFrame = new LobbyFrame(this);
                 onlineLobbyFrame.setVisible(true);
-            } else if (in(400, 530, 300, 44)) {
+            } else if (clicked(400, 530, 300, 44)) {
                 openCoopSlotScreen(2);
-            } else if (loginUser == null && in(88, 600, 150, 44)) {
+            } else if (loginUser == null && clicked(88, 600, 150, 44)) {
                 new LoginFrame(this, false).setVisible(true);
-            } else if (loginUser == null && in(250, 600, 150, 44)) {
+            } else if (loginUser == null && clicked(250, 600, 150, 44)) {
                 new LoginFrame(this, true).setVisible(true);
-            } else if (loginUser != null && in(88, 600, 150, 44)) {
+            } else if (loginUser != null && clicked(88, 600, 150, 44)) {
                 int r = JOptionPane.showOptionDialog(this, "로그아웃할까요?", "로그아웃",
                         JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"로그아웃", "취소"}, "취소");
                 if (r == 0) {
@@ -1298,19 +1377,19 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         } else if (screen == 1) {
-            if (loginUser == null && in(530, 420, 220, 46)) {
+            if (loginUser == null && clicked(530, 420, 220, 46)) {
                 new LoginFrame(this, false).setVisible(true);
                 if (loginUser != null) {
                     saveList = FileManager.getSaveList(loginUser);
                 }
-            } else if (in(490, 612, 300, 54)) {
+            } else if (clicked(490, 612, 300, 54)) {
                 screen = 2;
-            } else if (in(40, 640, 140, 44)) {
+            } else if (clicked(40, 640, 140, 44)) {
                 screen = 0;
             } else if (loginUser != null) {
                 for (int i = 0; i < saveList.size() && i < 5; i++) {
                     int y = 146 + i * 88;
-                    if (in(760, y + 18, 120, 44)) {
+                    if (clicked(760, y + 18, 120, 44)) {
                         if (FileManager.loadGame(saveList.get(i)[0], this)) {
                             screen = 5;
                             pressed.clear();
@@ -1319,7 +1398,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         }
                         break;
                     }
-                    if (in(890, y + 18, 110, 44)) {
+                    if (clicked(890, y + 18, 110, 44)) {
                         int r = JOptionPane.showOptionDialog(this, "스테이지 " + saveList.get(i)[2] + " · 점수 " + saveList.get(i)[3]
                                         + "\n이 저장을 지울까요? 되돌릴 수 없어요.", "저장 삭제",
                                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"삭제", "취소"}, "취소");
@@ -1332,38 +1411,38 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         } else if (screen == 2) {
-            if (in(370, 270, 220, 54)) {
+            if (clicked(370, 270, 220, 54)) {
                 newGame(false);
-            } else if (in(370, 366, 220, 54)) {
+            } else if (clicked(370, 366, 220, 54)) {
                 newGame(true);
-            } else if (in(570, 470, 140, 44)) {
+            } else if (clicked(570, 470, 140, 44)) {
                 screen = 1;
             }
         } else if (screen == 3) {
-            if (in(170, 146, 220, 46)) {
+            if (clicked(170, 146, 220, 46)) {
                 rankTab = 0;
                 loadRanking();
-            } else if (in(402, 146, 220, 46)) {
+            } else if (clicked(402, 146, 220, 46)) {
                 rankTab = 1;
                 loadRanking();
-            } else if (in(40, 640, 140, 44)) {
+            } else if (clicked(40, 640, 140, 44)) {
                 screen = 0;
             }
         } else if (screen == 4) {
             for (int t = 0; t < 4; t++) {
-                if (in(250 + t * 192, 126, 180, 42)) {
+                if (clicked(250 + t * 192, 126, 180, 42)) {
                     setTab = t;
                     captureRow = -1;
                 }
             }
             for (int r = 0; r < editKeys[setTab].length; r++) {
-                if (in(670, 190 + r * 48, 220, 36)) {
+                if (clicked(670, 190 + r * 48, 220, 36)) {
                     captureRow = r;
                     setMsg = "새 키를 누르세요. 취소하려면 Esc를 누르세요.";
                     setMsgError = false;
                 }
             }
-            if (in(250, 590, 170, 46)) {
+            if (clicked(250, 590, 170, 46)) {
                 editKeys = new int[][]{
                     {KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_DOWN, KeyEvent.VK_SPACE, KeyEvent.VK_UP, KeyEvent.VK_Z, KeyEvent.VK_C},
                     {KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_S, KeyEvent.VK_SPACE, KeyEvent.VK_W, KeyEvent.VK_Q, KeyEvent.VK_E},
@@ -1373,7 +1452,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 captureRow = -1;
                 setMsg = "기본 키 배치로 되돌렸어요. 저장을 눌러야 적용돼요.";
                 setMsgError = false;
-            } else if (in(700, 590, 150, 46)) {
+            } else if (clicked(700, 590, 150, 46)) {
                 keySingle = editKeys[0].clone();
                 keyP1 = editKeys[1].clone();
                 keyP2 = editKeys[2].clone();
@@ -1381,17 +1460,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 FileManager.saveKeys();
                 setMsg = "저장했어요! 바로 게임에 적용돼요.";
                 setMsgError = false;
-            } else if (in(862, 590, 150, 46)) {
+            } else if (clicked(862, 590, 150, 46)) {
                 closeSettings();
             }
         } else if (screen == 6) {
-            if (in(490, 210, 300, 54)) {
+            if (clicked(490, 210, 300, 54)) {
                 screen = 5;
                 pressed.clear();
                 if (useAEngine()) {
                     aEngineBridge.resumeEngine();
                 }
-            } else if (in(490, 282, 300, 54)) {
+                soundManager.resumeBgm();
+            } else if (clicked(490, 282, 300, 54)) {
                 if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
                     msg = "방장만 협동 저장을 할 수 있어요.";
                     msgTimer = 180;
@@ -1410,9 +1490,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     msg = "저장하지 못했어요.";
                     msgTimer = 180;
                 }
-            } else if (in(490, 354, 300, 54)) {
+            } else if (clicked(490, 354, 300, 54)) {
                 openSettings();
-            } else if (in(490, 426, 300, 54)) {
+            } else if (clicked(490, 426, 300, 54)) {
                 if (loginUser != null) {
                     int r = JOptionPane.showOptionDialog(this, "저장하지 않은 진행은 사라져요.", "메인으로",
                             JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
@@ -1424,19 +1504,22 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         }
                         FileManager.saveGame(this);
                         screen = 0;
+                        soundManager.stopBgm();
                     } else if (r == 1) {
                         screen = 0;
+                        soundManager.stopBgm();
                     }
                 } else {
                     int r = JOptionPane.showOptionDialog(this, "게스트 진행은 저장되지 않아요.\n메인 화면으로 갈까요?", "메인으로",
                             JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"나가기", "취소"}, "취소");
                     if (r == 0) {
                         screen = 0;
+                        soundManager.stopBgm();
                     }
                 }
             }
         } else if (screen == 7) {
-            if (in(490, 470, 300, 54)) {
+            if (clicked(490, 470, 300, 54)) {
                 screen = 0;
             }
         } else if (screen == 8) {
@@ -1445,12 +1528,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void handleCoopSlotClick() {
-        if (in(490, 560, 300, 48)) {
+        if (clicked(490, 560, 300, 48)) {
             screen = coopSlotMode == 1 ? 6 : 0;
             return;
         }
         for (int i = 0; i < 3; i++) {
-            if (in(340, 220 + i * 92, 600, 72)) {
+            if (clicked(340, 220 + i * 92, 600, 72)) {
                 pickCoopSlot(i + 1);
                 return;
             }
@@ -2510,6 +2593,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         msgTimer = 300;
         if (screen == 5 && !stageClear) {
             screen = 6;
+            soundManager.pauseBgm();
         }
     }
 

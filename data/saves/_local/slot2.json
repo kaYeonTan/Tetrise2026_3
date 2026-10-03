@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "coopId": "test-coop-id",
+  "seed": 42,
+  "stage": 2,
+  "bossHp": 80,
+  "bossMax": 150,
+  "bossTimer": 0,
+  "gameTime": 0,
+  "stageClear": false,
+  "blizzardEnd": 0,
+  "blueprintIndex": -1,
+  "onlineResume": false,
+  "savedAtMs": 1791022832552
+}
