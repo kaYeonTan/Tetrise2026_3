@@ -140,6 +140,7 @@ public class LoginFrame extends JDialog {
 
     JButton makeButton(String text, boolean red) {
         JButton b = new JButton(text);
+        b.addActionListener(e -> panel.playButtonClickSound());
         b.setFont(panel.font.deriveFont(red ? 22f : 16.5f));
         b.setFocusPainted(false);
         b.setContentAreaFilled(false);

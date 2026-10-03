@@ -31,10 +31,14 @@ public final class CoopEngineBridge {
 
 	public void startOnlineHost(int stage, long seed) {
 		engine = new CoopGameEngine();
-		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> panel.notifyBossBoardChanged());
+		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> {
+			panel.playBlockLockSound();
+			panel.notifyBossBoardChanged();
+		});
 		engine.getBus().subscribe(GameEventType.LINES_CLEARED, e -> {
 			if (e.value > 0) {
 				panel.applyBossLineDamage(e.value);
+				panel.playLineClearSound(e.value);
 			}
 			syncHudFromEngine();
 			panel.notifyBossBoardChanged();
@@ -66,6 +70,16 @@ public final class CoopEngineBridge {
 		syncHudFromEngine();
 	}
 
+	/** Applies the stage 2 boss garbage row to both authoritative online boards. */
+	public boolean raiseGarbageLines(int player0Hole, int player1Hole) {
+		if (!isDrivingHost()) {
+			return false;
+		}
+		boolean player0Raised = engine.engine(0).raiseGarbageLine(player0Hole);
+		boolean player1Raised = engine.engine(1).raiseGarbageLine(player1Hole);
+		return player0Raised && player1Raised;
+	}
+
 	public CoopGameMemento createMemento(String coopId) {
 		if (engine == null) {
 			return null;
@@ -82,10 +96,14 @@ public final class CoopEngineBridge {
 	}
 
 	private void wireEvents() {
-		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> panel.notifyBossBoardChanged());
+		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> {
+			panel.playBlockLockSound();
+			panel.notifyBossBoardChanged();
+		});
 		engine.getBus().subscribe(GameEventType.LINES_CLEARED, e -> {
 			if (e.value > 0) {
 				panel.applyBossLineDamage(e.value);
+				panel.playLineClearSound(e.value);
 			}
 			syncHudFromEngine();
 			panel.notifyBossBoardChanged();
@@ -136,6 +154,7 @@ public final class CoopEngineBridge {
 			CoopSnapshotMapper.applyToPanel(snap, panel, true);
 		}
 		panel.screen = 5;
+		panel.startBattleBgm();
 	}
 
 	public GameSession session(int player) {

@@ -570,6 +570,7 @@ public class LobbyFrame extends JDialog {
 	private JButton button(String text, boolean primary) {
 
 		JButton b = new JButton(text);
+		b.addActionListener(e -> panel.playButtonClickSound());
 
 		b.setFont(uiFont());
 

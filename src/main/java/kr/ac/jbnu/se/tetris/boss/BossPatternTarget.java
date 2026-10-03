@@ -6,6 +6,9 @@ public interface BossPatternTarget {
 
     void clearBossWarning();
 
+    default void onBossPatternActivated() {
+    }
+
     void showBossMessage(String message);
 
     void raiseBlocks();

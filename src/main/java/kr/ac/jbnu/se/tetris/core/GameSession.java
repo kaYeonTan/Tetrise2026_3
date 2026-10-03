@@ -79,7 +79,7 @@ public class GameSession {
 	public boolean spawnShape(Tetrominoes type) {
 		curPiece.setShape(type);
 		curX = WIDTH / 2 + 1;
-		curY = HEIGHT - 1 + curPiece.minY();
+		curY = HEIGHT - 2 + curPiece.minY();
 		return tryMove(curPiece, curX, curY);
 	}
 
@@ -176,7 +176,7 @@ public class GameSession {
 			randomizer = new SevenBagRandomizer();
 		curPiece.setShape(randomizer.next());
 		curX = WIDTH / 2 + 1;
-		curY = HEIGHT - 1 + curPiece.minY();
+		curY = HEIGHT - 2 + curPiece.minY();
 		return tryMove(curPiece, curX, curY);
 	}
 
