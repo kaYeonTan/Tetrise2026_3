@@ -1,12 +1,13 @@
-# S3 — F-02 7-Bag + Next
+# 다음 블록 메모
 
-- `SevenBagRandomizer` — seed, next/peek, saveState
-- `GameSession.spawnPiece` — randomizer.next()
-- `NextPreviewPanel` — peekNext() 표시
-- 창 가로 280 (NEXT 패널 EAST)
+다음 블록은 `SevenBagRandomizer`에서 뽑는다.
 
-## 플레이 확인
+- 블록 7종을 한 번씩 섞어서 사용함
+- `peekAt()`으로 다음 블록을 화면에 보여줌
+- 저장할 때 랜덤 상태도 같이 저장함
 
-1. 오른쪽 NEXT와 떨어지는 블록: NEXT는 **그 다음** 블록
-2. 블록 7개 떨어질 때까지 같은 종류 2번 연속 없음
-3. 고스트·회전·줄삭제 회귀
+확인할 것:
+
+1. NEXT는 현재 블록이 아니라 그 다음 블록부터 보여야 함
+2. 7개 안에 같은 일반 블록이 두 번 나오면 안 됨
+3. 저장 후 다시 들어와도 다음 블록 순서가 이상하지 않아야 함

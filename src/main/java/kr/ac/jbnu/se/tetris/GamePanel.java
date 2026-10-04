@@ -31,12 +31,31 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
-public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener {
+import kr.ac.jbnu.se.tetris.boss.BossPatternController;
+import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
+import kr.ac.jbnu.se.tetris.boss.Blueprint;
+import kr.ac.jbnu.se.tetris.audio.BgmType;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
+import kr.ac.jbnu.se.tetris.audio.SoundManager;
+import kr.ac.jbnu.se.tetris.core.GameSession;
+import kr.ac.jbnu.se.tetris.core.PlayerAction;
+import kr.ac.jbnu.se.tetris.integration.ASinglePlayerBridge;
+import kr.ac.jbnu.se.tetris.integration.CoopEngineBridge;
+import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
+import kr.ac.jbnu.se.tetris.persistence.LoadException;
+import kr.ac.jbnu.se.tetris.persistence.SaveService;
+import kr.ac.jbnu.se.tetris.persistence.SaveSlotMeta;
+import kr.ac.jbnu.se.tetris.network.coop.CoopNetworkBridge;
+import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshotMapper;
+import com.google.gson.Gson;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
+
+public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener, BossPatternTarget {
 
     private static final long serialVersionUID = 1L;
 
-    // 0 타이틀 1 저장목록 2 인원선택 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
-    int screen = 0;
+    // 0 타이틀 1 1인 저장목록 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
+    public int screen = 0;
     int settingFrom = 0;
 
     Timer timer;
@@ -47,26 +66,42 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     public String loginUser = null;
 
-    Font font;
+    public Font font;
     Font fontBold;
     Font fontSmall;
     transient BufferedImage mapImg;
 
     public boolean isTwoPlayer = false;
+    /** 2PC 온라인 협동 — 각 PC는 1인 키로 자기 보드만 조작. */
+    public boolean isOnlineCoop = false;
+    public int localPlayerIndex = 0;
+    public String onlineCoopId;
+    public transient CoopNetworkBridge coopBridge;
+    public transient LobbyClient onlineLobbyClient;
+    transient LobbyFrame onlineLobbyFrame;
+    public transient CoopEngineBridge coopEngineBridge;
+    public String lastOnlineRoomId;
+    public CoopGameMemento pendingCoopResume;
+    java.util.List<SaveSlotMeta> coopSlotList = new ArrayList<>();
+    /** 8=협동 슬롯 UI (저장/불러오기) */
+    int coopSlotMode;
     public int stage = 1;
     public int bossHp;
     public int bossMax;
     public int bossTimer;
     public long gameTime;
-    boolean bossWarning = false;
-    long blizzardEnd = 0;
-    boolean stageClear = false;
+    public boolean bossWarning = false;
+    public String bossWarningText = "";
+    public long blizzardEnd = 0;
+    public boolean stageClear = false;
+    boolean stageClearSoundPlayed;
     int clearTimer = 0;
     boolean allClear = false;
-    int hitEffect = 0;
+    public int hitEffect = 0;
+    int bossAwakeningEffect = 0;
     public String saveFile = null;
-    String msg = "";
-    int msgTimer = 0;
+    public String msg = "";
+    public int msgTimer = 0;
     String resultMsg = "";
 
     public int[][] board1 = new int[24][10];
@@ -78,6 +113,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public int p1Score, p1Lines;
     public int p1Garbage;
     int p1DropCount;
+    /** 좌·우: 첫 입력 후 이 시간(ms) 동안은 추가 이동 없음 (짧은 탭이 여러 칸으로 잡히는 것 방지) */
+    static final int HORIZONTAL_DAS_DELAY_MS = 400;
+    static final int HORIZONTAL_ARR_INTERVAL_MS = 90;
+    static final int SOFT_DROP_REPEAT_MS = 50;
     int p1LeftCount, p1RightCount, p1DownCount;
 
     public int[][] board2 = new int[24][10];
@@ -111,8 +150,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     ArrayList<String[]> saveList = new ArrayList<>();
 
     Random random = new Random();
+    public final BossPatternController bossPattern = new BossPatternController(random);
+    private final transient SoundManager soundManager;
+    int gravityMultiplier = 1;
+    boolean p1FastNext;
+    boolean p2FastNext;
+    boolean p1FastCurrent;
+    boolean p2FastCurrent;
+    int[] temporaryPrimaryKeys;
+    int[] temporarySecondaryKeys;
+    long randomKeyEnd;
 
-    // I O T S Z J L
+    /** 1인: A GameEngine + Board (B UI 위에 올림) */
+    transient ASinglePlayerBridge aEngineBridge;
+
+    // I O T S Z J L P U V X F
     static int[][][] SHAPES = {
         {{0, 1, 1, 1, 2, 1, 3, 1}, {2, 0, 2, 1, 2, 2, 2, 3}, {0, 2, 1, 2, 2, 2, 3, 2}, {1, 0, 1, 1, 1, 2, 1, 3}},
         {{1, 0, 2, 0, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 2, 1}},
@@ -120,7 +172,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         {{1, 0, 2, 0, 0, 1, 1, 1}, {1, 0, 1, 1, 2, 1, 2, 2}, {1, 1, 2, 1, 0, 2, 1, 2}, {0, 0, 0, 1, 1, 1, 1, 2}},
         {{0, 0, 1, 0, 1, 1, 2, 1}, {2, 0, 1, 1, 2, 1, 1, 2}, {0, 1, 1, 1, 1, 2, 2, 2}, {1, 0, 0, 1, 1, 1, 0, 2}},
         {{0, 0, 0, 1, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 1, 2}, {0, 1, 1, 1, 2, 1, 2, 2}, {1, 0, 1, 1, 0, 2, 1, 2}},
-        {{2, 0, 0, 1, 1, 1, 2, 1}, {1, 0, 1, 1, 1, 2, 2, 2}, {0, 1, 1, 1, 2, 1, 0, 2}, {0, 0, 1, 0, 1, 1, 1, 2}}
+        {{2, 0, 0, 1, 1, 1, 2, 1}, {1, 0, 1, 1, 1, 2, 2, 2}, {0, 1, 1, 1, 2, 1, 0, 2}, {0, 0, 1, 0, 1, 1, 1, 2}},
+        {{0, 0, 1, 0, 0, 1, 1, 1, 1, 2}, {1, 0, 2, 0, 0, 1, 1, 1, 2, 1}, {0, 0, 0, 1, 1, 1, 0, 2, 1, 2}, {0, 0, 1, 0, 2, 0, 0, 1, 1, 1}},
+        {{0, 0, 2, 0, 0, 1, 1, 1, 2, 1}, {0, 0, 1, 0, 0, 1, 0, 2, 1, 2}, {0, 0, 1, 0, 2, 0, 0, 1, 2, 1}, {0, 0, 1, 0, 1, 1, 0, 2, 1, 2}},
+        {{0, 0, 0, 1, 0, 2, 1, 2, 2, 2}, {0, 0, 1, 0, 2, 0, 0, 1, 0, 2}, {0, 0, 1, 0, 2, 0, 2, 1, 2, 2}, {2, 0, 2, 1, 0, 2, 1, 2, 2, 2}},
+        {{1, 0, 0, 1, 1, 1, 2, 1, 1, 2}, {1, 0, 0, 1, 1, 1, 2, 1, 1, 2}, {1, 0, 0, 1, 1, 1, 2, 1, 1, 2}, {1, 0, 0, 1, 1, 1, 2, 1, 1, 2}},
+        {{1, 0, 2, 0, 0, 1, 1, 1, 1, 2}, {1, 0, 0, 1, 1, 1, 2, 1, 2, 2}, {1, 0, 1, 1, 2, 1, 0, 2, 1, 2}, {0, 0, 0, 1, 1, 1, 2, 1, 1, 2}}
     };
 
     // 월킥. 0~3 시계방향(현재 회전 기준), 4~7 반시계
@@ -141,6 +198,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @SuppressWarnings("this-escape")
     public GamePanel() {
+        this(new SoundManager());
+    }
+
+    @SuppressWarnings("this-escape")
+    public GamePanel(SoundManager soundManager) {
+        this.soundManager = soundManager == null ? new SoundManager() : soundManager;
         setPreferredSize(new Dimension(1280, 720));
         setFocusable(true);
         setLayout(null);
@@ -170,6 +233,35 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         timer.start();
     }
 
+    public void playButtonClickSound() {
+        soundManager.playSfx(SfxType.BUTTON_CLICK);
+    }
+
+    public void playBlockLockSound() {
+        soundManager.playSfx(SfxType.BLOCK_LOCK);
+    }
+
+    public void playLineClearSound(int lines) {
+        if (lines == 1) {
+            soundManager.playSfx(SfxType.LINE_CLEAR_SINGLE);
+        } else if (lines >= 2) {
+            soundManager.playSfx(SfxType.LINE_CLEAR_MULTI);
+        }
+    }
+
+    public void startBattleBgm() {
+        soundManager.playBgm(BgmType.BATTLE);
+    }
+
+    private void playStageClearSound() {
+        if (stageClearSoundPlayed) {
+            return;
+        }
+        stageClearSoundPlayed = true;
+        soundManager.stopBgm();
+        soundManager.playSfx(SfxType.STAGE_CLEAR);
+    }
+
     @Override
     public void actionPerformed(ActionEvent e) {
         tick++;
@@ -183,7 +275,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (screen == 5) {
             update();
         }
+        syncSinglePlayerUiVisibility();
         repaint();
+    }
+
+    void syncSinglePlayerUiVisibility() {
+        if (aEngineBridge == null || !aEngineBridge.isAttached()) {
+            return;
+        }
+        // Swing children are painted after GamePanel, so they would otherwise
+        // cover pause/settings/result overlays and remain visible on menus.
+        aEngineBridge.setVisible(screen == 5 && !stageClear);
     }
 
     void update() {
@@ -193,86 +295,84 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 if (stage == 5) {
                     gameEnd(true);
                 } else {
-                    // 다음 스테이지
                     stage++;
-                    if (stage == 1) {
-                        bossMax = 100;
-                    } else if (stage == 2) {
-                        bossMax = 150;
-                    } else if (stage == 3) {
-                        bossMax = 120;
-                    } else if (stage == 4) {
-                        bossMax = 200;
-                    } else {
-                        bossMax = 250;
-                    }
-                    bossHp = bossMax;
-                    bossTimer = 0;
-                    bossWarning = false;
-                    blizzardEnd = 0;
-                    stageClear = false;
-                    hitEffect = 0;
-                    board1 = new int[24][10];
-                    board2 = new int[24][10];
-                    p1Garbage = 0;
-                    p2Garbage = 0;
-                    p1HoldUsed = false;
-                    p2HoldUsed = false;
-                    p1DropCount = 0;
-                    p2DropCount = 0;
-                    pressed.clear();
+                    startStage();
                     msg = "STAGE " + stage + " 시작!";
                     msgTimer = 90;
-                    spawnP1();
-                    if (isTwoPlayer) {
-                        spawnP2();
-                    }
                 }
             }
             return;
         }
-        gameTime += 16;
-        int[] k = isTwoPlayer ? keyP1 : keySingle;
-        if (pressed.contains(k[0])) {
-            p1LeftCount += 16;
-            if (p1LeftCount >= 170) {
-                moveP1(-1);
-                p1LeftCount -= 50;
+        if (!(isOnlineCoop && localPlayerIndex == 1)) {
+            gameTime += 16;
+        }
+        updateTemporaryBossEffects();
+        int[] k = currentPrimaryKeys();
+        if (!useAEngine() && controlsPlayer(0)) {
+            if (pressed.contains(k[0])) {
+                p1LeftCount += 16;
+                if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
+                    performCoopAction(0, PlayerAction.MOVE_LEFT, false);
+                    p1LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
+                }
+            }
+            if (pressed.contains(k[1])) {
+                p1RightCount += 16;
+                if (p1RightCount >= HORIZONTAL_DAS_DELAY_MS) {
+                    performCoopAction(0, PlayerAction.MOVE_RIGHT, false);
+                    p1RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
+                }
+            }
+            if (pressed.contains(k[2])) {
+                p1DownCount += 16;
+                if (p1DownCount >= SOFT_DROP_REPEAT_MS) {
+                    performCoopAction(0, PlayerAction.SOFT_DROP, false);
+                    p1DownCount = 0;
+                }
+            }
+        } else if (screen == 5 && !stageClear) {
+            if (pressed.contains(k[0])) {
+                p1LeftCount += 16;
+                if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
+                    aEngineBridge.handleKey(k[0], k);
+                    p1LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
+                }
+            }
+            if (pressed.contains(k[1])) {
+                p1RightCount += 16;
+                if (p1RightCount >= HORIZONTAL_DAS_DELAY_MS) {
+                    aEngineBridge.handleKey(k[1], k);
+                    p1RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
+                }
+            }
+            if (pressed.contains(k[2])) {
+                p1DownCount += 16;
+                if (p1DownCount >= SOFT_DROP_REPEAT_MS) {
+                    aEngineBridge.handleKey(k[2], k);
+                    p1DownCount = 0;
+                }
             }
         }
-        if (pressed.contains(k[1])) {
-            p1RightCount += 16;
-            if (p1RightCount >= 170) {
-                moveP1(1);
-                p1RightCount -= 50;
-            }
-        }
-        if (pressed.contains(k[2])) {
-            p1DownCount += 16;
-            if (p1DownCount >= 50) {
-                softDropP1();
-                p1DownCount = 0;
-            }
-        }
-        if (isTwoPlayer) {
-            if (pressed.contains(keyP2[0])) {
+        if (isTwoPlayer && controlsPlayer(1)) {
+            int[] p2Keys = onlineCoopKeysForP2();
+            if (pressed.contains(p2Keys[0])) {
                 p2LeftCount += 16;
-                if (p2LeftCount >= 170) {
-                    moveP2(-1);
-                    p2LeftCount -= 50;
+                if (p2LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
+                    performCoopAction(1, PlayerAction.MOVE_LEFT, false);
+                    p2LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
-            if (pressed.contains(keyP2[1])) {
+            if (pressed.contains(p2Keys[1])) {
                 p2RightCount += 16;
-                if (p2RightCount >= 170) {
-                    moveP2(1);
-                    p2RightCount -= 50;
+                if (p2RightCount >= HORIZONTAL_DAS_DELAY_MS) {
+                    performCoopAction(1, PlayerAction.MOVE_RIGHT, false);
+                    p2RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
-            if (pressed.contains(keyP2[2])) {
+            if (pressed.contains(p2Keys[2])) {
                 p2DownCount += 16;
-                if (p2DownCount >= 50) {
-                    softDropP2();
+                if (p2DownCount >= SOFT_DROP_REPEAT_MS) {
+                    performCoopAction(1, PlayerAction.SOFT_DROP, false);
                     p2DownCount = 0;
                 }
             }
@@ -282,25 +382,28 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
 
         // 블록 내리기
-        int speed = 1000 - (stage - 1) * 150;
-        if (gameTime < blizzardEnd) {
-            speed = speed / 2;
-        }
-        p1DropCount += 16;
-        if (p1DropCount >= speed) {
-            p1DropCount = 0;
-            if (canPlace(board1, p1Type, p1Rot, p1X, p1Y + 1)) {
-                p1Y++;
-            } else {
-                lockP1();
+        int speed = baseDropIntervalMillis(stage);
+        int p1Speed = Math.max(1, speed / (p1FastCurrent ? 10 : gravityMultiplier));
+        if (!useAEngine() && runsLocalGravity(0)) {
+            p1DropCount += 16;
+            if (p1DropCount >= p1Speed) {
+                p1DropCount = 0;
+                if (canPlace(board1, p1Type, p1Rot, p1X, p1Y + 1)) {
+                    p1Y++;
+                } else {
+                    lockP1();
+                }
             }
+        } else if (useAEngine()) {
+            aEngineBridge.syncHud();
         }
         if (screen != 5) {
             return;
         }
-        if (isTwoPlayer) {
+        if (isTwoPlayer && runsLocalGravity(1)) {
+            int p2Speed = Math.max(1, speed / (p2FastCurrent ? 10 : gravityMultiplier));
             p2DropCount += 16;
-            if (p2DropCount >= speed) {
+            if (p2DropCount >= p2Speed) {
                 p2DropCount = 0;
                 if (canPlace(board2, p2Type, p2Rot, p2X, p2Y + 1)) {
                     p2Y++;
@@ -313,84 +416,345 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
 
-        // 보스 공격
-        bossTimer += 16;
-        if (stage == 1) {
-            if (bossTimer >= 17000) {
-                bossWarning = true;
-            }
-            if (bossTimer >= 20000) {
-                p1Garbage++;
-                if (isTwoPlayer) {
-                    p2Garbage++;
-                }
-                bossTimer = 0;
-                bossWarning = false;
-                msg = "선인장 괴물이 모래를 밀어 올렸다!";
-                msgTimer = 120;
-            }
-        } else if (stage == 2) {
-            if (bossTimer >= 12000) {
-                bossWarning = true;
-            }
-            if (bossTimer >= 15000) {
-                p1Garbage++;
-                if (isTwoPlayer) {
-                    p2Garbage++;
-                }
-                bossTimer = 0;
-                bossWarning = false;
-                msg = "해신이 파도를 일으켰다! 블록이 한 줄 올라온다";
-                msgTimer = 120;
-            }
-        } else if (stage == 3) {
-            if (bossTimer >= 22000) {
-                bossWarning = true;
-            }
-            if (bossTimer >= 25000) {
-                p1Garbage++;
-                if (isTwoPlayer) {
-                    p2Garbage++;
-                }
-                bossTimer = 0;
-                bossWarning = false;
-                msg = "거목의 뿌리가 땅을 뚫고 올라왔다!";
-                msgTimer = 120;
-            }
-        } else if (stage == 4) {
-            if (bossTimer >= 17000) {
-                bossWarning = true;
-            }
-            if (bossTimer >= 20000) {
-                blizzardEnd = gameTime + 5000;
-                bossTimer = 0;
-                bossWarning = false;
-                msg = "눈보라! 5초 동안 블록이 빨리 떨어진다";
-                msgTimer = 120;
-            }
-        } else if (stage == 5) {
-            if (bossTimer >= 9000) {
-                bossWarning = true;
-            }
-            if (bossTimer >= 12000) {
-                p1Garbage++;
-                if (isTwoPlayer) {
-                    p2Garbage++;
-                }
-                blizzardEnd = gameTime + 3000;
-                bossTimer = 0;
-                bossWarning = false;
-                msg = "악의 신의 저주! 블록이 올라오고 빨라진다";
-                msgTimer = 120;
-            }
+        if (useCoopEngineHost()) {
+            coopEngineBridge.tickHost();
+        }
+        if (!isOnlineCoop || localPlayerIndex == 0) {
+            bossPattern.tick(16, this);
+            bossTimer = bossPattern.elapsedMillis();
         }
         if (hitEffect > 0) {
             hitEffect--;
+        }
+        if (bossAwakeningEffect > 0) {
+            bossAwakeningEffect--;
+        }
+        if (coopBridge != null) {
+            coopBridge.maybeSendSnapshot();
+        }
+    }
+
+    boolean useAEngine() {
+        return !isTwoPlayer && aEngineBridge != null && aEngineBridge.isAttached();
+    }
+
+    static int baseDropIntervalMillis(int stage) {
+        return Math.max(1, 1000 - (stage - 1) * 150);
+    }
+
+    int[] currentPrimaryKeys() {
+        if (temporaryPrimaryKeys != null) {
+            return temporaryPrimaryKeys;
+        }
+        if (isOnlineCoop) {
+            return keySingle;
+        }
+        return isTwoPlayer ? keyP1 : keySingle;
+    }
+
+    int[] onlineCoopKeysForP2() {
+        return isOnlineCoop ? keySingle : currentSecondaryKeys();
+    }
+
+    boolean controlsPlayer(int playerIndex) {
+        if (!isTwoPlayer) {
+            return playerIndex == 0;
+        }
+        if (!isOnlineCoop) {
+            return playerIndex == 0 || playerIndex == 1;
+        }
+        return localPlayerIndex == playerIndex;
+    }
+
+    boolean runsLocalGravity(int playerIndex) {
+        if (useCoopEngineHost()) {
+            return false;
+        }
+        if (!isOnlineCoop) {
+            return true;
+        }
+        if (localPlayerIndex == 0) {
+            return true;
+        }
+        return playerIndex == 1;
+    }
+
+    public boolean useCoopEngineHost() {
+        return coopEngineBridge != null && coopEngineBridge.isDrivingHost();
+    }
+
+    void openCoopSlotScreen(int mode) {
+        coopSlotMode = mode;
+        coopSlotList = SaveService.listCoopSlots(loginUser);
+        screen = 8;
+    }
+
+    int[] currentSecondaryKeys() {
+        return temporarySecondaryKeys == null ? keyP2 : temporarySecondaryKeys;
+    }
+
+    void updateTemporaryBossEffects() {
+        if (gravityMultiplier > 1 && gameTime >= blizzardEnd) {
+            gravityMultiplier = 1;
+            soundManager.stopManagedSfx(SfxType.STAGE_4_PATTERN);
+            if (useAEngine()) {
+                aEngineBridge.setGravityMultiplier(1);
+            }
+        }
+        if (temporaryPrimaryKeys != null && gameTime >= randomKeyEnd) {
+            temporaryPrimaryKeys = null;
+            temporarySecondaryKeys = null;
+            randomKeyEnd = 0;
+            clearInputRepeatState();
+        }
+    }
+
+    void clearInputRepeatState() {
+        pressed.clear();
+        p1LeftCount = 0;
+        p1RightCount = 0;
+        p1DownCount = 0;
+        p2LeftCount = 0;
+        p2RightCount = 0;
+        p2DownCount = 0;
+    }
+
+    boolean raiseBoardAndPiece(int[][] board, boolean playerOne) {
+        for (int c = 0; c < 10; c++) {
+            if (board[0][c] != 0) {
+                return false;
+            }
+        }
+        int type = playerOne ? p1Type : p2Type;
+        int rot = playerOne ? p1Rot : p2Rot;
+        int y = playerOne ? p1Y : p2Y;
+        for (int i = 0; i < blockCount(type); i++) {
+            if (y + SHAPES[type][rot][i * 2 + 1] - 1 < 0) {
+                return false;
+            }
+        }
+        for (int r = 0; r < 23; r++) {
+            board[r] = board[r + 1];
+        }
+        board[23] = new int[10];
+        int hole = random.nextInt(10);
+        for (int c = 0; c < 10; c++) {
+            if (c != hole) {
+                board[23][c] = 8;
+            }
+        }
+        if (playerOne) {
+            p1Y--;
+        } else {
+            p2Y--;
+        }
+        return true;
+    }
+
+    @Override
+    public void showBossWarning(String message) {
+        bossWarning = true;
+        bossWarningText = message;
+    }
+
+    @Override
+    public void clearBossWarning() {
+        bossWarning = false;
+        bossWarningText = "";
+    }
+
+    @Override
+    public void onBossPatternActivated() {
+        if (stage == 2) {
+            soundManager.playSfx(SfxType.STAGE_2_PATTERN);
+        } else if (stage == 4) {
+            soundManager.playManagedSfx(SfxType.STAGE_4_PATTERN);
+        } else if (stage == 5) {
+            soundManager.playSfx(SfxType.STAGE_5_PATTERN);
+        }
+    }
+
+    @Override
+    public void showBossMessage(String message) {
+        msg = message;
+        msgTimer = 120;
+    }
+
+    @Override
+    public void raiseBlocks() {
+        if (useCoopEngineHost()) {
+            if (!coopEngineBridge.raiseGarbageLines(random.nextInt(10), random.nextInt(10))) {
+                gameEnd(false);
+            }
+            return;
+        }
+        if (useAEngine()) {
+            if (!aEngineBridge.raiseGarbageLine(random.nextInt(10))) {
+                gameEnd(false);
+            }
+            return;
+        }
+        if (!raiseBoardAndPiece(board1, true)) {
+            gameEnd(false);
+            return;
+        }
+        if (isTwoPlayer && !raiseBoardAndPiece(board2, false)) {
+            gameEnd(false);
+        }
+    }
+
+    @Override
+    public void startAcceleration(int durationMillis, int multiplier, int nextPieceMultiplier) {
+        blizzardEnd = gameTime + durationMillis;
+        gravityMultiplier = multiplier;
+        if (useAEngine()) {
+            aEngineBridge.setGravityMultiplier(multiplier);
+            aEngineBridge.setNextPieceGravityMultiplier(nextPieceMultiplier);
+        } else {
+            p1FastNext = true;
+            if (isTwoPlayer) {
+                p2FastNext = true;
+            }
+        }
+    }
+
+    @Override
+    public int[] primaryOriginalKeys() {
+        return (isTwoPlayer ? keyP1 : keySingle).clone();
+    }
+
+    @Override
+    public int[] secondaryOriginalKeys() {
+        return keyP2.clone();
+    }
+
+    @Override
+    public boolean isTwoPlayerMode() {
+        return isTwoPlayer;
+    }
+
+    @Override
+    public void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis) {
+        temporaryPrimaryKeys = primaryKeys.clone();
+        temporarySecondaryKeys = secondaryKeys == null ? null : secondaryKeys.clone();
+        randomKeyEnd = gameTime + durationMillis;
+        clearInputRepeatState();
+    }
+
+    @Override
+    public void resetTemporaryBossEffects() {
+        gravityMultiplier = 1;
+        blizzardEnd = 0;
+        soundManager.stopManagedSfx(SfxType.STAGE_4_PATTERN);
+        p1FastNext = false;
+        p2FastNext = false;
+        p1FastCurrent = false;
+        p2FastCurrent = false;
+        temporaryPrimaryKeys = null;
+        temporarySecondaryKeys = null;
+        randomKeyEnd = 0;
+        clearInputRepeatState();
+        if (aEngineBridge != null) {
+            aEngineBridge.resetBossEffects();
+        }
+    }
+
+    @Override
+    public boolean isBlueprintCellOccupied(int row, int column) {
+        if (row < 0 || row >= Blueprint.ROWS || column < 0 || column >= Blueprint.COLUMNS) {
+            return false;
+        }
+        if (useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            int engineY = Blueprint.ROWS - 1 - row;
+            return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
+        }
+        int boardRow = 18 + row;
+        boolean occupied = board1[boardRow][column] != 0;
+        if (isTwoPlayer) {
+            occupied |= board2[boardRow][column] != 0;
+        }
+        return occupied;
+    }
+
+    @Override
+    public void completeBlueprintPattern() {
+        if (stage != 3 || stageClear) {
+            return;
+        }
+        bossHp = 0;
+        triggerBossAwakening();
+        stageClear = true;
+        clearTimer = 2000;
+        pressed.clear();
+        msg = "BLUEPRINT COMPLETE!";
+        msgTimer = 120;
+        bossPattern.stop(this);
+        playStageClearSound();
+    }
+
+    public void notifyBossBoardChanged() {
+        if (stage == 3 && !stageClear) {
+            bossPattern.onBoardChanged(this);
+        }
+    }
+
+    public void restoreBossPatternTimer(int elapsedMillis) {
+        bossPattern.restoreElapsed(elapsedMillis, this);
+        bossTimer = bossPattern.elapsedMillis();
+    }
+
+    void ensureAEngineBridge() {
+        if (aEngineBridge == null) {
+            aEngineBridge = new ASinglePlayerBridge(this);
+        }
+        if (!aEngineBridge.isAttached()) {
+            aEngineBridge.attach();
+        }
+    }
+
+    /** A 엔진 줄 클리어 → B 보스 HP (기존 B 데미지表) */
+    public void applyBossLineDamage(int count) {
+        if (count <= 0 || stageClear) {
+            return;
+        }
+        if (stage == 3) {
+            return;
+        }
+        int damage = switch (count) {
+            case 1 -> 10;
+            case 2 -> 25;
+            case 3 -> 40;
+            default -> 60;
+        };
+        bossHp -= damage;
+        hitEffect = 12;
+        triggerBossAwakening();
+        if (bossHp <= 0) {
+            bossHp = 0;
+            stageClear = true;
+            clearTimer = 2000;
+            pressed.clear();
+            bossPattern.stop(this);
+            playStageClearSound();
+        }
+    }
+
+    void triggerBossAwakening() {
+        bossAwakeningEffect = stage == 5 ? 75 : 70;
+    }
+
+    public void notifyEngineGameOver() {
+        if (screen == 5 && !stageClear) {
+            gameEnd(false);
         }
     }
 
     public void newGame(boolean two) {
         isTwoPlayer = two;
+        if (isTwoPlayer && aEngineBridge != null) {
+            aEngineBridge.stopAndHide();
+        }
         stage = 1;
         p1Score = 0;
         p1Lines = 0;
@@ -412,6 +776,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void startStage() {
+        startStage(-1);
+    }
+
+    public void startStage(int restoredBlueprintIndex) {
         if (stage == 1) {
             bossMax = 100;
         } else if (stage == 2) {
@@ -426,9 +794,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         bossHp = bossMax;
         bossTimer = 0;
         bossWarning = false;
+        bossWarningText = "";
         blizzardEnd = 0;
         stageClear = false;
+        stageClearSoundPlayed = false;
         hitEffect = 0;
+        bossAwakeningEffect = 0;
         board1 = new int[24][10];
         board2 = new int[24][10];
         p1Garbage = 0;
@@ -437,10 +808,22 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2HoldUsed = false;
         p1DropCount = 0;
         p2DropCount = 0;
-        spawnP1();
-        if (isTwoPlayer) {
+        if (stage == 3 && restoredBlueprintIndex >= 0) {
+            bossPattern.startStage(stage, this, restoredBlueprintIndex);
+        } else {
+            bossPattern.startStage(stage, this);
+        }
+        pressed.clear();
+        if (!isTwoPlayer) {
+            // 저장 호환용 GamePanel 상태도 A 엔진과 함께 초기화한다.
+            spawnP1();
+            ensureAEngineBridge();
+            aEngineBridge.startStage(stage, baseDropIntervalMillis(stage));
+        } else {
+            spawnP1();
             spawnP2();
         }
+        startBattleBgm();
     }
 
     void fillNext(ArrayList<Integer> next, ArrayList<Integer> bag) {
@@ -450,13 +833,52 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     bag.add(i);
                 }
                 Collections.shuffle(bag, random);
+                if (stage >= 3 && random.nextDouble() < 0.15) {
+                    int pentomino = 7 + random.nextInt(5);
+                    bag.add(random.nextInt(bag.size() + 1), pentomino);
+                }
             }
             next.add(bag.remove(0));
         }
     }
 
+    static int blockCount(int type) {
+        return type >= 7 ? 5 : 4;
+    }
+
+    static int blockValue(int type) {
+        // 저장 포맷이 셀 하나를 숫자 한 글자로 기록하므로 펜토미노 고정 셀은 9로 통일한다.
+        return type >= 7 ? 9 : type + 1;
+    }
+
+    public static int engineType(Tetrominoes shape) {
+        if (shape == null) {
+            return -1;
+        }
+        return switch (shape) {
+            case LineShape -> 0;
+            case SquareShape -> 1;
+            case TShape -> 2;
+            case SShape -> 3;
+            case ZShape -> 4;
+            case MirroredLShape -> 5;
+            case LShape -> 6;
+            case P5_P -> 7;
+            case P5_U -> 8;
+            case P5_V -> 9;
+            case P5_X -> 10;
+            case P5_F -> 11;
+            default -> -1;
+        };
+    }
+
+    public static int engineBlockValue(Tetrominoes shape) {
+        int type = engineType(shape);
+        return type < 0 ? 0 : blockValue(type);
+    }
+
     boolean canPlace(int[][] board, int type, int rot, int x, int y) {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < blockCount(type); i++) {
             int bx = x + SHAPES[type][rot][i * 2];
             int by = y + SHAPES[type][rot][i * 2 + 1];
             if (bx < 0 || bx >= 10 || by < 0 || by >= 24) {
@@ -476,6 +898,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p1Rot = 0;
         p1X = 3;
         p1Y = 3;
+        p1FastCurrent = p1FastNext;
+        p1FastNext = false;
         p1DropCount = 0;
         if (!canPlace(board1, p1Type, p1Rot, p1X, p1Y)) {
             gameEnd(false);
@@ -489,6 +913,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2Rot = 0;
         p2X = 3;
         p2Y = 3;
+        p2FastCurrent = p2FastNext;
+        p2FastNext = false;
         p2DropCount = 0;
         if (!canPlace(board2, p2Type, p2Rot, p2X, p2Y)) {
             gameEnd(false);
@@ -618,8 +1044,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void lockP1() {
-        for (int i = 0; i < 4; i++) {
-            board1[p1Y + SHAPES[p1Type][p1Rot][i * 2 + 1]][p1X + SHAPES[p1Type][p1Rot][i * 2]] = p1Type + 1;
+        playBlockLockSound();
+        for (int i = 0; i < blockCount(p1Type); i++) {
+            board1[p1Y + SHAPES[p1Type][p1Rot][i * 2 + 1]][p1X + SHAPES[p1Type][p1Rot][i * 2]] = blockValue(p1Type);
         }
         int n = checkLine(board1);
         if (n > 0) {
@@ -639,6 +1066,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 return;
             }
         }
+        notifyBossBoardChanged();
         if (stageClear) {
             return;
         }
@@ -646,8 +1074,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void lockP2() {
-        for (int i = 0; i < 4; i++) {
-            board2[p2Y + SHAPES[p2Type][p2Rot][i * 2 + 1]][p2X + SHAPES[p2Type][p2Rot][i * 2]] = p2Type + 1;
+        playBlockLockSound();
+        for (int i = 0; i < blockCount(p2Type); i++) {
+            board2[p2Y + SHAPES[p2Type][p2Rot][i * 2 + 1]][p2X + SHAPES[p2Type][p2Rot][i * 2]] = blockValue(p2Type);
         }
         int n = checkLine(board2);
         if (n > 0) {
@@ -665,6 +1094,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 return;
             }
         }
+        notifyBossBoardChanged();
         if (stageClear) {
             return;
         }
@@ -692,6 +1122,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
         }
         if (count > 0 && !stageClear) {
+            if (stage == 3) {
+                playLineClearSound(count);
+                return count;
+            }
             int damage = 0;
             if (count == 1) damage = 10;
             if (count == 2) damage = 25;
@@ -699,13 +1133,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             if (count == 4) damage = 60;
             bossHp -= damage;
             hitEffect = 12;
+            triggerBossAwakening();
             if (bossHp <= 0) {
                 bossHp = 0;
                 stageClear = true;
                 clearTimer = 2000;
                 pressed.clear();
+                bossPattern.stop(this);
+                playStageClearSound();
             }
         }
+        playLineClearSound(count);
         return count;
     }
 
@@ -735,6 +1173,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         allClear = clear;
         screen = 7;
         pressed.clear();
+        bossPattern.stop(this);
+        soundManager.stopBgm();
         int total = p1Score + (isTwoPlayer ? p2Score : 0);
         if (loginUser != null) {
             FileManager.addRecord(loginUser, total, stage, isTwoPlayer ? 2 : 1, clear);
@@ -801,6 +1241,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     screen = 6;
                     msg = "";
                     pressed.clear();
+                    if (useAEngine()) {
+                        aEngineBridge.pauseEngine();
+                    }
+                    soundManager.pauseBgm();
                 }
                 return;
             }
@@ -808,43 +1252,55 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 return;
             }
             pressed.add(code);
-            int[] k = isTwoPlayer ? keyP1 : keySingle;
-            if (code == k[0]) {
-                moveP1(-1);
-                p1LeftCount = 0;
-            } else if (code == k[1]) {
-                moveP1(1);
-                p1RightCount = 0;
-            } else if (code == k[2]) {
-                softDropP1();
-                p1DownCount = 0;
-            } else if (code == k[3]) {
-                hardDropP1();
-            } else if (code == k[4]) {
-                rotateP1(1);
-            } else if (code == k[5]) {
-                rotateP1(-1);
-            } else if (code == k[6]) {
-                holdP1();
+            int[] k = currentPrimaryKeys();
+            if (useAEngine()) {
+                aEngineBridge.handleKey(code, k);
+                if (code == k[0]) {
+                    p1LeftCount = 0;
+                } else if (code == k[1]) {
+                    p1RightCount = 0;
+                } else if (code == k[2]) {
+                    p1DownCount = 0;
+                }
+            } else if (controlsPlayer(0)) {
+                if (code == k[0]) {
+                    performCoopAction(0, PlayerAction.MOVE_LEFT, false);
+                    p1LeftCount = 0;
+                } else if (code == k[1]) {
+                    performCoopAction(0, PlayerAction.MOVE_RIGHT, false);
+                    p1RightCount = 0;
+                } else if (code == k[2]) {
+                    performCoopAction(0, PlayerAction.SOFT_DROP, false);
+                    p1DownCount = 0;
+                } else if (code == k[3]) {
+                    performCoopAction(0, PlayerAction.HARD_DROP, false);
+                } else if (code == k[4]) {
+                    performCoopAction(0, PlayerAction.ROTATE_CW, false);
+                } else if (code == k[5]) {
+                    performCoopAction(0, PlayerAction.ROTATE_CCW, false);
+                } else if (code == k[6]) {
+                    performCoopAction(0, PlayerAction.HOLD, false);
+                }
             }
-            if (isTwoPlayer && screen == 5 && !stageClear) {
-                if (code == keyP2[0]) {
-                    moveP2(-1);
+            if (isTwoPlayer && screen == 5 && !stageClear && controlsPlayer(1)) {
+                int[] p2Keys = onlineCoopKeysForP2();
+                if (code == p2Keys[0]) {
+                    performCoopAction(1, PlayerAction.MOVE_LEFT, false);
                     p2LeftCount = 0;
-                } else if (code == keyP2[1]) {
-                    moveP2(1);
+                } else if (code == p2Keys[1]) {
+                    performCoopAction(1, PlayerAction.MOVE_RIGHT, false);
                     p2RightCount = 0;
-                } else if (code == keyP2[2]) {
-                    softDropP2();
+                } else if (code == p2Keys[2]) {
+                    performCoopAction(1, PlayerAction.SOFT_DROP, false);
                     p2DownCount = 0;
-                } else if (code == keyP2[3]) {
-                    hardDropP2();
-                } else if (code == keyP2[4]) {
-                    rotateP2(1);
-                } else if (code == keyP2[5]) {
-                    rotateP2(-1);
-                } else if (code == keyP2[6]) {
-                    holdP2();
+                } else if (code == p2Keys[3]) {
+                    performCoopAction(1, PlayerAction.HARD_DROP, false);
+                } else if (code == p2Keys[4]) {
+                    performCoopAction(1, PlayerAction.ROTATE_CW, false);
+                } else if (code == p2Keys[5]) {
+                    performCoopAction(1, PlayerAction.ROTATE_CCW, false);
+                } else if (code == p2Keys[6]) {
+                    performCoopAction(1, PlayerAction.HOLD, false);
                 }
             }
             return;
@@ -853,8 +1309,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             if (screen == 6) {
                 screen = 5;
                 pressed.clear();
-            } else if (screen == 2) {
-                screen = 1;
+                if (useAEngine()) {
+                    aEngineBridge.resumeEngine();
+                }
+                soundManager.resumeBgm();
             } else if (screen == 1 || screen == 3) {
                 screen = 0;
             }
@@ -863,7 +1321,28 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public void keyReleased(KeyEvent e) {
-        pressed.remove(e.getKeyCode());
+        int code = e.getKeyCode();
+        pressed.remove(code);
+        if (screen == 5) {
+            int[] k = currentPrimaryKeys();
+            if (code == k[0]) {
+                p1LeftCount = 0;
+            } else if (code == k[1]) {
+                p1RightCount = 0;
+            } else if (code == k[2]) {
+                p1DownCount = 0;
+            }
+            if (isTwoPlayer) {
+                int[] p2Keys = onlineCoopKeysForP2();
+                if (code == p2Keys[0]) {
+                    p2LeftCount = 0;
+                } else if (code == p2Keys[1]) {
+                    p2RightCount = 0;
+                } else if (code == p2Keys[2]) {
+                    p2DownCount = 0;
+                }
+            }
+        }
     }
 
     @Override
@@ -897,36 +1376,47 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         return false;
     }
 
+    boolean clicked(int x, int y, int w, int h) {
+        if (!in(x, y, w, h)) {
+            return false;
+        }
+        playButtonClickSound();
+        return true;
+    }
+
     @Override
     public void mousePressed(MouseEvent e) {
         mouseX = e.getX();
         mouseY = e.getY();
         requestFocusInWindow();
         if (screen == 0) {
-            if (in(88, 262, 300, 54)) {
+            if (clicked(88, 262, 300, 54)) {
                 saveList = loginUser == null ? new ArrayList<>() : FileManager.getSaveList(loginUser);
                 screen = 1;
-            } else if (in(88, 332, 300, 54)) {
+            } else if (clicked(88, 332, 300, 54)) {
+                onlineLobbyFrame = new LobbyFrame(this);
+                onlineLobbyFrame.setVisible(true);
+            } else if (clicked(88, 402, 300, 54)) {
                 loadRanking();
                 screen = 3;
-            } else if (in(88, 402, 300, 54)) {
+            } else if (clicked(88, 472, 300, 54)) {
                 settingFrom = 0;
                 editKeys = new int[][]{keySingle.clone(), keyP1.clone(), keyP2.clone(), {keyPause}};
                 setTab = 0;
                 captureRow = -1;
                 setMsg = "";
                 screen = 4;
-            } else if (in(88, 472, 300, 54)) {
+            } else if (clicked(88, 542, 300, 54)) {
                 int r = JOptionPane.showOptionDialog(this, "모험을 마치고 게임을 종료할까요?", "게임 종료",
                         JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"종료", "취소"}, "취소");
                 if (r == 0) {
                     System.exit(0);
                 }
-            } else if (loginUser == null && in(88, 600, 150, 44)) {
+            } else if (loginUser == null && clicked(88, 600, 150, 44)) {
                 new LoginFrame(this, false).setVisible(true);
-            } else if (loginUser == null && in(250, 600, 150, 44)) {
+            } else if (loginUser == null && clicked(250, 600, 150, 44)) {
                 new LoginFrame(this, true).setVisible(true);
-            } else if (loginUser != null && in(88, 600, 150, 44)) {
+            } else if (loginUser != null && clicked(88, 600, 150, 44)) {
                 int r = JOptionPane.showOptionDialog(this, "로그아웃할까요?", "로그아웃",
                         JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"로그아웃", "취소"}, "취소");
                 if (r == 0) {
@@ -934,20 +1424,23 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         } else if (screen == 1) {
-            if (loginUser == null && in(530, 420, 220, 46)) {
+            if (loginUser == null && clicked(530, 420, 220, 46)) {
                 new LoginFrame(this, false).setVisible(true);
                 if (loginUser != null) {
                     saveList = FileManager.getSaveList(loginUser);
                 }
-            } else if (in(490, 612, 300, 54)) {
-                screen = 2;
-            } else if (in(40, 640, 140, 44)) {
+            } else if (clicked(490, 612, 300, 54)) {
+                newGame(false);
+            } else if (clicked(40, 640, 140, 44)) {
                 screen = 0;
             } else if (loginUser != null) {
                 for (int i = 0; i < saveList.size() && i < 5; i++) {
                     int y = 146 + i * 88;
-                    if (in(760, y + 18, 120, 44)) {
-                        if (FileManager.loadGame(saveList.get(i)[0], this)) {
+                    if (clicked(760, y + 18, 120, 44)) {
+                        if ("2".equals(saveList.get(i)[4])) {
+                            JOptionPane.showMessageDialog(this,
+                                    "단일 PC 2인 협동 저장은 더 이상 지원하지 않아요.");
+                        } else if (FileManager.loadGame(saveList.get(i)[0], this)) {
                             screen = 5;
                             pressed.clear();
                         } else {
@@ -955,7 +1448,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         }
                         break;
                     }
-                    if (in(890, y + 18, 110, 44)) {
+                    if (clicked(890, y + 18, 110, 44)) {
                         int r = JOptionPane.showOptionDialog(this, "스테이지 " + saveList.get(i)[2] + " · 점수 " + saveList.get(i)[3]
                                         + "\n이 저장을 지울까요? 되돌릴 수 없어요.", "저장 삭제",
                                 JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"삭제", "취소"}, "취소");
@@ -967,39 +1460,31 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     }
                 }
             }
-        } else if (screen == 2) {
-            if (in(370, 270, 220, 54)) {
-                newGame(false);
-            } else if (in(370, 366, 220, 54)) {
-                newGame(true);
-            } else if (in(570, 470, 140, 44)) {
-                screen = 1;
-            }
         } else if (screen == 3) {
-            if (in(170, 146, 220, 46)) {
+            if (clicked(170, 146, 220, 46)) {
                 rankTab = 0;
                 loadRanking();
-            } else if (in(402, 146, 220, 46)) {
+            } else if (clicked(402, 146, 220, 46)) {
                 rankTab = 1;
                 loadRanking();
-            } else if (in(40, 640, 140, 44)) {
+            } else if (clicked(40, 640, 140, 44)) {
                 screen = 0;
             }
         } else if (screen == 4) {
             for (int t = 0; t < 4; t++) {
-                if (in(250 + t * 192, 126, 180, 42)) {
+                if (clicked(250 + t * 192, 126, 180, 42)) {
                     setTab = t;
                     captureRow = -1;
                 }
             }
             for (int r = 0; r < editKeys[setTab].length; r++) {
-                if (in(670, 190 + r * 48, 220, 36)) {
+                if (clicked(670, 190 + r * 48, 220, 36)) {
                     captureRow = r;
                     setMsg = "새 키를 누르세요. 취소하려면 Esc를 누르세요.";
                     setMsgError = false;
                 }
             }
-            if (in(250, 590, 170, 46)) {
+            if (clicked(250, 590, 170, 46)) {
                 editKeys = new int[][]{
                     {KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_DOWN, KeyEvent.VK_SPACE, KeyEvent.VK_UP, KeyEvent.VK_Z, KeyEvent.VK_C},
                     {KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_S, KeyEvent.VK_SPACE, KeyEvent.VK_W, KeyEvent.VK_Q, KeyEvent.VK_E},
@@ -1009,7 +1494,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 captureRow = -1;
                 setMsg = "기본 키 배치로 되돌렸어요. 저장을 눌러야 적용돼요.";
                 setMsgError = false;
-            } else if (in(700, 590, 150, 46)) {
+            } else if (clicked(700, 590, 150, 46)) {
                 keySingle = editKeys[0].clone();
                 keyP1 = editKeys[1].clone();
                 keyP2 = editKeys[2].clone();
@@ -1017,27 +1502,39 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 FileManager.saveKeys();
                 setMsg = "저장했어요! 바로 게임에 적용돼요.";
                 setMsgError = false;
-            } else if (in(862, 590, 150, 46)) {
+            } else if (clicked(862, 590, 150, 46)) {
                 closeSettings();
             }
         } else if (screen == 6) {
-            if (in(490, 210, 300, 54)) {
+            if (clicked(490, 210, 300, 54)) {
                 screen = 5;
                 pressed.clear();
-            } else if (in(490, 282, 300, 54)) {
-                if (loginUser == null) {
-                    msg = "게스트는 저장할 수 없어요. 로그인 후 이용해 주세요.";
+                if (useAEngine()) {
+                    aEngineBridge.resumeEngine();
+                }
+                soundManager.resumeBgm();
+            } else if (clicked(490, 282, 300, 54)) {
+                if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+                    msg = "방장만 협동 저장을 할 수 있어요.";
+                    msgTimer = 180;
+                } else if (isTwoPlayer || isOnlineCoop) {
+                    openCoopSlotScreen(1);
+                } else if (loginUser == null) {
+                    msg = "게스트는 1인 저장을 할 수 없어요. 로그인 후 이용해 주세요.";
+                    msgTimer = 180;
                 } else if (saveFile == null && FileManager.getSaveList(loginUser).size() >= 5) {
                     msg = "저장 칸이 가득 찼어요(최대 5개). 메인에서 지운 뒤 저장하세요.";
+                    msgTimer = 180;
                 } else if (FileManager.saveGame(this)) {
                     msg = "저장했어요! [플레이]에서 이어할 수 있어요.";
+                    msgTimer = 180;
                 } else {
                     msg = "저장하지 못했어요.";
+                    msgTimer = 180;
                 }
-                msgTimer = 180;
-            } else if (in(490, 354, 300, 54)) {
+            } else if (clicked(490, 354, 300, 54)) {
                 openSettings();
-            } else if (in(490, 426, 300, 54)) {
+            } else if (clicked(490, 426, 300, 54)) {
                 if (loginUser != null) {
                     int r = JOptionPane.showOptionDialog(this, "저장하지 않은 진행은 사라져요.", "메인으로",
                             JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
@@ -1049,22 +1546,109 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         }
                         FileManager.saveGame(this);
                         screen = 0;
+                        soundManager.stopBgm();
                     } else if (r == 1) {
                         screen = 0;
+                        soundManager.stopBgm();
                     }
                 } else {
                     int r = JOptionPane.showOptionDialog(this, "게스트 진행은 저장되지 않아요.\n메인 화면으로 갈까요?", "메인으로",
                             JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"나가기", "취소"}, "취소");
                     if (r == 0) {
                         screen = 0;
+                        soundManager.stopBgm();
                     }
                 }
             }
         } else if (screen == 7) {
-            if (in(490, 470, 300, 54)) {
+            if (clicked(490, 470, 300, 54)) {
                 screen = 0;
             }
+        } else if (screen == 8) {
+            handleCoopSlotClick();
         }
+    }
+
+    void handleCoopSlotClick() {
+        if (clicked(490, 560, 300, 48)) {
+            screen = coopSlotMode == 1 ? 6 : 0;
+            return;
+        }
+        for (int i = 0; i < 3; i++) {
+            if (clicked(340, 220 + i * 92, 600, 72)) {
+                pickCoopSlot(i + 1);
+                return;
+            }
+        }
+    }
+
+    void pickCoopSlot(int slot) {
+        if (coopSlotMode == 1) {
+            try {
+                saveCoopToSlot(slot);
+                msg = "협동 슬롯 " + slot + "에 저장했어요.";
+                msgTimer = 200;
+                screen = 6;
+            } catch (Exception ex) {
+                msg = "저장 실패: " + ex.getMessage();
+                msgTimer = 200;
+                screen = 6;
+            }
+        } else {
+            try {
+                CoopGameMemento mem = SaveService.loadCoop(loginUser, slot);
+                if (mem.onlineResume) {
+                    pendingCoopResume = mem;
+                    msg = "슬롯 " + slot + "을 불러왔어요. 방을 만든 뒤 「저장 이어하기」를 누르세요.";
+                    msgTimer = 260;
+                    screen = 0;
+                    SwingUtilities.invokeLater(() -> {
+                        onlineLobbyFrame = new LobbyFrame(this);
+                        onlineLobbyFrame.setVisible(true);
+                    });
+                } else {
+                    msg = "단일 PC 2인 협동 저장은 더 이상 지원하지 않아요.";
+                    msgTimer = 200;
+                }
+            } catch (LoadException ex) {
+                msg = ex.getMessage();
+                msgTimer = 180;
+            }
+        }
+    }
+
+    void saveCoopToSlot(int slot) throws Exception {
+        CoopGameMemento mem;
+        if (useCoopEngineHost() && coopEngineBridge != null) {
+            mem = coopEngineBridge.createMemento(onlineCoopId != null ? onlineCoopId : java.util.UUID.randomUUID().toString());
+        } else {
+            mem = buildCoopMementoFromPanel();
+        }
+        mem.onlineResume = isOnlineCoop;
+        mem.lastRoomId = lastOnlineRoomId;
+        SaveService.saveCoop(loginUser, slot, mem);
+        if (coopBridge != null && coopBridge.isHost()) {
+            coopBridge.notifySaved(slot, mem);
+        }
+    }
+
+    public CoopGameMemento buildCoopMementoFromPanel() {
+        CoopGameMemento m = new CoopGameMemento();
+        String cid = onlineCoopId != null ? onlineCoopId : java.util.UUID.randomUUID().toString();
+        m.coopId = cid;
+        m.seed = random.nextLong();
+        m.stage = stage;
+        m.bossHp = bossHp;
+        m.bossMax = bossMax;
+        m.bossTimer = bossTimer;
+        m.gameTime = gameTime;
+        m.stageClear = stageClear;
+        m.blizzardEnd = blizzardEnd;
+        m.blueprintIndex = bossPattern.blueprintIndex();
+        m.onlineResume = isOnlineCoop;
+        m.lastRoomId = lastOnlineRoomId;
+        m.panelSnapshotJson = new Gson().toJson(CoopSnapshotMapper.fromPanel(this, cid));
+        return m;
     }
 
     void openSettings() {
@@ -1182,11 +1766,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 drawTitle(g);
             }
         } else {
-            if (screen == 1 || screen == 2) {
+            if (screen == 1) {
                 drawSaves(g);
-                if (screen == 2) {
-                    drawModeSelect(g);
-                }
             } else {
                 if (screen == 3) {
                     drawRanking(g);
@@ -1209,6 +1790,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                                 if (screen == 7) {
                                     drawGame(g);
                                     drawResult(g);
+                                } else if (screen == 8) {
+                                    if (screen == 6) {
+                                        drawGame(g);
+                                        drawPause(g);
+                                    } else {
+                                        drawTitle(g);
+                                    }
+                                    drawCoopSlots(g);
                                 }
                             }
                         }
@@ -1216,6 +1805,24 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         }
+    }
+
+    void drawCoopSlots(Graphics2D g) {
+        g.setColor(new Color(8, 6, 10, 190));
+        g.fillRect(0, 0, 1280, 720);
+        drawPanel(g, 300, 100, 680, 520);
+        g.setFont(fontBold.deriveFont(30f));
+        centerText(g, coopSlotMode == 1 ? "협동 저장 · 슬롯 선택" : "협동 불러오기 · 슬롯 선택",
+                640, 150, new Color(0x1a1216), new Color(0xefe0bf));
+        g.setFont(font.deriveFont(16f));
+        g.setColor(new Color(0x1a1216));
+        String hint = loginUser == null ? "게스트도 `_local` 슬롯에 저장됩니다." : "로그인: " + loginUser;
+        g.drawString(hint, 640 - g.getFontMetrics().stringWidth(hint) / 2, 188);
+        for (int i = 0; i < 3; i++) {
+            SaveSlotMeta meta = i < coopSlotList.size() ? coopSlotList.get(i) : new SaveSlotMeta(i + 1, false, "비어 있음", 0);
+            drawButton(g, "슬롯 " + meta.slot + " — " + meta.summary, 340, 220 + i * 92, 600, 72, i, 17f);
+        }
+        drawButton(g, "닫기", 490, 560, 300, 48, 3, 20f);
     }
 
     void drawCastle(Graphics2D g, boolean dark) {
@@ -1316,18 +1923,20 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         shadowText(g, "TETRIS", 84, 172, new Color(0xf0e2c8), new Color(0x6b2a1a), 5);
         g.setFont(font.deriveFont(22f));
         shadowText(g, "다섯 성의 보스를 무너뜨려라", 90, 214, new Color(0xd9c29a), new Color(0x0c090d), 2);
-        drawButton(g, "플레이", 88, 262, 300, 54, 1, 22f);
-        drawButton(g, "랭킹", 88, 332, 300, 54, 0, 22f);
-        drawButton(g, "환경설정", 88, 402, 300, 54, 0, 22f);
-        drawButton(g, "게임 종료", 88, 472, 300, 54, 0, 22f);
+        drawButton(g, "1인 플레이", 88, 262, 300, 54, 1, 22f);
+        drawButton(g, "2인 플레이", 88, 332, 300, 54, 0, 22f);
+        drawButton(g, "랭킹", 88, 402, 300, 54, 0, 22f);
+        drawButton(g, "환경설정", 88, 472, 300, 54, 0, 22f);
+        drawButton(g, "게임 종료", 88, 542, 300, 44, 0, 18f);
         g.setFont(font.deriveFont(22f));
         if (loginUser != null) {
-            shadowText(g, loginUser + " 용사님, 모험을 떠나요!", 88, 585, new Color(0xe9c98f), new Color(0x0c090d), 2);
             drawButton(g, "로그아웃", 88, 600, 150, 44, 2, 16.5f);
+            shadowText(g, loginUser + " 용사님, 모험을 떠나요!", 88, 672, new Color(0xe9c98f), new Color(0x0c090d), 2);
         } else {
-            shadowText(g, "게스트로 플레이 중", 88, 585, new Color(0xd9c29a), new Color(0x0c090d), 2);
             drawButton(g, "로그인", 88, 600, 150, 44, 2, 16.5f);
             drawButton(g, "회원가입", 250, 600, 150, 44, 2, 16.5f);
+            g.setFont(font.deriveFont(22f));
+            shadowText(g, "게스트로 플레이 중", 88, 672, new Color(0xd9c29a), new Color(0x0c090d), 2);
         }
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x9a8f9f));
@@ -1375,30 +1984,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 g.drawString("스테이지 " + st + " · " + stageNames[st], 390, y + 32);
                 g.setFont(font.deriveFont(16.5f));
                 g.setColor(new Color(0x4a3a2a));
-                g.drawString((s[4].equals("2") ? "2인 협동" : "1인 플레이") + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
+                g.drawString((s[4].equals("2") ? "단일 PC 2인 (지원 종료)" : "1인 플레이")
+                        + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
                 g.drawString("마지막 플레이  " + df.format(new Date(Long.parseLong(s[1]))), 390, y + 74);
-                drawButton(g, "이어하기", 760, y + 18, 120, 44, 1, 16.5f);
+                drawButton(g, s[4].equals("2") ? "지원 종료" : "이어하기", 760, y + 18, 120, 44, 1, 16.5f);
                 drawButton(g, "삭제", 890, y + 18, 110, 44, 0, 16.5f);
             }
         }
         drawButton(g, "+ 새 게임", 490, 612, 300, 54, 1, 22f);
         drawButton(g, "← 뒤로", 40, 640, 140, 44, 2, 16.5f);
-    }
-
-    void drawModeSelect(Graphics2D g) {
-        g.setColor(new Color(8, 6, 10, 170));
-        g.fillRect(0, 0, 1280, 720);
-        drawPanel(g, 330, 160, 620, 400);
-        g.setFont(fontBold.deriveFont(33f));
-        centerText(g, "몇 명이서 모험할까요?", 640, 230, new Color(0x1a1216), new Color(0xefe0bf));
-        drawButton(g, "1인 플레이", 370, 270, 220, 54, 1, 22f);
-        drawButton(g, "2인 협동", 370, 366, 220, 54, 0, 22f);
-        g.setFont(font.deriveFont(16.5f));
-        g.setColor(new Color(0x1a1216));
-        g.drawString("혼자서 다섯 성의 보스에 도전해요", 610, 302);
-        g.drawString("한 키보드로 둘이 함께 싸워요", 610, 390);
-        g.drawString("(P1: WASD · P2: 방향키)", 610, 412);
-        drawButton(g, "취소", 570, 470, 140, 44, 0, 16.5f);
     }
 
     void drawRanking(Graphics2D g) {
@@ -1512,6 +2106,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             case 5 -> new Color(0xe0524a);
             case 6 -> new Color(0x4a6ee0);
             case 7 -> new Color(0xf0943a);
+            case 9 -> new Color(0xc06be8);
             default -> new Color(0x7a7280);
         };
     }
@@ -1525,6 +2120,42 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.setColor(c.brighter());
         g.fillRect(x + 2, y + 2, size - 4, 3);
         g.fillRect(x + 2, y + 2, 3, size - 4);
+    }
+
+    void drawGhostCell(Graphics2D g, int x, int y, int size, int v) {
+        Color c = blockColor(v);
+        g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 36));
+        g.fillRect(x + 2, y + 2, size - 4, size - 4);
+        g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 72));
+        g.drawRect(x + 2, y + 2, size - 5, size - 5);
+    }
+
+    int panelGhostLandingY(int[][] board, int type, int rot, int x, int y) {
+        int gy = y;
+        while (canPlace(board, type, rot, x, gy + 1)) {
+            gy++;
+        }
+        return gy;
+    }
+
+    void drawLegacyActivePiece(Graphics2D g, int bx, int by, int[][] board, int type, int rot, int px, int py) {
+        int ghostY = panelGhostLandingY(board, type, rot, px, py);
+        if (ghostY != py) {
+            for (int i = 0; i < blockCount(type); i++) {
+                int cx = px + SHAPES[type][rot][i * 2];
+                int cy = ghostY + SHAPES[type][rot][i * 2 + 1];
+                if (cy >= 4) {
+                    drawGhostCell(g, bx + cx * 30, by + (cy - 4) * 30, 30, blockValue(type));
+                }
+            }
+        }
+        for (int i = 0; i < blockCount(type); i++) {
+            int cx = px + SHAPES[type][rot][i * 2];
+            int cy = py + SHAPES[type][rot][i * 2 + 1];
+            if (cy >= 4) {
+                drawCell(g, bx + cx * 30, by + (cy - 4) * 30, 30, blockValue(type));
+            }
+        }
     }
 
     void drawBox(Graphics2D g, int x, int y, int w, int h, String title) {
@@ -1549,8 +2180,201 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         int size = 18;
         int ox = type == 0 ? 0 : (type == 1 ? 0 : 9);
         int oy = type == 0 ? -9 : 0;
-        for (int i = 0; i < 4; i++) {
-            drawCell(g, x + ox + SHAPES[type][0][i * 2] * size, y + oy + SHAPES[type][0][i * 2 + 1] * size, size, type + 1);
+        for (int i = 0; i < blockCount(type); i++) {
+            drawCell(g, x + ox + SHAPES[type][0][i * 2] * size, y + oy + SHAPES[type][0][i * 2 + 1] * size, size, blockValue(type));
+        }
+    }
+
+    void drawEngineSessionBoard(Graphics2D g, GameSession session, int boardX, int boardY, boolean blinkOn) {
+        if (session == null) {
+            return;
+        }
+        for (int screenRow = 0; screenRow < 20; screenRow++) {
+            int engineY = 19 - screenRow;
+            boolean blinkRow = blinkOn && session.lineClearBlinkRows[engineY];
+            for (int column = 0; column < 10; column++) {
+                Tetrominoes shape = session.shapeAt(column, engineY);
+                if (shape == Tetrominoes.NoShape) {
+                    continue;
+                }
+                int x = boardX + column * 30;
+                int y = boardY + screenRow * 30;
+                if (blinkRow) {
+                    g.setColor(Color.WHITE);
+                    g.fillRect(x + 2, y + 2, 26, 26);
+                } else {
+                    drawCell(g, x, y, 30, engineBlockValue(shape));
+                }
+            }
+        }
+
+        if (screen == 7 || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
+            return;
+        }
+        int blockVal = engineBlockValue(session.curPiece.getShape());
+        int ghostY = session.ghostLandingY();
+        if (ghostY != session.curY) {
+            for (int i = 0; i < session.curPiece.blockCount(); i++) {
+                int x = session.curX + session.curPiece.x(i);
+                int y = ghostY - session.curPiece.y(i);
+                if (x >= 0 && x < 10 && y >= 0 && y < 20) {
+                    drawGhostCell(g, boardX + x * 30, boardY + (19 - y) * 30, 30, blockVal);
+                }
+            }
+        }
+        for (int i = 0; i < session.curPiece.blockCount(); i++) {
+            int x = session.curX + session.curPiece.x(i);
+            int y = session.curY - session.curPiece.y(i);
+            if (x >= 0 && x < 10 && y >= 0 && y < 20) {
+                drawCell(g, boardX + x * 30, boardY + (19 - y) * 30, 30, blockVal);
+            }
+        }
+    }
+
+    void drawSingleEngineBoard(Graphics2D g, int boardX, int boardY) {
+        if (aEngineBridge == null) {
+            return;
+        }
+        drawEngineSessionBoard(g, aEngineBridge.session(), boardX, boardY, aEngineBridge.isLineClearBlinkOn());
+    }
+
+    boolean isPlayerBlueprintCellOccupied(int player, int row, int column) {
+        if (!isTwoPlayer && useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            int engineY = Blueprint.ROWS - 1 - row;
+            return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
+        }
+        int[][] board = player == 0 ? board1 : board2;
+        return board[18 + row][column] != 0;
+    }
+
+    boolean isBlueprintCellFilledByOtherPlayer(int player, int row, int column) {
+        return isTwoPlayer
+                && !isPlayerBlueprintCellOccupied(player, row, column)
+                && isPlayerBlueprintCellOccupied(1 - player, row, column);
+    }
+
+    void drawBlueprintGuide(Graphics2D g, int boardX, int boardY) {
+        Blueprint blueprint = bossPattern.blueprint();
+        if (stage != 3 || blueprint == null) {
+            return;
+        }
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                int x = boardX + column * 30;
+                int y = boardY + (14 + row) * 30;
+                if (blueprint.isTarget(row, column)) {
+                    g.setColor(new Color(233, 201, 143, 58));
+                    g.fillRect(x + 3, y + 3, 24, 24);
+                    g.setColor(new Color(233, 201, 143, 150));
+                    g.drawRect(x + 3, y + 3, 23, 23);
+                } else if (blueprint.mustBeEmpty(row, column)) {
+                    g.setColor(new Color(190, 65, 55, 115));
+                    g.drawRect(x + 4, y + 4, 21, 21);
+                    g.drawLine(x + 7, y + 7, x + 22, y + 22);
+                    g.drawLine(x + 22, y + 7, x + 7, y + 22);
+                }
+            }
+        }
+    }
+
+    void drawBlueprintStatus(Graphics2D g, int boardX, int boardY, int player) {
+        Blueprint blueprint = bossPattern.blueprint();
+        if (stage != 3 || blueprint == null) {
+            return;
+        }
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                boolean occupied = isPlayerBlueprintCellOccupied(player, row, column);
+                boolean filledByOther = isBlueprintCellFilledByOtherPlayer(player, row, column);
+                int x = boardX + column * 30;
+                int y = boardY + (14 + row) * 30;
+                if (blueprint.mustBeEmpty(row, column) && occupied) {
+                    g.setColor(new Color(220, 55, 45, 150));
+                    g.fillRect(x + 1, y + 1, 28, 28);
+                    g.setColor(new Color(255, 225, 210));
+                    g.drawLine(x + 6, y + 6, x + 23, y + 23);
+                    g.drawLine(x + 23, y + 6, x + 6, y + 23);
+                } else if (blueprint.isTarget(row, column) && occupied) {
+                    g.setColor(new Color(100, 220, 120, 210));
+                    g.drawRect(x + 2, y + 2, 25, 25);
+                } else if (blueprint.isTarget(row, column) && filledByOther) {
+                    g.setColor(new Color(115, 135, 165, 105));
+                    g.fillRect(x + 3, y + 3, 24, 24);
+                    g.setColor(new Color(205, 220, 235, 175));
+                    g.drawRect(x + 3, y + 3, 23, 23);
+                    g.drawLine(x + 5, y + 20, x + 14, y + 27);
+                    g.drawLine(x + 14, y + 4, x + 27, y + 14);
+                }
+            }
+        }
+    }
+
+    void drawBossAwakening(Graphics2D g, int bossX) {
+        int passed = (stage == 5 ? 75 : 70) - bossAwakeningEffect;
+        if (stage == 1) {
+            for (int i = 0; i < 14; i++) {
+                int x = bossX - 40 - i * 72 + passed * 9;
+                int y = 610 - (i * 53 + passed * 5) % 520;
+                g.setColor(new Color(75, 112, 46, 210));
+                g.fillPolygon(new int[]{x, x + 18, x + 5}, new int[]{y, y + 5, y + 13}, 3);
+                g.setColor(new Color(220, 204, 120, 220));
+                g.drawLine(x + 2, y + 2, x + 15, y + 5);
+            }
+        } else if (stage == 2) {
+            for (int wave = 0; wave < 3; wave++) {
+                int y = 580 - wave * 90 - (passed * 4) % 80;
+                g.setColor(new Color(88, 190, 231, 120));
+                for (int x = 0; x < 1280; x += 24) {
+                    int y1 = y + (int) (Math.sin((x + passed * 18) * 0.05) * 11);
+                    int y2 = y + (int) (Math.sin((x + 24 + passed * 18) * 0.05) * 11);
+                    g.drawLine(x, y1, x + 24, y2);
+                }
+            }
+            g.setColor(new Color(245, 250, 255, 220));
+            int x = bossX - 20 + (passed % 3) * 12;
+            int y = 110;
+            for (int i = 0; i < 6; i++) {
+                int nextX = x + (i % 2 == 0 ? -18 : 20);
+                g.drawLine(x, y, nextX, y + 42);
+                x = nextX;
+                y += 42;
+            }
+        } else if (stage == 3) {
+            for (int i = 0; i < 38; i++) {
+                int x = Math.floorMod(i * 97 + passed * (i % 3 + 2) * 5, 1280);
+                int y = Math.floorMod(i * 47 + passed * (i % 4 + 3) * 4, 610);
+                g.setColor(i % 3 == 0 ? new Color(211, 170, 70, 200)
+                        : new Color(92, 151, 70, 210));
+                g.fillPolygon(new int[]{x, x + 10, x + 4, x - 5},
+                        new int[]{y, y + 4, y + 12, y + 7}, 4);
+            }
+        } else if (stage == 4) {
+            for (int i = 0; i < 44; i++) {
+                int x = Math.floorMod(i * 83 + passed * (i % 4 + 2) * 4, 1280);
+                int y = Math.floorMod(i * 59 + passed * (i % 3 + 3) * 5, 600);
+                g.setColor(i % 4 == 0 ? new Color(145, 218, 255, 210)
+                        : new Color(248, 253, 255, 220));
+                int size = i % 4 == 0 ? 10 : 5;
+                g.fillRect(x, y, size, size);
+                if (i % 4 == 0) {
+                    g.drawLine(x - 4, y + 5, x + 14, y + 5);
+                    g.drawLine(x + 5, y - 4, x + 5, y + 14);
+                }
+            }
+        } else if (stage == 5) {
+            int phase = passed / 25;
+            if (phase == 1) {
+                g.setColor(new Color(15, 16, 52, 185));
+                g.fillRect(0, 0, 1280, 720);
+                g.setColor(new Color(214, 225, 255, 235));
+                g.fillOval(1016, 38, 88, 88);
+            } else {
+                g.setColor(new Color(255, 212, 105, 135));
+                g.fillRect(0, 0, 1280, 720);
+                g.setColor(new Color(255, 238, 160, 235));
+                g.fillOval(1010, 32, 100, 100);
+            }
         }
     }
 
@@ -1587,25 +2411,35 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         for (int r = 1; r < 20; r++) {
             g.fillRect(bx, by + r * 30, 300, 1);
         }
-        for (int r = 4; r < 24; r++) {
-            for (int c = 0; c < 10; c++) {
-                if (board1[r][c] != 0) {
-                    drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board1[r][c]);
+        drawBlueprintGuide(g, bx, by);
+        if (useCoopEngineHost()) {
+            drawEngineSessionBoard(g, coopEngineBridge.session(0), bx, by,
+                    coopEngineBridge.isLineClearBlinkOn(0));
+        } else if (!useAEngine()) {
+            for (int r = 4; r < 24; r++) {
+                for (int c = 0; c < 10; c++) {
+                    if (board1[r][c] != 0) {
+                        drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board1[r][c]);
+                    }
                 }
             }
-        }
-        if (screen != 7 && !stageClear) {
-            for (int i = 0; i < 4; i++) {
-                int cx = p1X + SHAPES[p1Type][p1Rot][i * 2];
-                int cy = p1Y + SHAPES[p1Type][p1Rot][i * 2 + 1];
-                if (cy >= 4) {
-                    drawCell(g, bx + cx * 30, by + (cy - 4) * 30, 30, p1Type + 1);
-                }
+            if (screen != 7 && !stageClear) {
+                drawLegacyActivePiece(g, bx, by, board1, p1Type, p1Rot, p1X, p1Y);
             }
+        } else {
+            drawSingleEngineBoard(g, bx, by);
         }
+        drawBlueprintStatus(g, bx, by, 0);
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
-        drawMini(g, p1Hold, hx + 22, 150);
+        if (!useAEngine()) {
+            drawMini(g, p1Hold, hx + 22, 150);
+        } else {
+            GameSession session = aEngineBridge.session();
+            if (session != null && !session.hold.isEmpty()) {
+                drawMini(g, engineType(session.hold.getStored()), hx + 22, 150);
+            }
+        }
         if (isTwoPlayer) {
             drawBox(g, 56, 226, 116, 280, "다음");
             for (int i = 0; i < 3; i++) {
@@ -1614,8 +2448,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             drawBox(g, 40, 524, 132, 176, null);
         } else {
             drawBox(g, 808, 104, 116, 400, "다음");
-            for (int i = 0; i < 5; i++) {
-                drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+            if (!useAEngine()) {
+                for (int i = 0; i < 5; i++) {
+                    drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+                }
+            } else {
+                GameSession session = aEngineBridge.session();
+                if (session != null && session.randomizer != null) {
+                    for (int i = 0; i < 3; i++) {
+                        drawMini(g, engineType(session.randomizer.peekAt(i)), 808 + 22, 146 + i * 70);
+                    }
+                }
             }
             drawBox(g, 336, 530, 136, 170, null);
         }
@@ -1650,22 +2493,23 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             for (int r = 1; r < 20; r++) {
                 g.fillRect(bx, by + r * 30, 300, 1);
             }
-            for (int r = 4; r < 24; r++) {
-                for (int c = 0; c < 10; c++) {
-                    if (board2[r][c] != 0) {
-                        drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board2[r][c]);
+            drawBlueprintGuide(g, bx, by);
+            if (useCoopEngineHost()) {
+                drawEngineSessionBoard(g, coopEngineBridge.session(1), bx, by,
+                        coopEngineBridge.isLineClearBlinkOn(1));
+            } else {
+                for (int r = 4; r < 24; r++) {
+                    for (int c = 0; c < 10; c++) {
+                        if (board2[r][c] != 0) {
+                            drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board2[r][c]);
+                        }
                     }
                 }
-            }
-            if (screen != 7 && !stageClear) {
-                for (int i = 0; i < 4; i++) {
-                    int cx = p2X + SHAPES[p2Type][p2Rot][i * 2];
-                    int cy = p2Y + SHAPES[p2Type][p2Rot][i * 2 + 1];
-                    if (cy >= 4) {
-                        drawCell(g, bx + cx * 30, by + (cy - 4) * 30, 30, p2Type + 1);
-                    }
+                if (screen != 7 && !stageClear) {
+                    drawLegacyActivePiece(g, bx, by, board2, p2Type, p2Rot, p2X, p2Y);
                 }
             }
+            drawBlueprintStatus(g, bx, by, 1);
             drawBox(g, 1108, 104, 116, 104, "홀드");
             drawMini(g, p2Hold, 1108 + 22, 150);
             drawBox(g, 1108, 226, 116, 280, "다음");
@@ -1691,6 +2535,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             shadowText(g, "P2", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
         }
 
+        if (bossAwakeningEffect > 0) {
+            drawBossAwakening(g, mx + m.getWidth() / 2);
+        }
+
         // 보스 체력
         String[] stageNames = {"", "불타는 사막", "고립된 섬", "고요한 초원", "얼어붙은 설원", "하늘 위 마왕성"};
         String[] bossNames = {"", "분노한 선인장 괴물", "심연의 해신", "천년 거목", "설원의 포효자", "타락한 악의 신"};
@@ -1707,8 +2555,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.drawString(bossNames[stage], barX + 504 - g.getFontMetrics().stringWidth(bossNames[stage]), 38);
         g.setColor(new Color(0x1a1216));
         g.fillRect(barX + 16, 50, 488, 24);
-        int filled = (int) (482.0 * bossHp / bossMax);
-        g.setColor(new Color(0xc9432f));
+        boolean customVictory = bossPattern.usesCustomVictory();
+        double progress = customVictory ? bossPattern.progress(this) : (double) bossHp / bossMax;
+        int violations = customVictory ? bossPattern.violationCount(this) : 0;
+        int filled = (int) (482.0 * Math.max(0.0, Math.min(1.0, progress)));
+        g.setColor(customVictory ? (violations > 0 ? new Color(0xc9432f) : new Color(0x4fa65a)) : new Color(0xc9432f));
         g.fillRect(barX + 19, 53, filled, 18);
         g.setColor(new Color(255, 255, 255, 60));
         g.fillRect(barX + 19, 53, filled, 4);
@@ -1718,14 +2569,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         g.setFont(font.deriveFont(13.5f));
         g.setColor(new Color(0xf0e2c8));
-        String hp = bossHp + " / " + bossMax;
+        String hp = customVictory
+                ? "BLUEPRINT " + Math.round(progress * 100) + "%" + (violations > 0 ? "  MISPLACED " + violations : "")
+                : bossHp + " / " + bossMax;
         g.drawString(hp, barX + 260 - g.getFontMetrics().stringWidth(hp) / 2, 67);
 
         if (bossWarning && screen == 5 && (tick / 10) % 2 == 0) {
-            String warn = "!! 보스 공격 준비 중 !!";
-            if (stage == 4) {
-                warn = "!! 눈보라가 몰려온다 !!";
-            }
+            String warn = bossWarningText.isEmpty() ? "!! 보스 공격 준비 중 !!" : bossWarningText;
             g.setFont(fontBold.deriveFont(22f));
             int w = g.getFontMetrics().stringWidth(warn);
             g.setColor(new Color(120, 20, 20, 200));
@@ -1770,7 +2620,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawButton(g, "메인으로", 490, 426, 300, 54, 0, 22f);
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x1a1216));
-        String t = msgTimer > 0 ? msg : (loginUser == null ? "게스트는 저장할 수 없어요." : "");
+        String t = msgTimer > 0 ? msg : "";
         g.drawString(t, 640 - g.getFontMetrics().stringWidth(t) / 2, 530);
     }
 
@@ -1795,5 +2645,132 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.setColor(new Color(0x3a5a2a));
         g.drawString(resultMsg, 640 - g.getFontMetrics().stringWidth(resultMsg) / 2, 430);
         drawButton(g, "메인으로", 490, 470, 300, 54, 1, 22f);
+    }
+
+    public void beginOnlineCoop(int playerIndex, String coopId, long seed) {
+        isOnlineCoop = true;
+        localPlayerIndex = playerIndex;
+        onlineCoopId = coopId;
+        random.setSeed(seed);
+        newGame(true);
+        if (playerIndex == 0) {
+            if (coopEngineBridge == null) {
+                coopEngineBridge = new CoopEngineBridge(this);
+            }
+            coopEngineBridge.startOnlineHost(stage, seed);
+        }
+        screen = 5;
+        msg = playerIndex == 0 ? "온라인 협동 · 방장 (P1)" : "온라인 협동 · 참가 (P2)";
+        msgTimer = 150;
+        requestFocusInWindow();
+        closeOnlineLobbyUi();
+    }
+
+    public void closeOnlineLobbyUi() {
+        if (onlineLobbyFrame != null) {
+            onlineLobbyFrame.disposeKeepConnection();
+            onlineLobbyFrame = null;
+        }
+    }
+
+    public void applyRemoteCoopAction(int playerIndex, String actionName) {
+        if (!isOnlineCoop || actionName == null) {
+            return;
+        }
+        PlayerAction action;
+        try {
+            action = PlayerAction.valueOf(actionName);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        performCoopAction(playerIndex, action, true);
+    }
+
+    public void onCoopPeerDisconnected(String text) {
+        msg = text == null ? "상대 연결이 끊어졌어요." : text;
+        msgTimer = 300;
+        if (screen == 5 && !stageClear) {
+            screen = 6;
+            soundManager.pauseBgm();
+        }
+    }
+
+    void performCoopAction(int playerIndex, PlayerAction action, boolean fromNetwork) {
+        if (screen != 5 || stageClear) {
+            return;
+        }
+        if (useCoopEngineHost()) {
+            coopEngineBridge.applyAction(playerIndex, action);
+        } else {
+            switch (playerIndex) {
+                case 0:
+                    applyActionP1(action);
+                    break;
+                case 1:
+                    applyActionP2(action);
+                    break;
+                default:
+                    return;
+            }
+        }
+        if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {
+            coopBridge.sendLocalAction(action);
+        }
+    }
+
+    void applyActionP1(PlayerAction action) {
+        switch (action) {
+            case MOVE_LEFT:
+                moveP1(-1);
+                break;
+            case MOVE_RIGHT:
+                moveP1(1);
+                break;
+            case SOFT_DROP:
+                softDropP1();
+                break;
+            case HARD_DROP:
+                hardDropP1();
+                break;
+            case ROTATE_CW:
+                rotateP1(1);
+                break;
+            case ROTATE_CCW:
+                rotateP1(-1);
+                break;
+            case HOLD:
+                holdP1();
+                break;
+            default:
+                break;
+        }
+    }
+
+    void applyActionP2(PlayerAction action) {
+        switch (action) {
+            case MOVE_LEFT:
+                moveP2(-1);
+                break;
+            case MOVE_RIGHT:
+                moveP2(1);
+                break;
+            case SOFT_DROP:
+                softDropP2();
+                break;
+            case HARD_DROP:
+                hardDropP2();
+                break;
+            case ROTATE_CW:
+                rotateP2(1);
+                break;
+            case ROTATE_CCW:
+                rotateP2(-1);
+                break;
+            case HOLD:
+                holdP2();
+                break;
+            default:
+                break;
+        }
     }
 }

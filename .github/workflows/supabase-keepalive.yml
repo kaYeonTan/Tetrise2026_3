@@ -3,12 +3,19 @@ name: Supabase keep-alive
 on:
   schedule:
     - cron: "0 0 */3 * *"   # 3일마다
-  workflow_dispatch:         # 수동 실행
+  workflow_dispatch:        # 수동 실행
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          curl -s -o /dev/null -w "%{http_code}\n" \
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "Secret이 비어 있음"; exit 1
+          fi
+          status=$(curl -s -o response.txt -w "%{http_code}" \
             "${{ secrets.SUPABASE_URL }}/rest/v1/users?select=user_id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}"
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "HTTP $status"
+          cat response.txt
+          [ "$status" -lt 400 ] || exit 1
