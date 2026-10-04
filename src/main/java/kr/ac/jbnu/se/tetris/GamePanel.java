@@ -112,6 +112,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public int p1Score, p1Lines;
     public int p1Garbage;
     int p1DropCount;
+    /** 좌·우: 첫 입력 후 이 시간(ms) 동안은 추가 이동 없음 (짧은 탭이 여러 칸으로 잡히는 것 방지) */
+    static final int HORIZONTAL_DAS_DELAY_MS = 400;
+    static final int HORIZONTAL_ARR_INTERVAL_MS = 90;
+    static final int SOFT_DROP_REPEAT_MS = 50;
     int p1LeftCount, p1RightCount, p1DownCount;
 
     public int[][] board2 = new int[24][10];
@@ -306,21 +310,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (!useAEngine() && controlsPlayer(0)) {
             if (pressed.contains(k[0])) {
                 p1LeftCount += 16;
-                if (p1LeftCount >= 170) {
+                if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
                     performCoopAction(0, PlayerAction.MOVE_LEFT, false);
-                    p1LeftCount -= 50;
+                    p1LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
             if (pressed.contains(k[1])) {
                 p1RightCount += 16;
-                if (p1RightCount >= 170) {
+                if (p1RightCount >= HORIZONTAL_DAS_DELAY_MS) {
                     performCoopAction(0, PlayerAction.MOVE_RIGHT, false);
-                    p1RightCount -= 50;
+                    p1RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
             if (pressed.contains(k[2])) {
                 p1DownCount += 16;
-                if (p1DownCount >= 50) {
+                if (p1DownCount >= SOFT_DROP_REPEAT_MS) {
                     performCoopAction(0, PlayerAction.SOFT_DROP, false);
                     p1DownCount = 0;
                 }
@@ -328,21 +332,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else if (screen == 5 && !stageClear) {
             if (pressed.contains(k[0])) {
                 p1LeftCount += 16;
-                if (p1LeftCount >= 170) {
+                if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
                     aEngineBridge.handleKey(k[0], k);
-                    p1LeftCount -= 50;
+                    p1LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
             if (pressed.contains(k[1])) {
                 p1RightCount += 16;
-                if (p1RightCount >= 170) {
+                if (p1RightCount >= HORIZONTAL_DAS_DELAY_MS) {
                     aEngineBridge.handleKey(k[1], k);
-                    p1RightCount -= 50;
+                    p1RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
             if (pressed.contains(k[2])) {
                 p1DownCount += 16;
-                if (p1DownCount >= 50) {
+                if (p1DownCount >= SOFT_DROP_REPEAT_MS) {
                     aEngineBridge.handleKey(k[2], k);
                     p1DownCount = 0;
                 }
@@ -352,21 +356,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             int[] p2Keys = onlineCoopKeysForP2();
             if (pressed.contains(p2Keys[0])) {
                 p2LeftCount += 16;
-                if (p2LeftCount >= 170) {
+                if (p2LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
                     performCoopAction(1, PlayerAction.MOVE_LEFT, false);
-                    p2LeftCount -= 50;
+                    p2LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
             if (pressed.contains(p2Keys[1])) {
                 p2RightCount += 16;
-                if (p2RightCount >= 170) {
+                if (p2RightCount >= HORIZONTAL_DAS_DELAY_MS) {
                     performCoopAction(1, PlayerAction.MOVE_RIGHT, false);
-                    p2RightCount -= 50;
+                    p2RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
                 }
             }
             if (pressed.contains(p2Keys[2])) {
                 p2DownCount += 16;
-                if (p2DownCount >= 50) {
+                if (p2DownCount >= SOFT_DROP_REPEAT_MS) {
                     performCoopAction(1, PlayerAction.SOFT_DROP, false);
                     p2DownCount = 0;
                 }
@@ -1232,6 +1236,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             int[] k = currentPrimaryKeys();
             if (useAEngine()) {
                 aEngineBridge.handleKey(code, k);
+                if (code == k[0]) {
+                    p1LeftCount = 0;
+                } else if (code == k[1]) {
+                    p1RightCount = 0;
+                } else if (code == k[2]) {
+                    p1DownCount = 0;
+                }
             } else if (controlsPlayer(0)) {
                 if (code == k[0]) {
                     performCoopAction(0, PlayerAction.MOVE_LEFT, false);
@@ -1293,7 +1304,28 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public void keyReleased(KeyEvent e) {
-        pressed.remove(e.getKeyCode());
+        int code = e.getKeyCode();
+        pressed.remove(code);
+        if (screen == 5) {
+            int[] k = currentPrimaryKeys();
+            if (code == k[0]) {
+                p1LeftCount = 0;
+            } else if (code == k[1]) {
+                p1RightCount = 0;
+            } else if (code == k[2]) {
+                p1DownCount = 0;
+            }
+            if (isTwoPlayer) {
+                int[] p2Keys = onlineCoopKeysForP2();
+                if (code == p2Keys[0]) {
+                    p2LeftCount = 0;
+                } else if (code == p2Keys[1]) {
+                    p2RightCount = 0;
+                } else if (code == p2Keys[2]) {
+                    p2DownCount = 0;
+                }
+            }
+        }
     }
 
     @Override
