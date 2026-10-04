@@ -54,7 +54,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     private static final long serialVersionUID = 1L;
 
-    // 0 타이틀 1 저장목록 2 인원선택 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
+    // 0 타이틀 1 1인 저장목록 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
     public int screen = 0;
     int settingFrom = 0;
 
@@ -98,6 +98,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     int clearTimer = 0;
     boolean allClear = false;
     public int hitEffect = 0;
+    int bossAwakeningEffect = 0;
     public String saveFile = null;
     public String msg = "";
     public int msgTimer = 0;
@@ -425,6 +426,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (hitEffect > 0) {
             hitEffect--;
         }
+        if (bossAwakeningEffect > 0) {
+            bossAwakeningEffect--;
+        }
         if (coopBridge != null) {
             coopBridge.maybeSendSnapshot();
         }
@@ -679,6 +683,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         bossHp = 0;
+        triggerBossAwakening();
         stageClear = true;
         clearTimer = 2000;
         pressed.clear();
@@ -710,7 +715,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     /** A 엔진 줄 클리어 → B 보스 HP (기존 B 데미지表) */
     public void applyBossLineDamage(int count) {
-        if (count <= 0 || stageClear || stage == 3) {
+        if (count <= 0 || stageClear) {
+            return;
+        }
+        if (stage == 3) {
             return;
         }
         int damage = switch (count) {
@@ -721,6 +729,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         };
         bossHp -= damage;
         hitEffect = 12;
+        triggerBossAwakening();
         if (bossHp <= 0) {
             bossHp = 0;
             stageClear = true;
@@ -729,6 +738,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             bossPattern.stop(this);
             playStageClearSound();
         }
+    }
+
+    void triggerBossAwakening() {
+        bossAwakeningEffect = stage == 5 ? 75 : 70;
     }
 
     public void notifyEngineGameOver() {
@@ -786,6 +799,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         stageClear = false;
         stageClearSoundPlayed = false;
         hitEffect = 0;
+        bossAwakeningEffect = 0;
         board1 = new int[24][10];
         board2 = new int[24][10];
         p1Garbage = 0;
@@ -1107,7 +1121,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 r++;
             }
         }
-        if (count > 0 && !stageClear && stage != 3) {
+        if (count > 0 && !stageClear) {
+            if (stage == 3) {
+                playLineClearSound(count);
+                return count;
+            }
             int damage = 0;
             if (count == 1) damage = 10;
             if (count == 2) damage = 25;
@@ -1115,6 +1133,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             if (count == 4) damage = 60;
             bossHp -= damage;
             hitEffect = 12;
+            triggerBossAwakening();
             if (bossHp <= 0) {
                 bossHp = 0;
                 stageClear = true;
@@ -1294,8 +1313,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     aEngineBridge.resumeEngine();
                 }
                 soundManager.resumeBgm();
-            } else if (screen == 2) {
-                screen = 1;
             } else if (screen == 1 || screen == 3) {
                 screen = 0;
             }
@@ -1377,26 +1394,24 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 saveList = loginUser == null ? new ArrayList<>() : FileManager.getSaveList(loginUser);
                 screen = 1;
             } else if (clicked(88, 332, 300, 54)) {
+                onlineLobbyFrame = new LobbyFrame(this);
+                onlineLobbyFrame.setVisible(true);
+            } else if (clicked(88, 402, 300, 54)) {
                 loadRanking();
                 screen = 3;
-            } else if (clicked(88, 402, 300, 54)) {
+            } else if (clicked(88, 472, 300, 54)) {
                 settingFrom = 0;
                 editKeys = new int[][]{keySingle.clone(), keyP1.clone(), keyP2.clone(), {keyPause}};
                 setTab = 0;
                 captureRow = -1;
                 setMsg = "";
                 screen = 4;
-            } else if (clicked(88, 472, 300, 54)) {
+            } else if (clicked(88, 542, 300, 54)) {
                 int r = JOptionPane.showOptionDialog(this, "모험을 마치고 게임을 종료할까요?", "게임 종료",
                         JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"종료", "취소"}, "취소");
                 if (r == 0) {
                     System.exit(0);
                 }
-            } else if (clicked(88, 530, 300, 44)) {
-                onlineLobbyFrame = new LobbyFrame(this);
-                onlineLobbyFrame.setVisible(true);
-            } else if (clicked(400, 530, 300, 44)) {
-                openCoopSlotScreen(2);
             } else if (loginUser == null && clicked(88, 600, 150, 44)) {
                 new LoginFrame(this, false).setVisible(true);
             } else if (loginUser == null && clicked(250, 600, 150, 44)) {
@@ -1415,14 +1430,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     saveList = FileManager.getSaveList(loginUser);
                 }
             } else if (clicked(490, 612, 300, 54)) {
-                screen = 2;
+                newGame(false);
             } else if (clicked(40, 640, 140, 44)) {
                 screen = 0;
             } else if (loginUser != null) {
                 for (int i = 0; i < saveList.size() && i < 5; i++) {
                     int y = 146 + i * 88;
                     if (clicked(760, y + 18, 120, 44)) {
-                        if (FileManager.loadGame(saveList.get(i)[0], this)) {
+                        if ("2".equals(saveList.get(i)[4])) {
+                            JOptionPane.showMessageDialog(this,
+                                    "단일 PC 2인 협동 저장은 더 이상 지원하지 않아요.");
+                        } else if (FileManager.loadGame(saveList.get(i)[0], this)) {
                             screen = 5;
                             pressed.clear();
                         } else {
@@ -1441,14 +1459,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         break;
                     }
                 }
-            }
-        } else if (screen == 2) {
-            if (clicked(370, 270, 220, 54)) {
-                newGame(false);
-            } else if (clicked(370, 366, 220, 54)) {
-                newGame(true);
-            } else if (clicked(570, 470, 140, 44)) {
-                screen = 1;
             }
         } else if (screen == 3) {
             if (clicked(170, 146, 220, 46)) {
@@ -1589,12 +1599,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 CoopGameMemento mem = SaveService.loadCoop(loginUser, slot);
                 if (mem.onlineResume) {
                     pendingCoopResume = mem;
-                    msg = "슬롯 " + slot + " 준비됨 · 로비 입장 후 방장이 「이어하기」";
+                    msg = "슬롯 " + slot + "을 불러왔어요. 방을 만든 뒤 「저장 이어하기」를 누르세요.";
                     msgTimer = 260;
                     screen = 0;
+                    SwingUtilities.invokeLater(() -> {
+                        onlineLobbyFrame = new LobbyFrame(this);
+                        onlineLobbyFrame.setVisible(true);
+                    });
                 } else {
-                    CoopEngineBridge.applyLoadedMemento(this, mem);
-                    msg = "슬롯 " + slot + " 불러왔어요.";
+                    msg = "단일 PC 2인 협동 저장은 더 이상 지원하지 않아요.";
                     msgTimer = 200;
                 }
             } catch (LoadException ex) {
@@ -1753,11 +1766,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 drawTitle(g);
             }
         } else {
-            if (screen == 1 || screen == 2) {
+            if (screen == 1) {
                 drawSaves(g);
-                if (screen == 2) {
-                    drawModeSelect(g);
-                }
             } else {
                 if (screen == 3) {
                     drawRanking(g);
@@ -1913,12 +1923,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         shadowText(g, "TETRIS", 84, 172, new Color(0xf0e2c8), new Color(0x6b2a1a), 5);
         g.setFont(font.deriveFont(22f));
         shadowText(g, "다섯 성의 보스를 무너뜨려라", 90, 214, new Color(0xd9c29a), new Color(0x0c090d), 2);
-        drawButton(g, "플레이", 88, 262, 300, 54, 1, 22f);
-        drawButton(g, "랭킹", 88, 332, 300, 54, 0, 22f);
-        drawButton(g, "환경설정", 88, 402, 300, 54, 0, 22f);
-        drawButton(g, "게임 종료", 88, 472, 300, 54, 0, 22f);
-        drawButton(g, "온라인 협동", 88, 530, 300, 44, 0, 18f);
-        drawButton(g, "협동 저장 불러오기", 400, 530, 300, 44, 1, 16f);
+        drawButton(g, "1인 플레이", 88, 262, 300, 54, 1, 22f);
+        drawButton(g, "2인 플레이", 88, 332, 300, 54, 0, 22f);
+        drawButton(g, "랭킹", 88, 402, 300, 54, 0, 22f);
+        drawButton(g, "환경설정", 88, 472, 300, 54, 0, 22f);
+        drawButton(g, "게임 종료", 88, 542, 300, 44, 0, 18f);
         g.setFont(font.deriveFont(22f));
         if (loginUser != null) {
             drawButton(g, "로그아웃", 88, 600, 150, 44, 2, 16.5f);
@@ -1975,30 +1984,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 g.drawString("스테이지 " + st + " · " + stageNames[st], 390, y + 32);
                 g.setFont(font.deriveFont(16.5f));
                 g.setColor(new Color(0x4a3a2a));
-                g.drawString((s[4].equals("2") ? "2인 협동" : "1인 플레이") + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
+                g.drawString((s[4].equals("2") ? "단일 PC 2인 (지원 종료)" : "1인 플레이")
+                        + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
                 g.drawString("마지막 플레이  " + df.format(new Date(Long.parseLong(s[1]))), 390, y + 74);
-                drawButton(g, "이어하기", 760, y + 18, 120, 44, 1, 16.5f);
+                drawButton(g, s[4].equals("2") ? "지원 종료" : "이어하기", 760, y + 18, 120, 44, 1, 16.5f);
                 drawButton(g, "삭제", 890, y + 18, 110, 44, 0, 16.5f);
             }
         }
         drawButton(g, "+ 새 게임", 490, 612, 300, 54, 1, 22f);
         drawButton(g, "← 뒤로", 40, 640, 140, 44, 2, 16.5f);
-    }
-
-    void drawModeSelect(Graphics2D g) {
-        g.setColor(new Color(8, 6, 10, 170));
-        g.fillRect(0, 0, 1280, 720);
-        drawPanel(g, 330, 160, 620, 400);
-        g.setFont(fontBold.deriveFont(33f));
-        centerText(g, "몇 명이서 모험할까요?", 640, 230, new Color(0x1a1216), new Color(0xefe0bf));
-        drawButton(g, "1인 플레이", 370, 270, 220, 54, 1, 22f);
-        drawButton(g, "2인 협동", 370, 366, 220, 54, 0, 22f);
-        g.setFont(font.deriveFont(16.5f));
-        g.setColor(new Color(0x1a1216));
-        g.drawString("혼자서 다섯 성의 보스에 도전해요", 610, 302);
-        g.drawString("한 키보드로 둘이 함께 싸워요", 610, 390);
-        g.drawString("(P1: WASD · P2: 방향키)", 610, 412);
-        drawButton(g, "취소", 570, 470, 140, 44, 0, 16.5f);
     }
 
     void drawRanking(Graphics2D g) {
@@ -2316,6 +2310,74 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    void drawBossAwakening(Graphics2D g, int bossX) {
+        int passed = (stage == 5 ? 75 : 70) - bossAwakeningEffect;
+        if (stage == 1) {
+            for (int i = 0; i < 14; i++) {
+                int x = bossX - 40 - i * 72 + passed * 9;
+                int y = 610 - (i * 53 + passed * 5) % 520;
+                g.setColor(new Color(75, 112, 46, 210));
+                g.fillPolygon(new int[]{x, x + 18, x + 5}, new int[]{y, y + 5, y + 13}, 3);
+                g.setColor(new Color(220, 204, 120, 220));
+                g.drawLine(x + 2, y + 2, x + 15, y + 5);
+            }
+        } else if (stage == 2) {
+            for (int wave = 0; wave < 3; wave++) {
+                int y = 580 - wave * 90 - (passed * 4) % 80;
+                g.setColor(new Color(88, 190, 231, 120));
+                for (int x = 0; x < 1280; x += 24) {
+                    int y1 = y + (int) (Math.sin((x + passed * 18) * 0.05) * 11);
+                    int y2 = y + (int) (Math.sin((x + 24 + passed * 18) * 0.05) * 11);
+                    g.drawLine(x, y1, x + 24, y2);
+                }
+            }
+            g.setColor(new Color(245, 250, 255, 220));
+            int x = bossX - 20 + (passed % 3) * 12;
+            int y = 110;
+            for (int i = 0; i < 6; i++) {
+                int nextX = x + (i % 2 == 0 ? -18 : 20);
+                g.drawLine(x, y, nextX, y + 42);
+                x = nextX;
+                y += 42;
+            }
+        } else if (stage == 3) {
+            for (int i = 0; i < 38; i++) {
+                int x = Math.floorMod(i * 97 + passed * (i % 3 + 2) * 5, 1280);
+                int y = Math.floorMod(i * 47 + passed * (i % 4 + 3) * 4, 610);
+                g.setColor(i % 3 == 0 ? new Color(211, 170, 70, 200)
+                        : new Color(92, 151, 70, 210));
+                g.fillPolygon(new int[]{x, x + 10, x + 4, x - 5},
+                        new int[]{y, y + 4, y + 12, y + 7}, 4);
+            }
+        } else if (stage == 4) {
+            for (int i = 0; i < 44; i++) {
+                int x = Math.floorMod(i * 83 + passed * (i % 4 + 2) * 4, 1280);
+                int y = Math.floorMod(i * 59 + passed * (i % 3 + 3) * 5, 600);
+                g.setColor(i % 4 == 0 ? new Color(145, 218, 255, 210)
+                        : new Color(248, 253, 255, 220));
+                int size = i % 4 == 0 ? 10 : 5;
+                g.fillRect(x, y, size, size);
+                if (i % 4 == 0) {
+                    g.drawLine(x - 4, y + 5, x + 14, y + 5);
+                    g.drawLine(x + 5, y - 4, x + 5, y + 14);
+                }
+            }
+        } else if (stage == 5) {
+            int phase = passed / 25;
+            if (phase == 1) {
+                g.setColor(new Color(15, 16, 52, 185));
+                g.fillRect(0, 0, 1280, 720);
+                g.setColor(new Color(214, 225, 255, 235));
+                g.fillOval(1016, 38, 88, 88);
+            } else {
+                g.setColor(new Color(255, 212, 105, 135));
+                g.fillRect(0, 0, 1280, 720);
+                g.setColor(new Color(255, 238, 160, 235));
+                g.fillOval(1010, 32, 100, 100);
+            }
+        }
+    }
+
     void drawGame(Graphics2D g) {
         g.drawImage(Art.background(stage), 0, 0, null);
         BufferedImage m = Art.monster(stage);
@@ -2471,6 +2533,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             g.setFont(fontBold.deriveFont(22f));
             shadowText(g, "P1", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
             shadowText(g, "P2", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
+        }
+
+        if (bossAwakeningEffect > 0) {
+            drawBossAwakening(g, mx + m.getWidth() / 2);
         }
 
         // 보스 체력

@@ -1,67 +1,25 @@
-# 온라인 로비 프로토콜 (MVP)
+# 온라인 2인 로비 메모
 
-> **담당:** 네트워크 2인 협동 (in-game 동기화는 미구현)  
-> **패키지:** `kr.ac.jbnu.se.tetris.network.lobby`  
-> **서버 실행:** `kr.ac.jbnu.se.tetris.network.lobby.LobbyServerMain` (기본 포트 `8765`)
+서버는 `LobbyServerMain`으로 실행한다. 기본 포트는 `8765`이다.
 
-## 전송 형식
+메시지는 TCP로 보내고 한 줄에 JSON 하나씩 보낸다.
 
-- TCP, UTF-8, **한 요청 = JSON 한 줄 + `\n`**
-- 응답도 **한 줄 JSON**
+## 자주 쓰는 요청
 
-## 상수
+| type | 하는 일 |
+|---|---|
+| `HELLO` | 닉네임 연결 |
+| `LIST_ROOMS` | 방 목록 받기 |
+| `CREATE_ROOM` | 공개 또는 비밀 방 만들기 |
+| `JOIN_ROOM` | 방 들어가기 |
+| `LEAVE_ROOM` | 방 나가기 |
+| `MY_ROOM` | 내 대기실 정보 받기 |
+| `START_GAME` | 방장이 게임 시작 |
+| `RESUME_COOP` | 방장이 협동 저장 이어하기 |
 
-| 항목 | 값 |
-|------|-----|
-| 동시 방 최대 | 5 (`LobbyConfig.MAX_ROOMS`) |
-| 방 정원 | 2 (방장 포함) |
-| 비밀방 코드 | 서버가 6자 생성 (`JoinCodeGenerator`), 클라이언트가 비밀번호 정하지 않음 |
+비밀방 코드는 서버가 만든다. 방장은 내 대기실에서 코드를 확인할 수 있다.
 
-## 클라이언트 → 서버
+게임 중에는 `PLAYER_ACTION`으로 키 입력을 보내고, 방장은 `COOP_SNAPSHOT`을 보낸다.
+저장은 방장만 할 수 있다.
 
-| type | 필드 | 설명 |
-|------|------|------|
-| `HELLO` | `nick` | 표시 닉 (로그인 닉 또는 Guest) |
-| `LIST_ROOMS` | — | 공개 목록 (비밀방은 이름·잠금만, 코드 없음) |
-| `CREATE_ROOM` | `name`, `visibility` (`PUBLIC` / `PRIVATE`) | 방 생성 |
-| `JOIN_ROOM` | `roomId`, `joinCode?` | PUBLIC은 코드 생략, PRIVATE는 필수 |
-| `LEAVE_ROOM` | — | 현재 방 퇴장 |
-| `MY_ROOM` | — | 내가 들어 있는 방 (방장만 `joinCode` 수신) |
-
-## 서버 → 클라이언트
-
-| type | 설명 |
-|------|------|
-| `HELLO_OK` | `clientId`, `nick` |
-| `ROOM_LIST` | `rooms[]` → `RoomSnapshot` |
-| `ROOM_CREATED` | `roomId`, `roomName`, `visibility`, `joinCode?`(PRIVATE만), `players[]` |
-| `JOINED` | `roomId`, `roomName`, `role` (`HOST`/`GUEST`), `players[]` |
-| `LEFT` | 퇴장 완료 |
-| `ERROR` | `code`, `message` |
-
-### ERROR code 예
-
-`ROOM_CAP`, `FULL`, `WRONG_CODE`, `NOT_FOUND`, `ALREADY_IN_ROOM`, `INVALID_NAME`
-
-## UI 연동 (B팀)
-
-- 타이틀 **「온라인 협동」** → `LobbyFrame` (임시 다이얼로그)
-- 스타일 통합 시 `LobbyFrame`만 교체하고 `LobbyClient` API는 유지
-
-## in-game (협동 2PC)
-
-| type | 방향 | 필드 | 설명 |
-|------|------|------|------|
-| `START_GAME` | C→S | — | 방장, 2/2일 때 시작 |
-| `START_GAME_OK` | S→C | `roomId`, `coopId`, `seed`, `playerIndex`, `role` | 방장 응답 |
-| `GAME_STARTED` | S→C (push) | 위와 동일 | 게스트 푸시 |
-| `PLAYER_ACTION` | C→S / push | `playerIndex`, `action` | 입력 릴레이 (응답 없음) |
-| `COOP_SNAPSHOT` | C→S (방장) | `coopId`, `snapshotJson` | 스냅샷 (응답 없음) |
-| `COOP_SNAPSHOT_PUSH` | S→C (push) | `coopId`, `snapshotJson` | 게스트 동기화 |
-| `COOP_SAVE` | C→S (방장) | `coopId`, `snapshotJson`, `saveSlot` | 저장 확인 |
-| `COOP_SAVE_OK` | S→C | `coopId`, `saveSlot` | |
-| `PEER_DISCONNECTED` | S→C (push) | `message` | 상대 disconnect |
-
-`action`: `PlayerAction` enum — `MOVE_LEFT`, `MOVE_RIGHT`, `SOFT_DROP`, `HARD_DROP`, `ROTATE_CW`, `ROTATE_CCW`, `HOLD`
-
-저장 파일: `data/coop/{coopId}.json`, 유저 포인터 `data/saves/coop_slots/{userId}/slot{n}.txt`
+관련 코드는 `network/lobby`, `network/coop`, `LobbyFrame.java` 쪽에 있다.

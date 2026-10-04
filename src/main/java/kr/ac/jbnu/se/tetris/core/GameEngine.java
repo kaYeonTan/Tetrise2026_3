@@ -85,9 +85,7 @@ public class GameEngine {
 	}
 
 	public void startWithSeed(long seed) {
-		if (isPaused)
-			return;
-
+		isPaused = false;
 		isStarted = true;
 		isFallingFinished = false;
 		gameOverSent = false;

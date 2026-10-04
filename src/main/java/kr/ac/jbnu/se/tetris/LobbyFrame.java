@@ -11,7 +11,8 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 
 import java.awt.Font;
-
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -23,6 +24,7 @@ import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 
 import javax.swing.JDialog;
 
@@ -102,7 +104,7 @@ public class LobbyFrame extends JDialog {
 	private JTextField portField;
 
 	private JTextField roomNameField;
-
+	private JComboBox<String> roomVisibilitySelector;
 	private JList<String> roomList;
 
 	private JButton connectBtn;
@@ -120,7 +122,7 @@ public class LobbyFrame extends JDialog {
 
 	public LobbyFrame(GamePanel panel) {
 
-		super(SwingUtilities.getWindowAncestor(panel), "온라인 협동 로비", ModalityType.APPLICATION_MODAL);
+		super(SwingUtilities.getWindowAncestor(panel), "온라인 2인 플레이 로비", ModalityType.APPLICATION_MODAL);
 
 		this.panel = panel;
 
@@ -202,6 +204,10 @@ public class LobbyFrame extends JDialog {
 
 		connectRow.add(portField);
 
+		JButton refreshBtn = button("목록 새로고침", false);
+		refreshBtn.addActionListener(e -> refreshRooms());
+		connectRow.add(refreshBtn);
+
 
 
 		top.add(connectRow);
@@ -233,6 +239,14 @@ public class LobbyFrame extends JDialog {
 		roomList.setFont(uiFont());
 
 		roomList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		roomList.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if (e.getClickCount() == 2 && !e.isConsumed()) {
+					joinSelected();
+				}
+			}
+		});
 
 		JScrollPane listScroll = new JScrollPane(roomList);
 
@@ -271,17 +285,24 @@ public class LobbyFrame extends JDialog {
 				BorderFactory.createEmptyBorder(6, 8, 6, 8)));
 
 		JScrollPane myRoomScroll = new JScrollPane(myRoomPanel);
+		myRoomScroll.setBorder(BorderFactory.createEmptyBorder());
 
-		myRoomScroll.setBorder(BorderFactory.createTitledBorder(
-
+		JPanel myRoomBox = new JPanel(new BorderLayout(0, 6));
+		myRoomBox.setOpaque(false);
+		myRoomBox.setBorder(BorderFactory.createTitledBorder(
 				BorderFactory.createLineBorder(new Color(0x8a6a2a)), "내 대기실"));
-
-		myRoomScroll.setPreferredSize(new Dimension(260, 150));
-		right.add(myRoomScroll, BorderLayout.NORTH);
+		myRoomBox.add(myRoomScroll, BorderLayout.CENTER);
+		startGameBtn = actionButton("게임 시작 (방장)", true, this::startCoopGame);
+		startGameBtn.setEnabled(false);
+		myRoomBox.add(startGameBtn, BorderLayout.SOUTH);
+		myRoomBox.setPreferredSize(new Dimension(260, 200));
+		right.add(myRoomBox, BorderLayout.NORTH);
 
 		JPanel actions = new JPanel();
 		actions.setOpaque(false);
 		actions.setLayout(new BoxLayout(actions, BoxLayout.Y_AXIS));
+		actions.setBorder(BorderFactory.createTitledBorder(
+				BorderFactory.createLineBorder(new Color(0x8a6a2a)), "새 방 만들기"));
 
 		JLabel roomNameLabel = new JLabel("새 방 이름");
 		roomNameLabel.setFont(uiFont());
@@ -298,19 +319,19 @@ public class LobbyFrame extends JDialog {
 		actions.add(roomNameField);
 		actions.add(Box.createVerticalStrut(8));
 
-		actions.add(actionButton("공개 방 만들기", true, () -> createRoom(RoomVisibility.PUBLIC)));
+		roomVisibilitySelector = new JComboBox<>(new String[]{"공개 방", "비밀 방"});
+		roomVisibilitySelector.setFont(uiFont());
+		roomVisibilitySelector.setMaximumSize(new Dimension(260, 32));
+		roomVisibilitySelector.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		actions.add(roomVisibilitySelector);
 		actions.add(Box.createVerticalStrut(6));
-		actions.add(actionButton("비밀 방 만들기", false, () -> createRoom(RoomVisibility.PRIVATE)));
+
+		JButton loadBtn = actionButton("협동 저장 불러오기", false, this::openCoopSaveSlots);
+		actions.add(loadBtn);
 		actions.add(Box.createVerticalStrut(6));
-		actions.add(actionButton("선택한 방 입장", true, this::joinSelected));
-		actions.add(Box.createVerticalStrut(6));
-		actions.add(actionButton("목록 새로고침", false, this::refreshRooms));
+		actions.add(actionButton("방 만들기", true, this::createRoom));
 		actions.add(Box.createVerticalStrut(6));
 		actions.add(actionButton("방 나가기", false, this::leaveRoom));
-		actions.add(Box.createVerticalStrut(6));
-		startGameBtn = actionButton("게임 시작 (방장)", true, this::startCoopGame);
-		startGameBtn.setEnabled(false);
-		actions.add(startGameBtn);
 
 		right.add(actions, BorderLayout.CENTER);
 
@@ -362,7 +383,7 @@ public class LobbyFrame extends JDialog {
 
 	private void clearMyRoomPanel() {
 
-		myRoomPanel.setText("아직 방에 없어요.\n공개/비밀 방을 만들면\n여기에 대기실 정보가 표시돼요.");
+		myRoomPanel.setText("아직 방에 없어요.\n새 방을 만들면\n여기에 대기실 정보가 표시돼요.");
 
 		waitingLabel.setText("로비");
 
@@ -830,7 +851,7 @@ public class LobbyFrame extends JDialog {
 
 
 
-	private void createRoom(RoomVisibility visibility) {
+	private void createRoom() {
 
 		if (!ensureConnected()) {
 
@@ -839,6 +860,13 @@ public class LobbyFrame extends JDialog {
 		}
 
 		String name = roomNameField.getText().trim();
+		String visibilityOption = (String) roomVisibilitySelector.getSelectedItem();
+		if (visibilityOption == null) {
+			JOptionPane.showMessageDialog(this, "방 공개 여부를 선택해 주세요.");
+			return;
+		}
+		RoomVisibility visibility = "비밀 방".equals(visibilityOption)
+				? RoomVisibility.PRIVATE : RoomVisibility.PUBLIC;
 
 		try {
 
@@ -894,6 +922,13 @@ public class LobbyFrame extends JDialog {
 
 		}
 
+		int confirm = JOptionPane.showConfirmDialog(this,
+				"\"" + room.name + "\" 방에 입장하시겠습니까?",
+				"방 입장", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+		if (confirm != JOptionPane.YES_OPTION) {
+			return;
+		}
+
 		String code = null;
 
 		if (room.visibility == RoomVisibility.PRIVATE) {
@@ -930,6 +965,11 @@ public class LobbyFrame extends JDialog {
 
 		}
 
+	}
+
+	private void openCoopSaveSlots() {
+		dispose();
+		panel.openCoopSlotScreen(2);
 	}
 
 
@@ -1044,5 +1084,3 @@ public class LobbyFrame extends JDialog {
 	}
 
 }
-
-
