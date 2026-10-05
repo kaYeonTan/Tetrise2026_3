@@ -44,6 +44,9 @@ class LobbyServerIntegrationTest {
 				LobbyMessage joined = guest.joinRoom(created.roomId, created.joinCode);
 				assertEquals(LobbyMessageType.JOINED.name(), joined.type);
 				assertEquals(2, joined.players.size());
+				assertEquals("HostNick", joined.players.get(0));
+				assertEquals("GuestNick", joined.players.get(1));
+				assertEquals("GUEST", joined.role);
 			}
 		}
 	}
@@ -60,6 +63,10 @@ class LobbyServerIntegrationTest {
 				assertEquals(LobbyMessageType.START_GAME_OK.name(), started.type);
 				assertNotNull(started.coopId);
 				assertEquals(0, started.playerIndex);
+				assertEquals("HOST", started.role);
+				assertEquals(2, started.players.size());
+				assertEquals("Host", started.players.get(0));
+				assertEquals("Guest", started.players.get(1));
 			}
 		}
 	}

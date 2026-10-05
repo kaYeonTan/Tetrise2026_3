@@ -75,6 +75,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     /** 2PC 온라인 협동 — 각 PC는 1인 키로 자기 보드만 조작. */
     public boolean isOnlineCoop = false;
     public int localPlayerIndex = 0;
+    /** 온라인 협동: P1(왼쪽)=방장, P2(오른쪽)=입장자 */
+    public String onlineCoopHostNick;
+    public String onlineCoopGuestNick;
     public String onlineCoopId;
     public transient CoopNetworkBridge coopBridge;
     public transient LobbyClient onlineLobbyClient;
@@ -330,7 +333,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     p1DownCount = 0;
                 }
             }
-        } else if (screen == 5 && !stageClear) {
+        } else if (useAEngine() && screen == 5 && !stageClear) {
             if (pressed.contains(k[0])) {
                 p1LeftCount += 16;
                 if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
@@ -470,13 +473,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (useCoopEngineHost()) {
             return false;
         }
-        if (!isOnlineCoop) {
-            return true;
+        if (isOnlineCoop) {
+            return false;
         }
-        if (localPlayerIndex == 0) {
-            return true;
-        }
-        return playerIndex == 1;
+        return true;
     }
 
     public boolean useCoopEngineHost() {
@@ -2475,7 +2475,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.drawString("" + p1Lines, ix + 14, iy + 112);
         g.setFont(font.deriveFont(16.5f));
         g.setColor(new Color(0xe9c98f));
-        g.drawString(loginUser == null ? "게스트" : loginUser, ix + 14, iy + 158);
+        g.drawString(onlineCoopPlayerLabel(0), ix + 14, iy + 158);
 
         // 2p도 똑같이
         if (isTwoPlayer) {
@@ -2528,11 +2528,16 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             g.drawString("" + p2Lines, 1122, 636);
             g.setFont(font.deriveFont(16.5f));
             g.setColor(new Color(0xe9c98f));
-            g.drawString("P2", 1122, 682);
+            g.drawString(onlineCoopPlayerLabel(1), 1122, 682);
 
             g.setFont(fontBold.deriveFont(22f));
-            shadowText(g, "P1", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
-            shadowText(g, "P2", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
+            if (isOnlineCoop) {
+                shadowText(g, "P1 · 방장", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
+                shadowText(g, "P2 · 참가", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
+            } else {
+                shadowText(g, "P1", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
+                shadowText(g, "P2", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
+            }
         }
 
         if (bossAwakeningEffect > 0) {
@@ -2645,6 +2650,35 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.setColor(new Color(0x3a5a2a));
         g.drawString(resultMsg, 640 - g.getFontMetrics().stringWidth(resultMsg) / 2, 430);
         drawButton(g, "메인으로", 490, 470, 300, 54, 1, 22f);
+    }
+
+    public void applyOnlineCoopRoster(java.util.List<String> playersInOrder, int myPlayerIndex) {
+        localPlayerIndex = myPlayerIndex;
+        onlineCoopHostNick = null;
+        onlineCoopGuestNick = null;
+        if (playersInOrder != null && !playersInOrder.isEmpty()) {
+            onlineCoopHostNick = playersInOrder.get(0);
+        }
+        if (playersInOrder != null && playersInOrder.size() >= 2) {
+            onlineCoopGuestNick = playersInOrder.get(1);
+        }
+    }
+
+    String onlineCoopPlayerLabel(int playerIndex) {
+        if (!isOnlineCoop) {
+            if (playerIndex == 0) {
+                return loginUser == null ? "게스트" : loginUser;
+            }
+            return "P2";
+        }
+        String nick = playerIndex == 0 ? onlineCoopHostNick : onlineCoopGuestNick;
+        if (nick == null || nick.isEmpty()) {
+            nick = playerIndex == 0 ? "방장" : "참가";
+        }
+        if (localPlayerIndex == playerIndex) {
+            return nick + " (나)";
+        }
+        return nick;
     }
 
     public void beginOnlineCoop(int playerIndex, String coopId, long seed) {

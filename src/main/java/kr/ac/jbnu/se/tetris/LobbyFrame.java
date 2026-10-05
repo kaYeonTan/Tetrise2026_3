@@ -414,9 +414,7 @@ public class LobbyFrame extends JDialog {
 
 		String hostNick = resp.players.isEmpty() ? myNick : resp.players.get(0);
 
-		boolean host = "HOST".equals(resp.role)
-
-				|| (!resp.players.isEmpty() && myNick.equalsIgnoreCase(resp.players.get(0)));
+		boolean host = "HOST".equals(resp.role);
 
 		if (resp.joinCode != null && !resp.joinCode.isEmpty()) {
 

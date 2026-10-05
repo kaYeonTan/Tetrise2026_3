@@ -126,9 +126,11 @@ public final class CoopNetworkBridge {
 
 		coopId = started.coopId;
 
-		localPlayerIndex = started.playerIndex;
+		localPlayerIndex = resolveLocalPlayerIndex(started);
 
 		host = localPlayerIndex == 0;
+
+		panel.applyOnlineCoopRoster(started.players, localPlayerIndex);
 
 		panel.lastOnlineRoomId = started.roomId;
 
@@ -176,6 +178,19 @@ public final class CoopNetworkBridge {
 
 		panel.beginOnlineCoop(localPlayerIndex, coopId, started.seed);
 
+	}
+
+	private static int resolveLocalPlayerIndex(LobbyMessage started) {
+		if ("HOST".equals(started.role)) {
+			return 0;
+		}
+		if ("GUEST".equals(started.role)) {
+			return 1;
+		}
+		if (started.playerIndex == 0 || started.playerIndex == 1) {
+			return started.playerIndex;
+		}
+		return 0;
 	}
 
 
@@ -272,7 +287,8 @@ public final class CoopNetworkBridge {
 
 		snapshotTick++;
 
-		if (snapshotTick % 4 != 0) {
+		// 매 2틱(32ms)마다 스냅샷 전송 (더 부드러운 동기화)
+		if (snapshotTick % 2 != 0) {
 
 			return;
 
@@ -351,6 +367,8 @@ public final class CoopNetworkBridge {
 		if (snap != null) {
 
 			CoopSnapshotMapper.applyToPanel(snap, panel, false);
+			// 참가자: 스냅샷 받으면 바로 화면 갱신!
+			panel.repaint();
 
 		}
 

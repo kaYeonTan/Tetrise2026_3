@@ -16,6 +16,10 @@ public final class CoopEngineBridge {
 	private final GamePanel panel;
 	private CoopGameEngine engine;
 	private boolean drivingHost;
+	
+	// 낙하 속도 조절용 타이머 (학부생 스타일: 간단한 카운터)
+	private int dropTimer0 = 0;  // P1 낙하 타이머
+	private int dropTimer1 = 0;  // P2 낙하 타이머
 
 	public CoopEngineBridge(GamePanel panel) {
 		this.panel = panel;
@@ -58,8 +62,34 @@ public final class CoopEngineBridge {
 		if (!isDrivingHost()) {
 			return;
 		}
-		engine.tickCoop();
+		// 학부생 스타일: 간단한 시간 기반 낙하
+		// 스테이지에 따라 낙하 속도가 달라짐 (1000ms → 400ms)
+		int dropSpeed = getDropSpeed();
+		
+		// 16ms마다 호출되니까 타이머 증가
+		dropTimer0 += 16;
+		dropTimer1 += 16;
+		
+		// P1 낙하
+		if (dropTimer0 >= dropSpeed) {
+			dropTimer0 = 0;
+			engine.engine(0).tick();
+		}
+		
+		// P2 낙하
+		if (dropTimer1 >= dropSpeed) {
+			dropTimer1 = 0;
+			engine.engine(1).tick();
+		}
+		
 		syncHudFromEngine();
+	}
+	
+	// 스테이지에 따른 낙하 속도 계산 (간단 버전)
+	private int getDropSpeed() {
+		int stage = panel.stage;
+		// 스테이지 1: 1000ms, 스테이지 5: 400ms
+		return Math.max(400, 1000 - (stage - 1) * 150);
 	}
 
 	public void applyAction(int playerIndex, PlayerAction action) {
