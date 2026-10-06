@@ -91,14 +91,7 @@ public final class MementoMapper {
 		m.stageClear = panel.stageClear;
 		m.blizzardEnd = panel.blizzardEnd;
 		m.blueprintIndex = panel.bossPattern.blueprintIndex();
-		m.gravityMultiplier = panel.gravityMultiplier;
-		m.randomKeyEnd = panel.randomKeyEnd;
-		if (panel.randomKeyEnd > panel.gameTime && panel.temporaryPrimaryKeys != null) {
-			m.randomKeyForPlayer0 = panel.temporaryPrimaryKeys.clone();
-			m.randomKeyForPlayer1 = panel.temporarySecondaryKeys != null
-					? panel.temporarySecondaryKeys.clone()
-					: null;
-		}
+		panel.fillOnlineBossSyncFields(m);
 		m.player0 = fromSession(engine.session(0));
 		m.player1 = fromSession(engine.session(1));
 		m.onlineResume = panel.isOnlineCoop;

@@ -2808,6 +2808,19 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         return nick;
     }
 
+    /** 온라인 스냅샷: 보스 기믹 필드를 memento에 기록 (방장 → 참가자). */
+    public void fillOnlineBossSyncFields(CoopGameMemento mem) {
+        if (mem == null) {
+            return;
+        }
+        mem.gravityMultiplier = gravityMultiplier;
+        mem.randomKeyEnd = randomKeyEnd;
+        if (randomKeyEnd > gameTime && temporaryPrimaryKeys != null) {
+            mem.randomKeyForPlayer0 = temporaryPrimaryKeys.clone();
+            mem.randomKeyForPlayer1 = temporarySecondaryKeys != null ? temporarySecondaryKeys.clone() : null;
+        }
+    }
+
     /** 온라인 참가자: 방장 스냅샷 기준 보스 기믹·경고 UI 동기화 */
     public void applyOnlineBossSync(CoopGameMemento mem) {
         if (mem == null) {
