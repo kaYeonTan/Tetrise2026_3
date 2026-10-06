@@ -297,6 +297,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (stageClear) {
             clearTimer -= 16;
             if (clearTimer <= 0) {
+                if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+                    stageClear = false;
+                    return;
+                }
                 if (stage == 5) {
                     gameEnd(true);
                 } else {
@@ -849,6 +853,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             spawnP1();
             ensureAEngineBridge();
             aEngineBridge.startStage(stage, baseDropIntervalMillis(stage));
+        } else if (useCoopEngineHost()) {
+            coopEngineBridge.restartStageEngine(stage);
         } else {
             spawnP1();
             spawnP2();

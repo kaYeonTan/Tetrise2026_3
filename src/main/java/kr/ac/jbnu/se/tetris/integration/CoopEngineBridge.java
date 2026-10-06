@@ -9,6 +9,7 @@ import kr.ac.jbnu.se.tetris.event.GameEventType;
 import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshot;
 import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshotMapper;
 import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
+import kr.ac.jbnu.se.tetris.persistence.SessionMemento;
 
 /** 온라인 방장: CoopGameEngine 2세션이 권위, GamePanel은 HUD·보스·렌더. */
 public final class CoopEngineBridge {
@@ -21,6 +22,8 @@ public final class CoopEngineBridge {
 	private int dropTimer0 = 0;  // P1 낙하 타이머
 	private int dropTimer1 = 0;  // P2 낙하 타이머
 	private int guestDropTimer = 0;
+	private int guestSyncedStage = -1;
+	private int guestAppliedLocalLockSeq = -1;
 
 	public CoopEngineBridge(GamePanel panel) {
 		this.panel = panel;
@@ -144,6 +147,16 @@ public final class CoopEngineBridge {
 		return player0Raised && player1Raised;
 	}
 
+	public void restartStageEngine(int stage) {
+		if (!isDrivingHost() || engine == null) {
+			return;
+		}
+		engine.restartStage(stage);
+		dropTimer0 = 0;
+		dropTimer1 = 0;
+		syncHudFromEngine();
+	}
+
 	public CoopGameMemento createMemento(String coopId) {
 		if (engine == null) {
 			return null;
@@ -237,7 +250,31 @@ public final class CoopEngineBridge {
 			engine = new CoopGameEngine();
 		}
 		drivingHost = false;
-		engine.applyMementoState(mem);
+
+		boolean stageChanged = guestSyncedStage != mem.stage;
+		int local = panel.localPlayerIndex;
+		int remote = 1 - local;
+		SessionMemento remoteMem = remote == 0 ? mem.player0 : mem.player1;
+		SessionMemento localMem = local == 0 ? mem.player0 : mem.player1;
+
+		engine.engine(0).resetLineClearPresentation();
+		engine.engine(1).resetLineClearPresentation();
+
+		if (stageChanged) {
+			engine.applyMementoState(mem);
+			guestAppliedLocalLockSeq = localMem.pieceLockSequence;
+			guestSyncedStage = mem.stage;
+			guestDropTimer = 0;
+		} else {
+			engine.applyPlayerMemento(remote, remoteMem);
+			boolean needLocal = localMem.pieceLockSequence != guestAppliedLocalLockSeq;
+			if (needLocal) {
+				engine.applyPlayerMemento(local, localMem);
+				guestAppliedLocalLockSeq = localMem.pieceLockSequence;
+				guestDropTimer = 0;
+			}
+		}
+
 		panel.stage = mem.stage;
 		panel.bossHp = mem.bossHp;
 		panel.bossMax = mem.bossMax;
@@ -246,7 +283,6 @@ public final class CoopEngineBridge {
 		panel.stageClear = mem.stageClear;
 		panel.blizzardEnd = mem.blizzardEnd;
 		panel.applyOnlineBossSync(mem);
-		guestDropTimer = 0;
 		syncHudFromEngine();
 	}
 

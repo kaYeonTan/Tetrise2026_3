@@ -93,7 +93,9 @@ public final class MementoMapper {
 		m.blueprintIndex = panel.bossPattern.blueprintIndex();
 		panel.fillOnlineBossSyncFields(m);
 		m.player0 = fromSession(engine.session(0));
+		m.player0.pieceLockSequence = engine.engine(0).getPieceLockSequence();
 		m.player1 = fromSession(engine.session(1));
+		m.player1.pieceLockSequence = engine.engine(1).getPieceLockSequence();
 		m.onlineResume = panel.isOnlineCoop;
 		m.lastRoomId = panel.lastOnlineRoomId;
 		m.savedAtMs = System.currentTimeMillis();

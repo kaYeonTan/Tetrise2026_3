@@ -19,4 +19,6 @@ public class SessionMemento {
 	public String holdShape;
 	public boolean holdLocked;
 	public RandomizerState randomizer;
+	/** GameEngine.pieceLockSequence — 스냅샷·낙관적 동기화용 */
+	public int pieceLockSequence;
 }

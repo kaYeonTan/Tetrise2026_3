@@ -127,6 +127,14 @@ public class GameEngine {
 		return pieceLockSequence;
 	}
 
+	/** 네트워크 스냅샷·복원 시 줄 삭제 연출 상태를 끈다. */
+	public void resetLineClearPresentation() {
+		lineClearAnim = false;
+		pendingLineClearCount = 0;
+		pendingBossGarbageHole = -1;
+		sessions.get(0).clearLineClearBlink();
+	}
+
 	public void pause() {
 		if (!isStarted)
 			return;
@@ -159,9 +167,9 @@ public class GameEngine {
 	}
 
 	void onPieceLanded(GameSession s) {
+		pieceLockSequence++;
 		s.unlockHold();
 		s.lockPieceToBoard();
-		pieceLockSequence++;
 		bus.publish(new GameEvent(GameEventType.PIECE_LOCKED, s.playerIndex, 0));
 
 		int toClear = s.prepareLineClearAnimation();
