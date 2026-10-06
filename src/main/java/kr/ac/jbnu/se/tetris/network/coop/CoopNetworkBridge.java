@@ -147,6 +147,8 @@ public final class CoopNetworkBridge {
 
 			panel.isOnlineCoop = true;
 
+			panel.isTwoPlayer = true;
+
 			panel.localPlayerIndex = localPlayerIndex;
 
 			panel.onlineCoopId = coopId;

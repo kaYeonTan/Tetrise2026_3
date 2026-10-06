@@ -2971,7 +2971,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             drawBox(g, 808, 104, 116, 400, "다음");
             if (!useAEngine()) {
                 for (int i = 0; i < 5; i++) {
-                    drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+                    if (i < p1Next.size()) {
+                        drawMini(g, p1Next.get(i), 808 + 22, 146 + i * 70);
+                    }
                 }
             } else {
                 GameSession session = aEngineBridge.session();
