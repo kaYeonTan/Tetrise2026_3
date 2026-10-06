@@ -279,7 +279,14 @@ public final class CoopNetworkBridge {
 
 	public void maybeSendSnapshot() {
 
-		if (!isActive() || !host || panel.screen != 5) {
+		if (!isActive() || !host) {
+
+			return;
+
+		}
+
+		// 일시정지 중에도 참가자 화면·오버레이 동기화용 스냅샷 전송
+		if (panel.screen != 5 && panel.screen != 6) {
 
 			return;
 

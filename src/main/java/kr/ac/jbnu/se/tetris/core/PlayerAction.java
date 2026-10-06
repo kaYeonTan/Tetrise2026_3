@@ -8,5 +8,8 @@ public enum PlayerAction {
 	HARD_DROP,
 	ROTATE_CW,
 	ROTATE_CCW,
-	HOLD
+	HOLD,
+	/** 온라인 협동: 양쪽 일시정지 동기화 */
+	PAUSE,
+	RESUME
 }

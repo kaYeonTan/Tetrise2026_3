@@ -380,6 +380,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         }
+        if (screen == 6 && isOnlineCoop && coopBridge != null && coopBridge.isHost()) {
+            coopBridge.maybeSendSnapshot();
+            return;
+        }
         if (screen != 5 || stageClear) {
             return;
         }
@@ -1238,13 +1242,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (screen == 5) {
             if (code == KeyEvent.VK_ESCAPE || code == keyPause) {
                 if (!stageClear) {
-                    screen = 6;
-                    msg = "";
-                    pressed.clear();
-                    if (useAEngine()) {
-                        aEngineBridge.pauseEngine();
+                    if (isOnlineCoop && coopBridge != null) {
+                        performCoopAction(localPlayerIndex, PlayerAction.PAUSE, false);
+                    } else {
+                        enterLocalPause("");
                     }
-                    soundManager.pauseBgm();
                 }
                 return;
             }
@@ -1307,12 +1309,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         if (code == KeyEvent.VK_ESCAPE) {
             if (screen == 6) {
-                screen = 5;
-                pressed.clear();
-                if (useAEngine()) {
-                    aEngineBridge.resumeEngine();
+                if (isOnlineCoop && coopBridge != null) {
+                    performCoopAction(localPlayerIndex, PlayerAction.RESUME, false);
+                } else {
+                    resumeLocalPause();
                 }
-                soundManager.resumeBgm();
             } else if (screen == 1 || screen == 3) {
                 screen = 0;
             }
@@ -1507,12 +1508,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
         } else if (screen == 6) {
             if (clicked(490, 210, 300, 54)) {
-                screen = 5;
-                pressed.clear();
-                if (useAEngine()) {
-                    aEngineBridge.resumeEngine();
+                if (isOnlineCoop && coopBridge != null) {
+                    performCoopAction(localPlayerIndex, PlayerAction.RESUME, false);
+                } else {
+                    resumeLocalPause();
                 }
-                soundManager.resumeBgm();
             } else if (clicked(490, 282, 300, 54)) {
                 if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
                     msg = "방장만 협동 저장을 할 수 있어요.";
@@ -2432,7 +2432,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawBlueprintStatus(g, bx, by, 0);
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
-        if (!useAEngine()) {
+        if (useCoopEngineHost()) {
+            GameSession coopS0 = coopEngineBridge.session(0);
+            if (coopS0 != null && !coopS0.hold.isEmpty()) {
+                drawMini(g, engineType(coopS0.hold.getStored()), hx + 22, 150);
+            }
+        } else if (!useAEngine()) {
             drawMini(g, p1Hold, hx + 22, 150);
         } else {
             GameSession session = aEngineBridge.session();
@@ -2443,7 +2448,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (isTwoPlayer) {
             drawBox(g, 56, 226, 116, 280, "다음");
             for (int i = 0; i < 3; i++) {
-                drawMini(g, p1Next.get(i), 56 + 22, 270 + i * 76);
+                if (useCoopEngineHost()) {
+                    GameSession coopS0 = coopEngineBridge.session(0);
+                    if (coopS0 != null && coopS0.randomizer != null) {
+                        drawMini(g, engineType(coopS0.randomizer.peekAt(i)), 56 + 22, 270 + i * 76);
+                    }
+                } else if (i < p1Next.size()) {
+                    drawMini(g, p1Next.get(i), 56 + 22, 270 + i * 76);
+                }
             }
             drawBox(g, 40, 524, 132, 176, null);
         } else {
@@ -2511,10 +2523,24 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
             drawBlueprintStatus(g, bx, by, 1);
             drawBox(g, 1108, 104, 116, 104, "홀드");
-            drawMini(g, p2Hold, 1108 + 22, 150);
+            if (useCoopEngineHost()) {
+                GameSession coopS1 = coopEngineBridge.session(1);
+                if (coopS1 != null && !coopS1.hold.isEmpty()) {
+                    drawMini(g, engineType(coopS1.hold.getStored()), 1108 + 22, 150);
+                }
+            } else {
+                drawMini(g, p2Hold, 1108 + 22, 150);
+            }
             drawBox(g, 1108, 226, 116, 280, "다음");
             for (int i = 0; i < 3; i++) {
-                drawMini(g, p2Next.get(i), 1108 + 22, 270 + i * 76);
+                if (useCoopEngineHost()) {
+                    GameSession coopS1 = coopEngineBridge.session(1);
+                    if (coopS1 != null && coopS1.randomizer != null) {
+                        drawMini(g, engineType(coopS1.randomizer.peekAt(i)), 1108 + 22, 270 + i * 76);
+                    }
+                } else if (i < p2Next.size()) {
+                    drawMini(g, p2Next.get(i), 1108 + 22, 270 + i * 76);
+                }
             }
             drawBox(g, 1108, 524, 132, 176, null);
             g.setFont(fontSmall.deriveFont(13.5f));
@@ -2729,12 +2755,58 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    void enterLocalPause(String pauseMsg) {
+        screen = 6;
+        msg = pauseMsg == null ? "" : pauseMsg;
+        msgTimer = msg.isEmpty() ? 0 : 300;
+        pressed.clear();
+        if (useAEngine()) {
+            aEngineBridge.pauseEngine();
+        }
+        soundManager.pauseBgm();
+    }
+
+    void resumeLocalPause() {
+        screen = 5;
+        pressed.clear();
+        if (useAEngine()) {
+            aEngineBridge.resumeEngine();
+        }
+        soundManager.resumeBgm();
+    }
+
     void performCoopAction(int playerIndex, PlayerAction action, boolean fromNetwork) {
+        if (action == PlayerAction.PAUSE) {
+            if (screen == 5 && !stageClear) {
+                String pauseMsg = fromNetwork ? "상대방이 일시정지했어요." : "";
+                enterLocalPause(pauseMsg);
+            }
+            if (!fromNetwork && isOnlineCoop && coopBridge != null) {
+                coopBridge.sendLocalAction(action);
+            }
+            return;
+        }
+        if (action == PlayerAction.RESUME) {
+            if (screen == 6) {
+                resumeLocalPause();
+            }
+            if (!fromNetwork && isOnlineCoop && coopBridge != null) {
+                coopBridge.sendLocalAction(action);
+            }
+            return;
+        }
         if (screen != 5 || stageClear) {
             return;
         }
         if (useCoopEngineHost()) {
             coopEngineBridge.applyAction(playerIndex, action);
+            if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {
+                coopBridge.sendLocalAction(action);
+            }
+        } else if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+            if (!fromNetwork && localPlayerIndex == playerIndex) {
+                coopBridge.sendLocalAction(action);
+            }
         } else {
             switch (playerIndex) {
                 case 0:
@@ -2746,9 +2818,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 default:
                     return;
             }
-        }
-        if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {
-            coopBridge.sendLocalAction(action);
         }
     }
 

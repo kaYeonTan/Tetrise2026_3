@@ -157,6 +157,16 @@ public final class CoopSnapshotMapper {
 		Tetrominoes hold = Tetrominoes.valueOf(sm.holdShape);
 		dst.hold = hold == Tetrominoes.NoShape ? -1 : GamePanel.engineType(hold);
 		dst.rot = 0;
+		dst.next = new ArrayList<>();
+		if (sm.randomizer != null && sm.randomizer.bagOrder != null) {
+			int limit = Math.min(3, sm.randomizer.bagOrder.length);
+			for (int i = 0; i < limit; i++) {
+				Tetrominoes peek = sm.randomizer.bagOrder[i];
+				if (peek != null && peek != Tetrominoes.NoShape) {
+					dst.next.add(GamePanel.engineType(peek));
+				}
+			}
+		}
 	}
 
 	static String sessionMementoToBoardString(SessionMemento sm) {
