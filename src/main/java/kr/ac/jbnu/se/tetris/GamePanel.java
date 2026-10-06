@@ -1,7 +1,9 @@
 package kr.ac.jbnu.se.tetris;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Stroke;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -2254,31 +2256,82 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 && isPlayerBlueprintCellOccupied(1 - player, row, column);
     }
 
-    void drawBlueprintGuide(Graphics2D g, int boardX, int boardY) {
-        Blueprint blueprint = bossPattern.blueprint();
-        if (stage != 3 || blueprint == null) {
-            return;
-        }
-        for (int row = 0; row < Blueprint.ROWS; row++) {
-            for (int column = 0; column < Blueprint.COLUMNS; column++) {
-                int x = boardX + column * 30;
-                int y = boardY + (14 + row) * 30;
-                if (blueprint.isTarget(row, column)) {
-                    g.setColor(new Color(233, 201, 143, 58));
-                    g.fillRect(x + 3, y + 3, 24, 24);
-                    g.setColor(new Color(233, 201, 143, 150));
-                    g.drawRect(x + 3, y + 3, 23, 23);
-                } else if (blueprint.mustBeEmpty(row, column)) {
-                    g.setColor(new Color(190, 65, 55, 115));
-                    g.drawRect(x + 4, y + 4, 21, 21);
-                    g.drawLine(x + 7, y + 7, x + 22, y + 22);
-                    g.drawLine(x + 22, y + 7, x + 7, y + 22);
-                }
-            }
-        }
+    void drawBlueprintCellHighlight(Graphics2D g, int x, int y, Color color, int inset, float stroke) {
+        Stroke previous = g.getStroke();
+        g.setStroke(new BasicStroke(stroke));
+        g.setColor(color);
+        g.drawRect(x + inset, y + inset, 29 - inset * 2, 29 - inset * 2);
+        g.setStroke(previous);
     }
 
-    void drawBlueprintStatus(Graphics2D g, int boardX, int boardY, int player) {
+    void drawBlueprintForbiddenMark(Graphics2D g, int x, int y, boolean emphasized) {
+        float stroke = emphasized ? 3f : 2f;
+        Stroke previous = g.getStroke();
+        g.setStroke(new BasicStroke(stroke + 1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(new Color(40, 10, 10, emphasized ? 220 : 180));
+        g.drawLine(x + 7, y + 7, x + 22, y + 22);
+        g.drawLine(x + 22, y + 7, x + 7, y + 22);
+        g.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(emphasized ? new Color(255, 235, 225) : new Color(235, 100, 90));
+        g.drawLine(x + 7, y + 7, x + 22, y + 22);
+        g.drawLine(x + 22, y + 7, x + 7, y + 22);
+        g.setStroke(previous);
+    }
+
+    boolean isPlayerBlueprintActivePieceAt(int player, int row, int column) {
+        if (screen == 7 || stageClear) {
+            return false;
+        }
+        int engineY = Blueprint.ROWS - 1 - row;
+        if (useCoopEngineHost()) {
+            GameSession session = coopEngineBridge.session(player);
+            if (session == null || session.curPiece.getShape() == Tetrominoes.NoShape) {
+                return false;
+            }
+            for (int i = 0; i < session.curPiece.blockCount(); i++) {
+                int pieceX = session.curX + session.curPiece.x(i);
+                int pieceY = session.curY - session.curPiece.y(i);
+                if (pieceX == column && pieceY == engineY) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            if (session == null || session.curPiece.getShape() == Tetrominoes.NoShape) {
+                return false;
+            }
+            for (int i = 0; i < session.curPiece.blockCount(); i++) {
+                int pieceX = session.curX + session.curPiece.x(i);
+                int pieceY = session.curY - session.curPiece.y(i);
+                if (pieceX == column && pieceY == engineY) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        int type = player == 0 ? p1Type : p2Type;
+        int rot = player == 0 ? p1Rot : p2Rot;
+        int px = player == 0 ? p1X : p2X;
+        int py = player == 0 ? p1Y : p2Y;
+        int boardRow = 18 + row;
+        for (int i = 0; i < blockCount(type); i++) {
+            int cx = px + SHAPES[type][rot][i * 2];
+            int cy = py + SHAPES[type][rot][i * 2 + 1];
+            if (cx == column && cy == boardRow) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean isPlayerBlueprintCellVisuallyOccupied(int player, int row, int column) {
+        return isPlayerBlueprintCellOccupied(player, row, column)
+                || isPlayerBlueprintActivePieceAt(player, row, column);
+    }
+
+    void drawBlueprintOverlay(Graphics2D g, int boardX, int boardY, int player) {
         Blueprint blueprint = bossPattern.blueprint();
         if (stage != 3 || blueprint == null) {
             return;
@@ -2289,23 +2342,38 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 boolean filledByOther = isBlueprintCellFilledByOtherPlayer(player, row, column);
                 int x = boardX + column * 30;
                 int y = boardY + (14 + row) * 30;
-                if (blueprint.mustBeEmpty(row, column) && occupied) {
-                    g.setColor(new Color(220, 55, 45, 150));
-                    g.fillRect(x + 1, y + 1, 28, 28);
-                    g.setColor(new Color(255, 225, 210));
-                    g.drawLine(x + 6, y + 6, x + 23, y + 23);
-                    g.drawLine(x + 23, y + 6, x + 6, y + 23);
-                } else if (blueprint.isTarget(row, column) && occupied) {
-                    g.setColor(new Color(100, 220, 120, 210));
-                    g.drawRect(x + 2, y + 2, 25, 25);
-                } else if (blueprint.isTarget(row, column) && filledByOther) {
-                    g.setColor(new Color(115, 135, 165, 105));
-                    g.fillRect(x + 3, y + 3, 24, 24);
-                    g.setColor(new Color(205, 220, 235, 175));
-                    g.drawRect(x + 3, y + 3, 23, 23);
-                    g.drawLine(x + 5, y + 20, x + 14, y + 27);
-                    g.drawLine(x + 14, y + 4, x + 27, y + 14);
+
+                if (blueprint.mustBeEmpty(row, column)) {
+                    boolean blocked = isPlayerBlueprintCellVisuallyOccupied(player, row, column);
+                    drawBlueprintCellHighlight(g, x, y,
+                            blocked ? new Color(235, 70, 55) : new Color(190, 75, 65, 200),
+                            blocked ? 1 : 3,
+                            blocked ? 3f : 1.5f);
+                } else if (blueprint.isTarget(row, column)) {
+                    if (occupied) {
+                        drawBlueprintCellHighlight(g, x, y, new Color(90, 235, 120), 1, 2.5f);
+                    } else if (filledByOther) {
+                        drawBlueprintCellHighlight(g, x, y, new Color(150, 185, 220), 2, 2f);
+                        g.setColor(new Color(210, 230, 250));
+                        g.drawLine(x + 5, y + 20, x + 14, y + 27);
+                        g.drawLine(x + 14, y + 4, x + 27, y + 14);
+                    } else {
+                        drawBlueprintCellHighlight(g, x, y, new Color(245, 215, 150), 2, 2f);
+                        g.setColor(new Color(255, 248, 220, 180));
+                        g.drawRect(x + 5, y + 5, 19, 19);
+                    }
                 }
+            }
+        }
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                if (!blueprint.mustBeEmpty(row, column)) {
+                    continue;
+                }
+                int x = boardX + column * 30;
+                int y = boardY + (14 + row) * 30;
+                boolean blocked = isPlayerBlueprintCellVisuallyOccupied(player, row, column);
+                drawBlueprintForbiddenMark(g, x, y, blocked);
             }
         }
     }
@@ -2411,7 +2479,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         for (int r = 1; r < 20; r++) {
             g.fillRect(bx, by + r * 30, 300, 1);
         }
-        drawBlueprintGuide(g, bx, by);
         if (useCoopEngineHost()) {
             drawEngineSessionBoard(g, coopEngineBridge.session(0), bx, by,
                     coopEngineBridge.isLineClearBlinkOn(0));
@@ -2429,7 +2496,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else {
             drawSingleEngineBoard(g, bx, by);
         }
-        drawBlueprintStatus(g, bx, by, 0);
+        drawBlueprintOverlay(g, bx, by, 0);
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
         if (useCoopEngineHost()) {
@@ -2505,7 +2572,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             for (int r = 1; r < 20; r++) {
                 g.fillRect(bx, by + r * 30, 300, 1);
             }
-            drawBlueprintGuide(g, bx, by);
             if (useCoopEngineHost()) {
                 drawEngineSessionBoard(g, coopEngineBridge.session(1), bx, by,
                         coopEngineBridge.isLineClearBlinkOn(1));
@@ -2521,7 +2587,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     drawLegacyActivePiece(g, bx, by, board2, p2Type, p2Rot, p2X, p2Y);
                 }
             }
-            drawBlueprintStatus(g, bx, by, 1);
+            drawBlueprintOverlay(g, bx, by, 1);
             drawBox(g, 1108, 104, 116, 104, "홀드");
             if (useCoopEngineHost()) {
                 GameSession coopS1 = coopEngineBridge.session(1);
