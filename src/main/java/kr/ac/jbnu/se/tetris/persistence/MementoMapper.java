@@ -89,6 +89,7 @@ public final class MementoMapper {
 		m.bossTimer = panel.bossTimer;
 		m.gameTime = panel.gameTime;
 		m.stageClear = panel.stageClear;
+		m.gameOver = panel.screen == 7;
 		m.stageAdvancePrompt = panel.stageAdvancePrompt;
 		m.stageReadyPlayer0 = panel.stageReadyPlayer0;
 		m.stageReadyPlayer1 = panel.stageReadyPlayer1;

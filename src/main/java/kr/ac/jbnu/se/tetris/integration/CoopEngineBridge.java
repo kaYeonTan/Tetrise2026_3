@@ -73,18 +73,11 @@ public final class CoopEngineBridge {
 		
 		// 16ms마다 호출되니까 타이머 증가
 		dropTimer0 += 16;
-		dropTimer1 += 16;
 		
-		// P1 낙하
+		// P1만 낙하. P2는 참가자가 보낸 보드를 그대로 그린다.
 		if (dropTimer0 >= dropSpeed) {
 			dropTimer0 = 0;
 			engine.engine(0).tick();
-		}
-		
-		// P2 낙하
-		if (dropTimer1 >= dropSpeed) {
-			dropTimer1 = 0;
-			engine.engine(1).tick();
 		}
 		
 		syncHudFromEngine();
@@ -99,6 +92,10 @@ public final class CoopEngineBridge {
 
 	public void applyAction(int playerIndex, PlayerAction action) {
 		if (!isDrivingHost() || action == null) {
+			return;
+		}
+		// P2 조작은 참가자 PC에서만 계산한다
+		if (playerIndex != 0) {
 			return;
 		}
 		engine.applyAction(playerIndex, action);
@@ -132,13 +129,24 @@ public final class CoopEngineBridge {
 			return false;
 		}
 		boolean player0Raised = engine.engine(0).raiseGarbageLine(player0Hole);
-		boolean player1Raised = engine.engine(1).raiseGarbageLine(player1Hole);
-		if (player0Raised && player1Raised) {
-			panel.garbageSeq++;
-			panel.garbageHole0 = player0Hole;
-			panel.garbageHole1 = player1Hole;
+		// P2 줄은 참가자 엔진이 올리고, 그 결과가 스냅샷으로 돌아온다
+		panel.garbageSeq++;
+		panel.garbageHole0 = player0Hole;
+		panel.garbageHole1 = player1Hole;
+		return player0Raised;
+	}
+
+	/** 참가자가 보낸 P2 보드를 화면에만 붙인다. 점수·줄 수는 방장 값을 유지. */
+	public void showGuestBoard(SessionMemento guestBoard) {
+		if (!isDrivingHost() || guestBoard == null || engine == null) {
+			return;
 		}
-		return player0Raised && player1Raised;
+		GameSession guest = engine.session(1);
+		int score = guest.score;
+		int lines = guest.linesRemoved;
+		engine.applyPlayerMemento(1, guestBoard);
+		guest.score = score;
+		guest.linesRemoved = lines;
 	}
 
 	/** 참가자가 실제로 지운 줄. 방장 복사 보드는 점수·HP에 넣지 않는다. */
@@ -329,6 +337,9 @@ public final class CoopEngineBridge {
 			panel.clearTimer = 2000;
 		}
 		panel.stageClear = mem.stageClear;
+		if (mem.gameOver) {
+			panel.notifyEngineGameOver();
+		}
 		panel.stageAdvancePrompt = mem.stageAdvancePrompt;
 		panel.stageReadyPlayer0 = mem.stageReadyPlayer0;
 		panel.stageReadyPlayer1 = mem.stageReadyPlayer1;

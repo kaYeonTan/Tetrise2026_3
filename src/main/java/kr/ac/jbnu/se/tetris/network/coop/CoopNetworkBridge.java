@@ -18,6 +18,7 @@ import com.google.gson.GsonBuilder;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
 
+import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.core.PlayerAction;
 
 import kr.ac.jbnu.se.tetris.integration.CoopEngineBridge;
@@ -30,7 +31,11 @@ import kr.ac.jbnu.se.tetris.network.lobby.LobbyMessageType;
 
 import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 
+import kr.ac.jbnu.se.tetris.persistence.MementoMapper;
+
 import kr.ac.jbnu.se.tetris.persistence.SaveService;
+
+import kr.ac.jbnu.se.tetris.persistence.SessionMemento;
 
 
 
@@ -240,6 +245,14 @@ public final class CoopNetworkBridge {
 
 				break;
 
+			case GUEST_BOARD_PUSH:
+
+				String boardJson = msg.snapshotJson;
+				String boardMsg = msg.message;
+				SwingUtilities.invokeLater(() -> applyGuestBoard(boardJson, boardMsg));
+
+				break;
+
 			case PEER_DISCONNECTED:
 
 				SwingUtilities.invokeLater(() -> panel.onCoopPeerDisconnected(msg.message));
@@ -339,6 +352,72 @@ public final class CoopNetworkBridge {
 
 		}
 
+	}
+
+	/** 참가자: 내 보드 배열이랑 떨어지는 블록을 방장에게 보낸다. */
+	public void maybeSendMyBoard() {
+		if (!isActive() || host || panel.screen != 5) {
+			return;
+		}
+		sendMyBoard(false);
+	}
+
+	public void sendGameOver() {
+		if (!isActive()) {
+			return;
+		}
+		try {
+			if (host) {
+				if (panel.coopEngineBridge == null) {
+					return;
+				}
+				CoopGameMemento mem = panel.coopEngineBridge.createMemento(coopId);
+				if (mem == null) {
+					return;
+				}
+				mem.gameOver = true;
+				LobbyMessage req = LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT);
+				req.coopId = coopId;
+				req.snapshotJson = GSON.toJson(mem);
+				client.sendCoopSnapshot(req);
+			} else {
+				sendMyBoard(true);
+			}
+		} catch (Exception ignored) {
+		}
+	}
+
+	private void sendMyBoard(boolean gameOver) {
+		if (panel.coopEngineBridge == null) {
+			return;
+		}
+		GameSession mine = panel.coopEngineBridge.session(localPlayerIndex);
+		if (mine == null) {
+			return;
+		}
+		try {
+			SessionMemento board = MementoMapper.fromSession(mine);
+			LobbyMessage req = LobbyMessage.of(LobbyMessageType.GUEST_BOARD);
+			req.playerIndex = localPlayerIndex;
+			req.snapshotJson = GSON.toJson(board);
+			req.message = gameOver ? "GAMEOVER" : "";
+			client.sendCoopSnapshot(req);
+		} catch (Exception ignored) {
+		}
+	}
+
+	private void applyGuestBoard(String json, String message) {
+		if (!host || panel.coopEngineBridge == null) {
+			return;
+		}
+		if (json != null && !json.isEmpty()) {
+			SessionMemento board = GSON.fromJson(json, SessionMemento.class);
+			panel.coopEngineBridge.showGuestBoard(board);
+		}
+		if ("GAMEOVER".equals(message)) {
+			panel.notifyEngineGameOver();
+		}
+		panel.repaint();
 	}
 
 

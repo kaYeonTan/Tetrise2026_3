@@ -470,6 +470,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         if (coopBridge != null) {
             coopBridge.maybeSendSnapshot();
+            coopBridge.maybeSendMyBoard();
         }
     }
 
@@ -1381,6 +1382,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         allClear = clear;
         screen = 7;
         pressed.clear();
+        if (isOnlineCoop && coopBridge != null) {
+            coopBridge.sendGameOver();
+        }
         bossPattern.stop(this);
         soundManager.stopBgm();
         int total = p1Score + (isTwoPlayer ? p2Score : 0);

@@ -163,6 +163,8 @@ public class LobbyServer implements AutoCloseable {
 				return handlePlayerAction(clientId, req);
 			case COOP_SNAPSHOT:
 				return handleCoopSnapshot(clientId, req);
+			case GUEST_BOARD:
+				return handleGuestBoard(clientId, req);
 			case COOP_SAVE:
 				return handleCoopSave(clientId, req);
 			default:
@@ -274,6 +276,23 @@ public class LobbyServer implements AutoCloseable {
 		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT_PUSH), push -> {
 			push.coopId = req.coopId;
 			push.snapshotJson = req.snapshotJson;
+		});
+		return null;
+	}
+
+	// 참가자 보드를 방장에게 그대로 넘긴다
+	private LobbyMessage handleGuestBoard(String clientId, LobbyMessage req) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		if (clientId.equals(room.hostClientId)) {
+			return error("NOT_GUEST", "참가자만 보드를 보낼 수 있어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.GUEST_BOARD_PUSH), push -> {
+			push.playerIndex = req.playerIndex;
+			push.snapshotJson = req.snapshotJson;
+			push.message = req.message;
 		});
 		return null;
 	}
