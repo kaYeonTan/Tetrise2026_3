@@ -27,5 +27,9 @@ public interface BossPatternTarget {
 
     boolean isBlueprintCellOccupied(int row, int column);
 
+    default boolean isBlueprintCellOccupiedForPlayer(int player, int row, int column) {
+        return isBlueprintCellOccupied(row, column);
+    }
+
     void completeBlueprintPattern();
 }

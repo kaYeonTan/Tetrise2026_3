@@ -2,6 +2,8 @@ package kr.ac.jbnu.se.tetris.boss;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -63,6 +65,16 @@ class BossPatternControllerTest {
         controller.startStage(3, new FakeTarget(), 5);
 
         assertEquals(5, controller.blueprintIndex());
+    }
+
+    @Test
+    void stageThreeTwoPlayerUsesDifferentBlueprintIndices() {
+        FakeTarget target = new FakeTarget();
+        target.twoPlayer = true;
+        BossPatternController controller = new BossPatternController(new Random(3));
+        controller.startStage(3, target);
+        assertNotEquals(controller.blueprintIndex(), controller.blueprintIndexP1());
+        assertNotSame(controller.blueprintForPlayer(0), controller.blueprintForPlayer(1));
     }
 
     @Test

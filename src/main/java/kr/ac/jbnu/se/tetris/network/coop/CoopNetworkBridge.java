@@ -225,7 +225,12 @@ public final class CoopNetworkBridge {
 
 			case PLAYER_ACTION:
 
-				SwingUtilities.invokeLater(() -> panel.applyRemoteCoopAction(msg.playerIndex, msg.action));
+				if ("BLUEPRINT".equals(msg.action)) {
+					String mask = msg.message;
+					SwingUtilities.invokeLater(() -> panel.applyGuestBlueprintMask(mask));
+				} else {
+					SwingUtilities.invokeLater(() -> panel.applyRemoteCoopAction(msg.playerIndex, msg.action));
+				}
 
 				break;
 
@@ -250,6 +255,20 @@ public final class CoopNetworkBridge {
 	}
 
 
+
+	public void sendBlueprintMask(long mask) {
+		if (!isActive() || host) {
+			return;
+		}
+		try {
+			LobbyMessage req = LobbyMessage.of(LobbyMessageType.PLAYER_ACTION);
+			req.playerIndex = localPlayerIndex;
+			req.action = "BLUEPRINT";
+			req.message = Long.toHexString(mask);
+			client.sendPlayerAction(req);
+		} catch (Exception ignored) {
+		}
+	}
 
 	public void sendLocalAction(PlayerAction action) {
 

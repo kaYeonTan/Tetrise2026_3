@@ -19,6 +19,7 @@ public final class CoopGameEngine {
 		bus = new GameEventBus();
 		player0 = new GameEngine(bus);
 		player1 = new GameEngine(bus);
+		player1.getSession(0).playerIndex = 1;
 	}
 
 	public GameEventBus getBus() {

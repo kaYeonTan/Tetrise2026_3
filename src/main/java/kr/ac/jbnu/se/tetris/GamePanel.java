@@ -98,9 +98,24 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public boolean bossWarning = false;
     public String bossWarningText = "";
     public long blizzardEnd = 0;
+    /** 스테이지 2 쓰레기 줄 (방장 발행, 참가자 자기 보드에 적용) */
+    public int garbageSeq;
+    public int garbageHole0 = -1;
+    public int garbageHole1 = -1;
+    /** 스테이지 3: 참가자 블루프린트 칸 (bit = row * 10 + col) */
+    public long onlineGuestBlueprint;
     public boolean stageClear = false;
     boolean stageClearSoundPlayed;
-    int clearTimer = 0;
+    public int clearTimer = 0;
+    /** 온라인: 클리어 연출 후 다음 스테이지 확인 패널 (방장 스냅샷 권위) */
+    public boolean stageAdvancePrompt = false;
+    public boolean stageReadyPlayer0 = false;
+    public boolean stageReadyPlayer1 = false;
+    int nextStagePreview = 0;
+    static final int STAGE_ADVANCE_BTN_X = 490;
+    static final int STAGE_ADVANCE_BTN_Y = 470;
+    static final int STAGE_ADVANCE_BTN_W = 300;
+    static final int STAGE_ADVANCE_BTN_H = 54;
     boolean allClear = false;
     public int hitEffect = 0;
     int bossAwakeningEffect = 0;
@@ -157,7 +172,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     Random random = new Random();
     public final BossPatternController bossPattern = new BossPatternController(random);
     private final transient SoundManager soundManager;
-    int gravityMultiplier = 1;
+    public int gravityMultiplier = 1;
     boolean p1FastNext;
     boolean p2FastNext;
     boolean p1FastCurrent;
@@ -295,10 +310,19 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     void update() {
         if (stageClear) {
+            if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+                return;
+            }
             clearTimer -= 16;
             if (clearTimer <= 0) {
-                if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
-                    stageClear = false;
+                if (isOnlineCoop && coopBridge != null && stage < 5) {
+                    if (!stageAdvancePrompt) {
+                        stageAdvancePrompt = true;
+                        stageReadyPlayer0 = false;
+                        stageReadyPlayer1 = false;
+                        ensureNextStagePreviewLoaded(stage + 1);
+                    }
+                    tryAdvanceOnlineCoopStage();
                     return;
                 }
                 if (stage == 5) {
@@ -432,7 +456,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (useCoopEngineHost()) {
             coopEngineBridge.tickHost();
         } else if (isOnlineCoop && useCoopEngineRender()) {
-            coopEngineBridge.tickGuestPrediction(localPlayerIndex);
+            coopEngineBridge.tickGuestLocal(localPlayerIndex);
         }
         if (!isOnlineCoop || localPlayerIndex == 0) {
             bossPattern.tick(16, this);
@@ -681,10 +705,31 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    boolean isCoopPlayers() {
+        return isTwoPlayer || isOnlineCoop;
+    }
+
+    @Override
+    public boolean isBlueprintCellOccupiedForPlayer(int player, int row, int column) {
+        if (!isCoopPlayers()) {
+            return isBlueprintCellOccupied(row, column);
+        }
+        return isPlayerBlueprintCellOccupied(player, row, column);
+    }
+
     @Override
     public boolean isBlueprintCellOccupied(int row, int column) {
         if (row < 0 || row >= Blueprint.ROWS || column < 0 || column >= Blueprint.COLUMNS) {
             return false;
+        }
+        if (useCoopEngineHost()) {
+            GameSession hostSession = coopEngineBridge.session(0);
+            int engineY = Blueprint.ROWS - 1 - row;
+            if (hostSession != null && hostSession.shapeAt(column, engineY) != Tetrominoes.NoShape) {
+                return true;
+            }
+            int bit = row * Blueprint.COLUMNS + column;
+            return ((onlineGuestBlueprint >>> bit) & 1L) != 0;
         }
         if (useCoopEngineRender()) {
             boolean occupied = false;
@@ -704,11 +749,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
         }
         int boardRow = 18 + row;
-        boolean occupied = board1[boardRow][column] != 0;
-        if (isTwoPlayer) {
-            occupied |= board2[boardRow][column] != 0;
+        if (isCoopPlayers()) {
+            return board1[boardRow][column] != 0 || board2[boardRow][column] != 0;
         }
-        return occupied;
+        return board1[boardRow][column] != 0;
     }
 
     @Override
@@ -718,8 +762,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         bossHp = 0;
         triggerBossAwakening();
-        stageClear = true;
-        clearTimer = 2000;
+        beginStageClearSequence();
         pressed.clear();
         msg = "BLUEPRINT COMPLETE!";
         msgTimer = 120;
@@ -728,9 +771,62 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void notifyBossBoardChanged() {
+        if (stage != 3 || stageClear) {
+            return;
+        }
+        if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+            coopBridge.sendBlueprintMask(localBlueprintMask());
+            return;
+        }
+        bossPattern.onBoardChanged(this);
+    }
+
+    long localBlueprintMask() {
+        if (coopEngineBridge == null) {
+            return 0;
+        }
+        GameSession session = coopEngineBridge.session(localPlayerIndex);
+        if (session == null) {
+            return 0;
+        }
+        long mask = 0;
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            int engineY = Blueprint.ROWS - 1 - row;
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                if (session.shapeAt(column, engineY) != Tetrominoes.NoShape) {
+                    mask |= 1L << (row * Blueprint.COLUMNS + column);
+                }
+            }
+        }
+        return mask;
+    }
+
+    public void applyGuestBlueprintMask(String hex) {
+        if (!useCoopEngineHost() || hex == null || hex.isBlank()) {
+            return;
+        }
+        try {
+            onlineGuestBlueprint = Long.parseUnsignedLong(hex, 16);
+        } catch (NumberFormatException ignored) {
+            return;
+        }
         if (stage == 3 && !stageClear) {
             bossPattern.onBoardChanged(this);
         }
+    }
+
+    public void reportOnlineLinesCleared(int count) {
+        if (!isOnlineCoop || coopBridge == null || coopBridge.isHost() || count <= 0) {
+            return;
+        }
+        int n = Math.min(4, count);
+        PlayerAction action = switch (n) {
+            case 1 -> PlayerAction.LINES_1;
+            case 2 -> PlayerAction.LINES_2;
+            case 3 -> PlayerAction.LINES_3;
+            default -> PlayerAction.LINES_4;
+        };
+        coopBridge.sendLocalAction(action);
     }
 
     public void restoreBossPatternTimer(int elapsedMillis) {
@@ -748,6 +844,67 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     /** A 엔진 줄 클리어 → B 보스 HP (기존 B 데미지表) */
+    void beginStageClearSequence() {
+        stageClear = true;
+        clearTimer = 2000;
+        stageAdvancePrompt = false;
+        stageReadyPlayer0 = false;
+        stageReadyPlayer1 = false;
+    }
+
+    public void ensureNextStagePreviewLoaded(int nextStage) {
+        if (nextStage < 1 || nextStage > 5) {
+            return;
+        }
+        nextStagePreview = nextStage;
+    }
+
+    boolean isStageReady(int playerIndex) {
+        return playerIndex == 0 ? stageReadyPlayer0 : stageReadyPlayer1;
+    }
+
+    void setStageReady(int playerIndex, boolean ready) {
+        if (playerIndex == 0) {
+            stageReadyPlayer0 = ready;
+        } else {
+            stageReadyPlayer1 = ready;
+        }
+    }
+
+    boolean bothStageReadyOnline() {
+        return stageReadyPlayer0 && stageReadyPlayer1;
+    }
+
+    void tryAdvanceOnlineCoopStage() {
+        if (!isOnlineCoop || !useCoopEngineHost() || !stageAdvancePrompt || !bothStageReadyOnline()) {
+            return;
+        }
+        advanceOnlineCoopStage();
+    }
+
+    void advanceOnlineCoopStage() {
+        stageAdvancePrompt = false;
+        stageClear = false;
+        stageReadyPlayer0 = false;
+        stageReadyPlayer1 = false;
+        stageClearSoundPlayed = false;
+        clearTimer = 0;
+        stage++;
+        startStage();
+        msg = "STAGE " + stage + " 시작!";
+        msgTimer = 90;
+    }
+
+    static String stageGimmickHint(int nextStage) {
+        return switch (nextStage) {
+            case 2 -> "20초마다 바닥에서 쓰레기 줄이 한 줄씩 올라옵니다.";
+            case 3 -> "블루프린트 목표대로 블록을 배치해 클리어하세요.";
+            case 4 -> "보스 패턴 동안 중력이 빨라집니다.";
+            case 5 -> "주기적으로 조작키가 바뀝니다.";
+            default -> "협력해서 보스 HP를 0으로 만드세요.";
+        };
+    }
+
     public void applyBossLineDamage(int count) {
         if (count <= 0 || stageClear) {
             return;
@@ -766,8 +923,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         triggerBossAwakening();
         if (bossHp <= 0) {
             bossHp = 0;
-            stageClear = true;
-            clearTimer = 2000;
+            beginStageClearSequence();
             pressed.clear();
             bossPattern.stop(this);
             playStageClearSound();
@@ -814,6 +970,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void startStage(int restoredBlueprintIndex) {
+        startStage(restoredBlueprintIndex, -1);
+    }
+
+    public void startStage(int restoredBlueprintIndex, int restoredBlueprintIndexP1) {
         if (stage == 1) {
             bossMax = 100;
         } else if (stage == 2) {
@@ -825,12 +985,22 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else {
             bossMax = 250;
         }
+        if (isCoopPlayers()) {
+            bossMax *= 2;
+        }
         bossHp = bossMax;
         bossTimer = 0;
         bossWarning = false;
         bossWarningText = "";
         blizzardEnd = 0;
         stageClear = false;
+        garbageSeq = 0;
+        garbageHole0 = -1;
+        garbageHole1 = -1;
+        onlineGuestBlueprint = 0;
+        stageAdvancePrompt = false;
+        stageReadyPlayer0 = false;
+        stageReadyPlayer1 = false;
         stageClearSoundPlayed = false;
         hitEffect = 0;
         bossAwakeningEffect = 0;
@@ -843,7 +1013,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p1DropCount = 0;
         p2DropCount = 0;
         if (stage == 3 && restoredBlueprintIndex >= 0) {
-            bossPattern.startStage(stage, this, restoredBlueprintIndex);
+            bossPattern.startStage(stage, this, restoredBlueprintIndex, restoredBlueprintIndexP1);
         } else {
             bossPattern.startStage(stage, this);
         }
@@ -1175,8 +1345,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             triggerBossAwakening();
             if (bossHp <= 0) {
                 bossHp = 0;
-                stageClear = true;
-                clearTimer = 2000;
+                beginStageClearSequence();
                 pressed.clear();
                 bossPattern.stop(this);
                 playStageClearSound();
@@ -1430,8 +1599,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 saveList = loginUser == null ? new ArrayList<>() : FileManager.getSaveList(loginUser);
                 screen = 1;
             } else if (clicked(88, 332, 300, 54)) {
-                onlineLobbyFrame = new LobbyFrame(this);
-                onlineLobbyFrame.setVisible(true);
+                promptTwoPlayerMode();
             } else if (clicked(88, 402, 300, 54)) {
                 loadRanking();
                 screen = 3;
@@ -1473,10 +1641,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 for (int i = 0; i < saveList.size() && i < 5; i++) {
                     int y = 146 + i * 88;
                     if (clicked(760, y + 18, 120, 44)) {
-                        if ("2".equals(saveList.get(i)[4])) {
-                            JOptionPane.showMessageDialog(this,
-                                    "단일 PC 2인 협동 저장은 더 이상 지원하지 않아요.");
-                        } else if (FileManager.loadGame(saveList.get(i)[0], this)) {
+                        if (FileManager.loadGame(saveList.get(i)[0], this)) {
                             screen = 5;
                             pressed.clear();
                         } else {
@@ -1540,6 +1705,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 setMsgError = false;
             } else if (clicked(862, 590, 150, 46)) {
                 closeSettings();
+            }
+        } else if (screen == 5 && stageAdvancePrompt && isOnlineCoop) {
+            if (!isStageReady(localPlayerIndex)
+                    && clicked(STAGE_ADVANCE_BTN_X, STAGE_ADVANCE_BTN_Y, STAGE_ADVANCE_BTN_W, STAGE_ADVANCE_BTN_H)) {
+                performCoopAction(localPlayerIndex, PlayerAction.STAGE_READY, false);
             }
         } else if (screen == 6) {
             if (clicked(490, 210, 300, 54)) {
@@ -1642,8 +1812,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         onlineLobbyFrame.setVisible(true);
                     });
                 } else {
-                    msg = "단일 PC 2인 협동 저장은 더 이상 지원하지 않아요.";
-                    msgTimer = 200;
+                    isOnlineCoop = false;
+                    CoopEngineBridge.applyLoadedMemento(this, mem);
+                    msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 이어합니다.";
+                    msgTimer = 150;
                 }
             } catch (LoadException ex) {
                 msg = ex.getMessage();
@@ -1678,8 +1850,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         m.bossTimer = bossTimer;
         m.gameTime = gameTime;
         m.stageClear = stageClear;
+        m.stageAdvancePrompt = stageAdvancePrompt;
+        m.stageReadyPlayer0 = stageReadyPlayer0;
+        m.stageReadyPlayer1 = stageReadyPlayer1;
         m.blizzardEnd = blizzardEnd;
         m.blueprintIndex = bossPattern.blueprintIndex();
+        m.blueprintIndexP1 = bossPattern.blueprintIndexP1();
         m.onlineResume = isOnlineCoop;
         m.lastRoomId = lastOnlineRoomId;
         m.panelSnapshotJson = new Gson().toJson(CoopSnapshotMapper.fromPanel(this, cid));
@@ -2019,10 +2195,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 g.drawString("스테이지 " + st + " · " + stageNames[st], 390, y + 32);
                 g.setFont(font.deriveFont(16.5f));
                 g.setColor(new Color(0x4a3a2a));
-                g.drawString((s[4].equals("2") ? "단일 PC 2인 (지원 종료)" : "1인 플레이")
+                g.drawString((s[4].equals("2") ? "단일 PC 2인" : "1인 플레이")
                         + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
                 g.drawString("마지막 플레이  " + df.format(new Date(Long.parseLong(s[1]))), 390, y + 74);
-                drawButton(g, s[4].equals("2") ? "지원 종료" : "이어하기", 760, y + 18, 120, 44, 1, 16.5f);
+                drawButton(g, "이어하기", 760, y + 18, 120, 44, 1, 16.5f);
                 drawButton(g, "삭제", 890, y + 18, 110, 44, 0, 16.5f);
             }
         }
@@ -2277,6 +2453,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     boolean isPlayerBlueprintCellOccupied(int player, int row, int column) {
+        if (useCoopEngineHost()) {
+            GameSession session = coopEngineBridge.session(player);
+            int engineY = Blueprint.ROWS - 1 - row;
+            if (session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape) {
+                return true;
+            }
+            if (player == 1) {
+                int bit = row * Blueprint.COLUMNS + column;
+                return ((onlineGuestBlueprint >>> bit) & 1L) != 0;
+            }
+            return false;
+        }
         if (useCoopEngineRender()) {
             GameSession session = coopEngineBridge.session(player);
             int engineY = Blueprint.ROWS - 1 - row;
@@ -2373,7 +2561,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void drawBlueprintOverlay(Graphics2D g, int boardX, int boardY, int player) {
-        Blueprint blueprint = bossPattern.blueprint();
+        Blueprint blueprint = bossPattern.blueprintForPlayer(player);
         if (stage != 3 || blueprint == null) {
             return;
         }
@@ -2729,13 +2917,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             g.setColor(new Color(0xe9c98f));
             g.drawString(msg, 640 - w / 2, 161);
         }
-        if (stageClear) {
+        if (stageAdvancePrompt && isOnlineCoop) {
+            drawStageAdvancePrompt(g, stageNames, bossNames);
+        } else if (stageClear) {
             g.setColor(new Color(0, 0, 0, 120));
             g.fillRect(0, 280, 1280, 140);
             g.setFont(fontBold.deriveFont(66f));
-            centerText(g, "STAGE CLEAR!", 640, 360, new Color(0xe9c98f), new Color(0x6b2a1a));
+            centerText(g, "GameClear!", 640, 350, new Color(0xe9c98f), new Color(0x6b2a1a));
             g.setFont(font.deriveFont(22f));
-            centerText(g, bossNames[stage] + "을(를) 쓰러뜨렸다!", 640, 400, new Color(0xf0e2c8), new Color(0x0c090d));
+            centerText(g, bossNames[stage] + "을(를) 쓰러뜨렸다!", 640, 390, new Color(0xf0e2c8), new Color(0x0c090d));
         }
         String help = keyName(keyPause) + " / Esc 일시정지";
         g.setFont(fontSmall.deriveFont(13.5f));
@@ -2744,6 +2934,47 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.fillRect(8, 696, hw + 20, 20);
         g.setColor(new Color(0xd9c29a));
         g.drawString(help, 18, 711);
+    }
+
+    void drawStageAdvancePrompt(Graphics2D g, String[] stageNames, String[] bossNames) {
+        g.setColor(new Color(8, 6, 10, 190));
+        g.fillRect(0, 0, 1280, 720);
+        drawPanel(g, 340, 130, 600, 460);
+        int next = nextStagePreview >= 1 && nextStagePreview <= 5 ? nextStagePreview : Math.min(5, stage + 1);
+        g.setFont(fontBold.deriveFont(40f));
+        centerText(g, "GameClear!", 640, 185, new Color(0x1a1216), new Color(0xefe0bf));
+        g.setFont(fontBold.deriveFont(26f));
+        centerText(g, "다음 스테이지", 640, 235, new Color(0x1a1216), new Color(0xc9a227));
+        g.setFont(fontBold.deriveFont(22f));
+        String title = "STAGE " + next + " · " + stageNames[next];
+        centerText(g, title, 640, 275, new Color(0x1a1216), new Color(0x3a5a2a));
+        g.setFont(font.deriveFont(18f));
+        centerText(g, "보스: " + bossNames[next], 640, 310, new Color(0x1a1216), new Color(0x5a3a2a));
+        g.setFont(font.deriveFont(16f));
+        String hint = stageGimmickHint(next);
+        int hintW = g.getFontMetrics().stringWidth(hint);
+        if (hintW > 520) {
+            g.drawString(hint, 640 - 260, 350);
+        } else {
+            centerText(g, hint, 640, 350, new Color(0x1a1216), new Color(0x4a4a4a));
+        }
+        g.setFont(font.deriveFont(15f));
+        String p1 = onlineCoopPlayerLabel(0) + ": "
+                + (stageReadyPlayer0 ? "준비 완료" : "대기 중…");
+        String p2 = onlineCoopPlayerLabel(1) + ": "
+                + (stageReadyPlayer1 ? "준비 완료" : "대기 중…");
+        centerText(g, p1, 640, 400, new Color(0x1a1216), new Color(0x2a5a2a));
+        centerText(g, p2, 640, 428, new Color(0x1a1216), new Color(0x2a5a2a));
+        boolean mineReady = isStageReady(localPlayerIndex);
+        if (mineReady) {
+            g.setFont(font.deriveFont(17f));
+            centerText(g, "상대방 확인을 기다리는 중…", 640, 455, new Color(0x1a1216), new Color(0x6a4a2a));
+        } else {
+            drawButton(g, "다음 스테이지 진행", STAGE_ADVANCE_BTN_X, STAGE_ADVANCE_BTN_Y, STAGE_ADVANCE_BTN_W,
+                    STAGE_ADVANCE_BTN_H, 1, 20f);
+        }
+        g.setFont(fontSmall.deriveFont(13f));
+        centerText(g, "두 플레이어 모두 동의하면 시작됩니다.", 640, 545, new Color(0x1a1216), new Color(0x6a6a6a));
     }
 
     void drawPause(Graphics2D g) {
@@ -2820,6 +3051,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         mem.gravityMultiplier = gravityMultiplier;
+        mem.garbageSeq = garbageSeq;
+        mem.garbageHole0 = garbageHole0;
+        mem.garbageHole1 = garbageHole1;
         mem.randomKeyEnd = randomKeyEnd;
         if (randomKeyEnd > gameTime && temporaryPrimaryKeys != null) {
             mem.randomKeyForPlayer0 = temporaryPrimaryKeys.clone();
@@ -2834,8 +3068,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         gravityMultiplier = mem.gravityMultiplier <= 0 ? 1 : mem.gravityMultiplier;
         blizzardEnd = mem.blizzardEnd;
-        if (stage != mem.stage || bossPattern.blueprintIndex() != mem.blueprintIndex) {
-            bossPattern.startStage(mem.stage, this, mem.blueprintIndex);
+        if (stage != mem.stage || bossPattern.blueprintIndex() != mem.blueprintIndex
+                || bossPattern.blueprintIndexP1() != mem.blueprintIndexP1) {
+            bossPattern.startStage(mem.stage, this, mem.blueprintIndex, mem.blueprintIndexP1);
         }
         bossPattern.restoreElapsed(mem.bossTimer, this);
         bossTimer = mem.bossTimer;
@@ -2852,6 +3087,44 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         randomKeyEnd = 0;
     }
 
+    void promptTwoPlayerMode() {
+        int choice = JOptionPane.showOptionDialog(this,
+                "2인 플레이 방식을 선택하세요.",
+                "2인 플레이",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                new String[]{"온라인 (로비)", "로컬 (단일 PC)", "취소"},
+                "온라인 (로비)");
+        if (choice == 0) {
+            onlineLobbyFrame = new LobbyFrame(this);
+            onlineLobbyFrame.setVisible(true);
+        } else if (choice == 1) {
+            beginLocalCoop();
+        }
+    }
+
+    public void beginLocalCoop() {
+        isOnlineCoop = false;
+        localPlayerIndex = 0;
+        onlineCoopId = null;
+        pendingCoopResume = null;
+        if (coopBridge != null) {
+            coopBridge.detach();
+            coopBridge = null;
+        }
+        onlineLobbyClient = null;
+        closeOnlineLobbyUi();
+        if (coopEngineBridge != null) {
+            coopEngineBridge.stop();
+            coopEngineBridge = null;
+        }
+        newGame(true);
+        msg = "단일 PC 2인 · P1 / P2";
+        msgTimer = 120;
+        requestFocusInWindow();
+    }
+
     public void beginOnlineCoop(int playerIndex, String coopId, long seed) {
         isOnlineCoop = true;
         localPlayerIndex = playerIndex;
@@ -2863,6 +3136,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         if (playerIndex == 0) {
             coopEngineBridge.startOnlineHost(stage, seed);
+        } else {
+            coopEngineBridge.startOnlineGuest(stage, seed);
         }
         screen = 5;
         msg = playerIndex == 0 ? "온라인 협동 · 방장 (P1)" : "온라인 협동 · 참가 (P2)";
@@ -2920,7 +3195,37 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         soundManager.resumeBgm();
     }
 
+    static int reportedLineCount(PlayerAction action) {
+        return switch (action) {
+            case LINES_1 -> 1;
+            case LINES_2 -> 2;
+            case LINES_3 -> 3;
+            case LINES_4 -> 4;
+            default -> 0;
+        };
+    }
+
     void performCoopAction(int playerIndex, PlayerAction action, boolean fromNetwork) {
+        int reportedLines = reportedLineCount(action);
+        if (reportedLines > 0) {
+            if (fromNetwork && useCoopEngineHost() && playerIndex == 1 && coopEngineBridge != null) {
+                coopEngineBridge.creditGuestLines(reportedLines);
+            }
+            return;
+        }
+        if (action == PlayerAction.STAGE_READY) {
+            if (screen != 5 || !stageAdvancePrompt || isStageReady(playerIndex)) {
+                return;
+            }
+            if (useCoopEngineHost()) {
+                setStageReady(playerIndex, true);
+                tryAdvanceOnlineCoopStage();
+            }
+            if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {
+                coopBridge.sendLocalAction(action);
+            }
+            return;
+        }
         if (action == PlayerAction.PAUSE) {
             if (screen == 5 && !stageClear) {
                 String pauseMsg = fromNetwork ? "상대방이 일시정지했어요." : "";

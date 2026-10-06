@@ -9,6 +9,7 @@ public final class BossPatternController {
     private int elapsedMillis;
     private boolean warning;
     private int blueprintIndex = -1;
+    private int blueprintIndexP1 = -1;
 
     public BossPatternController(Random random) {
         this.random = random;
@@ -20,15 +21,30 @@ public final class BossPatternController {
     }
 
     public void startStage(int stage, BossPatternTarget target, int restoredBlueprintIndex) {
+        startStage(stage, target, restoredBlueprintIndex, -1);
+    }
+
+    public void startStage(int stage, BossPatternTarget target, int restoredBlueprintIndex, int restoredBlueprintIndexP1) {
         stop(target);
         blueprintIndex = -1;
+        blueprintIndexP1 = -1;
         if (stage == 2) {
             pattern = new RisingBlockPattern();
         } else if (stage == 3) {
+            int count = Blueprint.stageThreePatternCount();
             blueprintIndex = restoredBlueprintIndex >= 0
                     ? restoredBlueprintIndex
-                    : random.nextInt(Blueprint.stageThreePatternCount());
-            pattern = new BlueprintPattern(Blueprint.stageThree(blueprintIndex));
+                    : random.nextInt(count);
+            if (target.isTwoPlayerMode()) {
+                blueprintIndexP1 = restoredBlueprintIndexP1 >= 0
+                        ? restoredBlueprintIndexP1
+                        : pickDifferentBlueprintIndex(blueprintIndex, count);
+                pattern = new DualBlueprintPattern(
+                        Blueprint.stageThree(blueprintIndex),
+                        Blueprint.stageThree(blueprintIndexP1));
+            } else {
+                pattern = new BlueprintPattern(Blueprint.stageThree(blueprintIndex));
+            }
         } else if (stage == 4) {
             pattern = new AccelerationPattern();
         } else if (stage == 5) {
@@ -98,6 +114,28 @@ public final class BossPatternController {
 
     public int blueprintIndex() {
         return blueprintIndex;
+    }
+
+    public int blueprintIndexP1() {
+        return blueprintIndexP1;
+    }
+
+    public Blueprint blueprintForPlayer(int player) {
+        if (pattern instanceof DualBlueprintPattern dual) {
+            return dual.blueprint(player);
+        }
+        return pattern.blueprint();
+    }
+
+    private int pickDifferentBlueprintIndex(int index0, int count) {
+        if (count <= 1) {
+            return 0;
+        }
+        int index1 = random.nextInt(count - 1);
+        if (index1 >= index0) {
+            index1++;
+        }
+        return index1;
     }
 
     public void stop(BossPatternTarget target) {

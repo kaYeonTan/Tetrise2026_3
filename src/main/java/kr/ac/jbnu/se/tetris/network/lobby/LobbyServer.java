@@ -261,6 +261,7 @@ public class LobbyServer implements AutoCloseable {
 		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.PLAYER_ACTION), push -> {
 			push.playerIndex = req.playerIndex;
 			push.action = req.action;
+			push.message = req.message;
 		});
 		return null;
 	}

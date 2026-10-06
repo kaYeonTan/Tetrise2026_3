@@ -14,14 +14,24 @@ public class CoopGameMemento {
 	public int bossTimer;
 	public long gameTime;
 	public boolean stageClear;
+	/** 클리어 연출 후 다음 스테이지 확인 패널 (온라인, 방장 권위) */
+	public boolean stageAdvancePrompt;
+	public boolean stageReadyPlayer0;
+	public boolean stageReadyPlayer1;
 	public long blizzardEnd;
 	public int blueprintIndex = -1;
+	/** 2인 3스테이지: P2 도안 (1인·구 저장은 -1) */
+	public int blueprintIndexP1 = -1;
 	/** 스테이지 4 가속 등 */
 	public int gravityMultiplier = 1;
 	/** 스테이지 5 조작키 뒤섞기 (gameTime 기준 만료) */
 	public long randomKeyEnd;
 	public int[] randomKeyForPlayer0;
 	public int[] randomKeyForPlayer1;
+	/** 스테이지 2: 방장이 올린 쓰레기 줄. 참가자는 seq가 늘면 자기 보드에만 적용 */
+	public int garbageSeq;
+	public int garbageHole0 = -1;
+	public int garbageHole1 = -1;
 
 	public SessionMemento player0;
 	public SessionMemento player1;
