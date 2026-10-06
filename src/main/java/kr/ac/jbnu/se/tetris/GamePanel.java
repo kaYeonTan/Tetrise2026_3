@@ -101,6 +101,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     static final int PAUSE_Y_LOAD = PAUSE_Y_SAVE + PAUSE_BTN_H + PAUSE_BTN_GAP;
     static final int PAUSE_Y_SETTINGS = PAUSE_Y_LOAD + PAUSE_BTN_H + PAUSE_BTN_GAP;
     static final int PAUSE_Y_MAIN = PAUSE_Y_SETTINGS + PAUSE_BTN_H + PAUSE_BTN_GAP;
+    /** 일시정지 안내 문구 — 마지막 버튼(그림자 포함) 아래 */
+    static final int PAUSE_MSG_Y = PAUSE_Y_MAIN + PAUSE_BTN_H + 28;
+    static final int PAUSE_PANEL_H = PAUSE_MSG_Y - 120 + 24;
     /** 방장이 선택한 슬롯 (참가자 저장 UI) */
     int onlineCoopHostSaveSlot;
     CoopGameMemento pendingGuestCoopSave;
@@ -556,6 +559,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         coopSlotReturnScreen = returnScreen;
         coopSlotList = SaveService.listCoopSlots(loginUser);
         screen = 8;
+        if (mode == 1 && isOnlineCoop && coopBridge != null && coopBridge.isHost()) {
+            coopBridge.notifyGuestSaveUiOpen();
+        }
     }
 
     void openCoopGuestSaveScreen(int hostSlot, CoopGameMemento memento) {
@@ -572,12 +578,53 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         msgTimer = 260;
     }
 
+    public void onHostCoopSaveSessionOpen() {
+        if (!isOnlineCoop || coopBridge == null || coopBridge.isHost()) {
+            return;
+        }
+        openCoopGuestSaveScreenWaiting();
+    }
+
+    public void onHostCoopSaveSessionCancelled() {
+        if (!isOnlineCoop || coopBridge == null || coopBridge.isHost()) {
+            return;
+        }
+        awaitingGuestCoopSave = false;
+        pendingGuestCoopSave = null;
+        if (screen == 8 && coopSlotMode == 3) {
+            screen = 6;
+            msg = "방장이 저장을 취소했어요.";
+            msgTimer = 180;
+        }
+    }
+
+    void openCoopGuestSaveScreenWaiting() {
+        awaitingGuestCoopSave = true;
+        onlineCoopHostSaveSlot = 0;
+        pendingGuestCoopSave = null;
+        coopSlotMode = 3;
+        coopSlotList = SaveService.listCoopSlots(loginUser);
+        if (screen != 6) {
+            screen = 6;
+        }
+        screen = 8;
+        msg = "방장과 함께 저장합니다. 방장이 슬롯을 고르면 이어서 저장해 주세요.";
+        msgTimer = 280;
+    }
+
     public void onHostCoopSavePush(int hostSlot, String snapshotJson) {
         if (!isOnlineCoop || coopBridge == null || coopBridge.isHost() || snapshotJson == null || snapshotJson.isBlank()) {
             return;
         }
         CoopGameMemento mem = new Gson().fromJson(snapshotJson, CoopGameMemento.class);
         if (mem == null) {
+            return;
+        }
+        if (screen == 8 && coopSlotMode == 3 && awaitingGuestCoopSave) {
+            pendingGuestCoopSave = mem;
+            onlineCoopHostSaveSlot = hostSlot;
+            msg = "방장이 슬롯 " + hostSlot + "을(를) 골랐어요. 같은 슬롯에 저장해 주세요.";
+            msgTimer = 260;
             return;
         }
         openCoopGuestSaveScreen(hostSlot, mem);
@@ -1866,6 +1913,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 msgTimer = 180;
                 return;
             }
+            if (coopSlotMode == 1 && isOnlineCoop && coopBridge != null && coopBridge.isHost()) {
+                coopBridge.notifyGuestSaveUiCancelled();
+            }
             if (coopSlotMode == 1 || coopSlotMode == 3) {
                 screen = 6;
             } else {
@@ -1887,6 +1937,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 if (loginUser == null) {
                     msg = "로그인 후 저장할 수 있어요.";
                     msgTimer = 180;
+                    return;
+                }
+                if (pendingGuestCoopSave == null) {
+                    msg = "방장이 슬롯을 선택할 때까지 기다려 주세요.";
+                    msgTimer = 200;
                     return;
                 }
                 boolean allFull = SaveService.allCoopSlotsOccupied(loginUser);
@@ -1945,13 +2000,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     msgTimer = 220;
                 } else if (mem.onlineResume) {
                     pendingCoopResume = mem;
-                    msg = "슬롯 " + slot + "을 불러왔어요. 방을 만든 뒤 「저장 이어하기」를 누르세요.";
+                    msg = "슬롯 " + slot + "을 불러왔어요. 로비에서 「게임 시작 (방장)」으로 이어하세요.";
                     msgTimer = 260;
-                    screen = 0;
-                    SwingUtilities.invokeLater(() -> {
-                        onlineLobbyFrame = new LobbyFrame(this);
-                        onlineLobbyFrame.setVisible(true);
-                    });
+                    screen = coopSlotReturnScreen == 0 ? 0 : coopSlotReturnScreen;
+                    if (coopSlotReturnScreen == 0) {
+                        SwingUtilities.invokeLater(() -> {
+                            onlineLobbyFrame = new LobbyFrame(this);
+                            onlineLobbyFrame.setVisible(true);
+                        });
+                    }
                 } else {
                     isOnlineCoop = false;
                     CoopEngineBridge.applyLoadedMemento(this, mem);
@@ -3137,7 +3194,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     void drawPause(Graphics2D g) {
         g.setColor(new Color(8, 6, 10, 170));
         g.fillRect(0, 0, 1280, 720);
-        drawPanel(g, 420, 120, 440, 520);
+        drawPanel(g, 420, 120, 440, PAUSE_PANEL_H);
         g.setFont(fontBold.deriveFont(33f));
         centerText(g, "일시정지", 640, 180, new Color(0x1a1216), new Color(0xefe0bf));
         drawButton(g, "계속하기", PAUSE_BTN_X, PAUSE_Y_CONTINUE, PAUSE_BTN_W, PAUSE_BTN_H, 1, 22f);
@@ -3151,7 +3208,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x1a1216));
         String t = msgTimer > 0 ? msg : "";
-        g.drawString(t, 640 - g.getFontMetrics().stringWidth(t) / 2, 565);
+        g.drawString(t, 640 - g.getFontMetrics().stringWidth(t) / 2, PAUSE_MSG_Y);
     }
 
     void drawResult(Graphics2D g) {

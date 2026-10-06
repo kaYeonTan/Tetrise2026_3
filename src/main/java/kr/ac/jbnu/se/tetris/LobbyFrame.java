@@ -53,6 +53,7 @@ import javax.swing.Timer;
 import com.google.gson.Gson;
 
 import kr.ac.jbnu.se.tetris.network.coop.CoopNetworkBridge;
+import kr.ac.jbnu.se.tetris.ui.CoopSlotPickerDialog;
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
 
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyConfig;
@@ -326,7 +327,7 @@ public class LobbyFrame extends JDialog {
 		actions.add(roomVisibilitySelector);
 		actions.add(Box.createVerticalStrut(6));
 
-		JButton loadBtn = actionButton("협동 저장 불러오기", false, this::openCoopSaveSlots);
+		JButton loadBtn = actionButton("저장 불러오기", false, this::openCoopSaveSlots);
 		actions.add(loadBtn);
 		actions.add(Box.createVerticalStrut(6));
 		actions.add(actionButton("방 만들기", true, this::createRoom));
@@ -523,11 +524,7 @@ public class LobbyFrame extends JDialog {
 		boolean full = resp.players.size() >= 2;
 		if (startGameBtn != null) {
 			startGameBtn.setEnabled(isHostRole && full && client != null && client.isConnected());
-			if (isHostRole && panel.pendingCoopResume != null) {
-				startGameBtn.setText("저장 이어하기 (방장)");
-			} else {
-				startGameBtn.setText(isHostRole ? "게임 시작 (방장)" : "방장이 시작할 때까지 대기");
-			}
+			startGameBtn.setText(isHostRole ? "게임 시작 (방장)" : "방장이 시작할 때까지 대기");
 		}
 
 	}
@@ -983,8 +980,7 @@ public class LobbyFrame extends JDialog {
 		if (!ensureLoggedInForOnline()) {
 			return;
 		}
-		dispose();
-		panel.openCoopSlotScreen(2);
+		CoopSlotPickerDialog.showLobbyLoad(this, panel, client, this::syncMyRoom);
 	}
 
 
@@ -1022,7 +1018,6 @@ public class LobbyFrame extends JDialog {
 				String json = gson.toJson(panel.pendingCoopResume);
 				resp = client.resumeCoop(panel.pendingCoopResume.coopId, panel.pendingCoopResume.seed, json);
 				panel.pendingCoopResume = null;
-				startGameBtn.setText("게임 시작 (방장)");
 			} else {
 				resp = client.startGame();
 			}

@@ -167,6 +167,10 @@ public class LobbyServer implements AutoCloseable {
 				return handleGuestBoard(clientId, req);
 			case COOP_SAVE:
 				return handleCoopSave(clientId, req);
+			case COOP_SAVE_OPEN:
+				return handleCoopSaveOpen(clientId);
+			case COOP_SAVE_CANCEL:
+				return handleCoopSaveCancel(clientId);
 			default:
 				return error("INVALID", "로비에서 지원하지 않는 요청이에요.");
 		}
@@ -293,6 +297,32 @@ public class LobbyServer implements AutoCloseable {
 			push.playerIndex = req.playerIndex;
 			push.snapshotJson = req.snapshotJson;
 			push.message = req.message;
+		});
+		return null;
+	}
+
+	private LobbyMessage handleCoopSaveOpen(String clientId) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 저장을 시작할 수 있어요.");
+		}
+		if (!ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SAVE_OPEN_PUSH), push -> {
+		});
+		return null;
+	}
+
+	private LobbyMessage handleCoopSaveCancel(String clientId) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 저장을 취소할 수 있어요.");
+		}
+		if (!ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SAVE_CANCEL_PUSH), push -> {
 		});
 		return null;
 	}

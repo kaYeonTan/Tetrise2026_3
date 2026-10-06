@@ -14,6 +14,9 @@ public final class LobbyPush {
 				|| LobbyMessageType.COOP_SNAPSHOT_PUSH.name().equals(type)
 				|| LobbyMessageType.GUEST_BOARD_PUSH.name().equals(type)
 				|| LobbyMessageType.PLAYER_ACTION.name().equals(type)
-				|| LobbyMessageType.PEER_DISCONNECTED.name().equals(type);
+				|| LobbyMessageType.PEER_DISCONNECTED.name().equals(type)
+				|| LobbyMessageType.COOP_SAVE_PUSH.name().equals(type)
+				|| LobbyMessageType.COOP_SAVE_OPEN_PUSH.name().equals(type)
+				|| LobbyMessageType.COOP_SAVE_CANCEL_PUSH.name().equals(type);
 	}
 }

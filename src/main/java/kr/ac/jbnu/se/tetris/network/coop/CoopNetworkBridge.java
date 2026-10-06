@@ -265,6 +265,18 @@ public final class CoopNetworkBridge {
 
 				break;
 
+			case COOP_SAVE_OPEN_PUSH:
+
+				SwingUtilities.invokeLater(() -> panel.onHostCoopSaveSessionOpen());
+
+				break;
+
+			case COOP_SAVE_CANCEL_PUSH:
+
+				SwingUtilities.invokeLater(() -> panel.onHostCoopSaveSessionCancelled());
+
+				break;
+
 			default:
 
 				break;
@@ -427,6 +439,26 @@ public final class CoopNetworkBridge {
 	}
 
 
+
+	public void notifyGuestSaveUiOpen() {
+		if (!isActive() || !host) {
+			return;
+		}
+		try {
+			client.sendCoopSnapshot(LobbyMessage.of(LobbyMessageType.COOP_SAVE_OPEN));
+		} catch (Exception ignored) {
+		}
+	}
+
+	public void notifyGuestSaveUiCancelled() {
+		if (!isActive() || !host) {
+			return;
+		}
+		try {
+			client.sendCoopSnapshot(LobbyMessage.of(LobbyMessageType.COOP_SAVE_CANCEL));
+		} catch (Exception ignored) {
+		}
+	}
 
 	public void pushLoadedState(CoopGameMemento mem) {
 		if (!isActive() || !host || mem == null) {
