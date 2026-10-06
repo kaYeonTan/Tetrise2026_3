@@ -22,8 +22,6 @@ public class CoopGameMemento {
 	public boolean stageReadyPlayer1;
 	public long blizzardEnd;
 	public int blueprintIndex = -1;
-	/** 2인 3스테이지: P2 도안 (1인·구 저장은 -1) */
-	public int blueprintIndexP1 = -1;
 	/** 스테이지 4 가속 등 */
 	public int gravityMultiplier = 1;
 	/** 스테이지 5 조작키 뒤섞기 (gameTime 기준 만료) */

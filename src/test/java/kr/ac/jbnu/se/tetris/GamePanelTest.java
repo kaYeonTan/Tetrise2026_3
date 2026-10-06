@@ -2,7 +2,6 @@ package kr.ac.jbnu.se.tetris;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
@@ -226,35 +225,25 @@ class GamePanelTest {
     }
 
     @Test
-    void twoPlayerStageThreeUsesSeparateBlueprintsPerPlayer() {
+    void twoPlayerStageThreeCombinesBoardsAndRejectsEmptyCellViolations() {
         p.newGame(true);
         p.stage = 3;
         p.startStage();
-        assertNotEquals(p.bossPattern.blueprintIndex(), p.bossPattern.blueprintIndexP1());
-        Blueprint blueprint0 = p.bossPattern.blueprintForPlayer(0);
-        Blueprint blueprint1 = p.bossPattern.blueprintForPlayer(1);
+        Blueprint blueprint = p.bossPattern.blueprint();
 
-        fillBlueprintTargets(p.board1, blueprint0);
-        p.notifyBossBoardChanged();
-        assertFalse(p.stageClear);
-
-        fillBlueprintTargets(p.board2, blueprint1);
-        p.notifyBossBoardChanged();
-        assertTrue(p.stageClear);
-    }
-
-    @Test
-    void twoPlayerStageThreeRejectsEmptyCellViolationsPerBoard() {
-        p.newGame(true);
-        p.stage = 3;
-        p.startStage();
-        Blueprint blueprint0 = p.bossPattern.blueprintForPlayer(0);
-        fillBlueprintTargets(p.board1, blueprint0);
+        for (int row = 0; row < Blueprint.ROWS; row++) {
+            for (int column = 0; column < Blueprint.COLUMNS; column++) {
+                if (blueprint.isTarget(row, column)) {
+                    int[][] board = (row + column) % 2 == 0 ? p.board1 : p.board2;
+                    board[18 + row][column] = 1;
+                }
+            }
+        }
         int forbiddenRow = -1;
         int forbiddenColumn = -1;
         for (int row = 0; row < Blueprint.ROWS && forbiddenRow < 0; row++) {
             for (int column = 0; column < Blueprint.COLUMNS; column++) {
-                if (blueprint0.mustBeEmpty(row, column)) {
+                if (blueprint.mustBeEmpty(row, column)) {
                     forbiddenRow = row;
                     forbiddenColumn = column;
                     break;
@@ -266,19 +255,8 @@ class GamePanelTest {
         assertFalse(p.stageClear);
 
         p.board1[18 + forbiddenRow][forbiddenColumn] = 0;
-        fillBlueprintTargets(p.board2, p.bossPattern.blueprintForPlayer(1));
         p.notifyBossBoardChanged();
         assertTrue(p.stageClear);
-    }
-
-    private static void fillBlueprintTargets(int[][] board, Blueprint blueprint) {
-        for (int row = 0; row < Blueprint.ROWS; row++) {
-            for (int column = 0; column < Blueprint.COLUMNS; column++) {
-                if (blueprint.isTarget(row, column)) {
-                    board[18 + row][column] = 1;
-                }
-            }
-        }
     }
 
     @Test
@@ -286,7 +264,7 @@ class GamePanelTest {
         p.newGame(true);
         p.stage = 3;
         p.startStage();
-        Blueprint blueprint = p.bossPattern.blueprintForPlayer(0);
+        Blueprint blueprint = p.bossPattern.blueprint();
         int targetRow = -1;
         int targetColumn = -1;
         for (int row = 0; row < Blueprint.ROWS && targetRow < 0; row++) {

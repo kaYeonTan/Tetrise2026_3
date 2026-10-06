@@ -28,7 +28,6 @@ public final class CoopSnapshotMapper {
 		s.stageClear = run.stageClear;
 		s.blizzardEnd = run.blizzardEnd;
 		s.blueprintIndex = p.bossPattern.blueprintIndex();
-		s.blueprintIndexP1 = p.bossPattern.blueprintIndexP1();
 		fillPlayer(s.p1, p, true);
 		fillPlayer(s.p2, p, false);
 		return s;
@@ -67,7 +66,7 @@ public final class CoopSnapshotMapper {
 	public static void applyToPanel(CoopSnapshot s, GamePanel p, boolean fullStageReset) {
 		if (fullStageReset) {
 			p.newGame(true);
-			p.startStage(s.blueprintIndex, s.blueprintIndexP1);
+			p.startStage(s.blueprintIndex);
 		}
 		p.stage = s.stage;
 		p.bossHp = s.bossHp;
@@ -138,7 +137,6 @@ public final class CoopSnapshotMapper {
 		s.stageClear = m.stageClear;
 		s.blizzardEnd = m.blizzardEnd;
 		s.blueprintIndex = m.blueprintIndex;
-		s.blueprintIndexP1 = m.blueprintIndexP1;
 		fillFromSessionMemento(s.p1, m.player0);
 		fillFromSessionMemento(s.p2, m.player1);
 		return s;

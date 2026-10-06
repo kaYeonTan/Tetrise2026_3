@@ -275,7 +275,7 @@ public final class CoopEngineBridge {
 		panel.onlineCoopId = m.coopId;
 		panel.lastOnlineRoomId = m.lastRoomId;
 		panel.pendingCoopResume = m.onlineResume ? m : null;
-		panel.bossPattern.startStage(m.stage, panel, m.blueprintIndex, m.blueprintIndexP1);
+		panel.bossPattern.startStage(m.stage, panel, m.blueprintIndex);
 		if (m.player0 != null && m.player1 != null) {
 			if (panel.coopEngineBridge == null) {
 				panel.coopEngineBridge = new CoopEngineBridge(panel);

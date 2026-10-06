@@ -95,7 +95,6 @@ public final class MementoMapper {
 		m.stageReadyPlayer1 = panel.stageReadyPlayer1;
 		m.blizzardEnd = panel.blizzardEnd;
 		m.blueprintIndex = panel.bossPattern.blueprintIndex();
-		m.blueprintIndexP1 = panel.bossPattern.blueprintIndexP1();
 		panel.fillOnlineBossSyncFields(m);
 		m.player0 = fromSession(engine.session(0));
 		m.player0.pieceLockSequence = engine.engine(0).getPieceLockSequence();

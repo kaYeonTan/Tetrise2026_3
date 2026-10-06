@@ -12,7 +12,6 @@ public class CoopSnapshot {
 	public boolean stageClear;
 	public long blizzardEnd;
 	public int blueprintIndex = -1;
-	public int blueprintIndexP1 = -1;
 
 	public CoopPlayerSnapshot p1 = new CoopPlayerSnapshot();
 	public CoopPlayerSnapshot p2 = new CoopPlayerSnapshot();

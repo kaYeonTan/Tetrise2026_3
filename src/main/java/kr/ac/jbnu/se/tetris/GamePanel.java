@@ -713,14 +713,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     @Override
-    public boolean isBlueprintCellOccupiedForPlayer(int player, int row, int column) {
-        if (!isCoopPlayers()) {
-            return isBlueprintCellOccupied(row, column);
-        }
-        return isPlayerBlueprintCellOccupied(player, row, column);
-    }
-
-    @Override
     public boolean isBlueprintCellOccupied(int row, int column) {
         if (row < 0 || row >= Blueprint.ROWS || column < 0 || column >= Blueprint.COLUMNS) {
             return false;
@@ -752,10 +744,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
         }
         int boardRow = 18 + row;
-        if (isCoopPlayers()) {
-            return board1[boardRow][column] != 0 || board2[boardRow][column] != 0;
+        boolean occupied = board1[boardRow][column] != 0;
+        if (isTwoPlayer) {
+            occupied |= board2[boardRow][column] != 0;
         }
-        return board1[boardRow][column] != 0;
+        return occupied;
     }
 
     @Override
@@ -973,10 +966,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void startStage(int restoredBlueprintIndex) {
-        startStage(restoredBlueprintIndex, -1);
-    }
-
-    public void startStage(int restoredBlueprintIndex, int restoredBlueprintIndexP1) {
         if (stage == 1) {
             bossMax = 100;
         } else if (stage == 2) {
@@ -1016,7 +1005,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p1DropCount = 0;
         p2DropCount = 0;
         if (stage == 3 && restoredBlueprintIndex >= 0) {
-            bossPattern.startStage(stage, this, restoredBlueprintIndex, restoredBlueprintIndexP1);
+            bossPattern.startStage(stage, this, restoredBlueprintIndex);
         } else {
             bossPattern.startStage(stage, this);
         }
@@ -1861,7 +1850,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         m.stageReadyPlayer1 = stageReadyPlayer1;
         m.blizzardEnd = blizzardEnd;
         m.blueprintIndex = bossPattern.blueprintIndex();
-        m.blueprintIndexP1 = bossPattern.blueprintIndexP1();
         m.onlineResume = isOnlineCoop;
         m.lastRoomId = lastOnlineRoomId;
         m.panelSnapshotJson = new Gson().toJson(CoopSnapshotMapper.fromPanel(this, cid));
@@ -2119,6 +2107,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     void centerText(Graphics2D g, String text, int cx, int y, Color c, Color shadow) {
         int w = g.getFontMetrics().stringWidth(text);
         shadowText(g, text, cx - w / 2, y, c, shadow, 2);
+    }
+
+    void centerPlainText(Graphics2D g, String text, int cx, int y, Color c) {
+        int w = g.getFontMetrics().stringWidth(text);
+        g.setColor(c);
+        g.drawString(text, cx - w / 2, y);
     }
 
     void drawTitle(Graphics2D g) {
@@ -2459,18 +2453,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     boolean isPlayerBlueprintCellOccupied(int player, int row, int column) {
-        if (useCoopEngineHost()) {
-            GameSession session = coopEngineBridge.session(player);
-            int engineY = Blueprint.ROWS - 1 - row;
-            if (session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape) {
-                return true;
-            }
-            if (player == 1) {
-                int bit = row * Blueprint.COLUMNS + column;
-                return ((onlineGuestBlueprint >>> bit) & 1L) != 0;
-            }
-            return false;
-        }
         if (useCoopEngineRender()) {
             GameSession session = coopEngineBridge.session(player);
             int engineY = Blueprint.ROWS - 1 - row;
@@ -2567,7 +2549,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void drawBlueprintOverlay(Graphics2D g, int boardX, int boardY, int player) {
-        Blueprint blueprint = bossPattern.blueprintForPlayer(player);
+        Blueprint blueprint = bossPattern.blueprint();
         if (stage != 3 || blueprint == null) {
             return;
         }
@@ -2948,39 +2930,40 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawPanel(g, 340, 130, 600, 460);
         int next = nextStagePreview >= 1 && nextStagePreview <= 5 ? nextStagePreview : Math.min(5, stage + 1);
         g.setFont(fontBold.deriveFont(40f));
-        centerText(g, "GameClear!", 640, 185, new Color(0x1a1216), new Color(0xefe0bf));
+        centerPlainText(g, "GameClear!", 640, 185, new Color(0x1a1216));
         g.setFont(fontBold.deriveFont(26f));
-        centerText(g, "다음 스테이지", 640, 235, new Color(0x1a1216), new Color(0xc9a227));
+        centerPlainText(g, "다음 스테이지", 640, 235, new Color(0x1a1216));
         g.setFont(fontBold.deriveFont(22f));
         String title = "STAGE " + next + " · " + stageNames[next];
-        centerText(g, title, 640, 275, new Color(0x1a1216), new Color(0x3a5a2a));
+        centerPlainText(g, title, 640, 275, new Color(0x1a1216));
         g.setFont(font.deriveFont(18f));
-        centerText(g, "보스: " + bossNames[next], 640, 310, new Color(0x1a1216), new Color(0x5a3a2a));
+        centerPlainText(g, "보스: " + bossNames[next], 640, 310, new Color(0x1a1216));
         g.setFont(font.deriveFont(16f));
         String hint = stageGimmickHint(next);
         int hintW = g.getFontMetrics().stringWidth(hint);
         if (hintW > 520) {
+            g.setColor(new Color(0x1a1216));
             g.drawString(hint, 640 - 260, 350);
         } else {
-            centerText(g, hint, 640, 350, new Color(0x1a1216), new Color(0x4a4a4a));
+            centerPlainText(g, hint, 640, 350, new Color(0x1a1216));
         }
         g.setFont(font.deriveFont(15f));
         String p1 = onlineCoopPlayerLabel(0) + ": "
                 + (stageReadyPlayer0 ? "준비 완료" : "대기 중…");
         String p2 = onlineCoopPlayerLabel(1) + ": "
                 + (stageReadyPlayer1 ? "준비 완료" : "대기 중…");
-        centerText(g, p1, 640, 400, new Color(0x1a1216), new Color(0x2a5a2a));
-        centerText(g, p2, 640, 428, new Color(0x1a1216), new Color(0x2a5a2a));
+        centerPlainText(g, p1, 640, 400, new Color(0x1a1216));
+        centerPlainText(g, p2, 640, 428, new Color(0x1a1216));
         boolean mineReady = isStageReady(localPlayerIndex);
         if (mineReady) {
             g.setFont(font.deriveFont(17f));
-            centerText(g, "상대방 확인을 기다리는 중…", 640, 455, new Color(0x1a1216), new Color(0x6a4a2a));
+            centerPlainText(g, "상대방 확인을 기다리는 중…", 640, 455, new Color(0x1a1216));
         } else {
             drawButton(g, "다음 스테이지 진행", STAGE_ADVANCE_BTN_X, STAGE_ADVANCE_BTN_Y, STAGE_ADVANCE_BTN_W,
                     STAGE_ADVANCE_BTN_H, 1, 20f);
         }
         g.setFont(fontSmall.deriveFont(13f));
-        centerText(g, "두 플레이어 모두 동의하면 시작됩니다.", 640, 545, new Color(0x1a1216), new Color(0x6a6a6a));
+        centerPlainText(g, "두 플레이어 모두 동의하면 시작됩니다.", 640, 545, new Color(0x1a1216));
     }
 
     void drawPause(Graphics2D g) {
@@ -3074,9 +3057,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         gravityMultiplier = mem.gravityMultiplier <= 0 ? 1 : mem.gravityMultiplier;
         blizzardEnd = mem.blizzardEnd;
-        if (stage != mem.stage || bossPattern.blueprintIndex() != mem.blueprintIndex
-                || bossPattern.blueprintIndexP1() != mem.blueprintIndexP1) {
-            bossPattern.startStage(mem.stage, this, mem.blueprintIndex, mem.blueprintIndexP1);
+        if (stage != mem.stage || bossPattern.blueprintIndex() != mem.blueprintIndex) {
+            bossPattern.startStage(mem.stage, this, mem.blueprintIndex);
         }
         bossPattern.restoreElapsed(mem.bossTimer, this);
         bossTimer = mem.bossTimer;

@@ -199,9 +199,6 @@ public class FileManager {
         lines.add("bossHp=" + p.bossHp);
         lines.add("bossTimer=" + p.bossTimer);
         lines.add("blueprint=" + p.bossPattern.blueprintIndex());
-        if (p.isTwoPlayer) {
-            lines.add("blueprintP1=" + p.bossPattern.blueprintIndexP1());
-        }
         lines.add("gameTime=" + p.gameTime);
         lines.add("p1=" + p.p1Type + "," + p.p1Rot + "," + p.p1X + "," + p.p1Y + "," + p.p1Hold + "," + (p.p1HoldUsed ? 1 : 0)
                 + "," + p.p1Score + "," + p.p1Lines + "," + p.p1Garbage);
@@ -226,7 +223,7 @@ public class FileManager {
         try {
             String p1 = "", p1Next = "", p1Bag = "", p1Board = "";
             String p2 = "", p2Next = "", p2Bag = "", p2Board = "";
-            int players = 1, stage = 1, bossHp = 0, bossTimer = 0, blueprintIndex = -1, blueprintIndexP1 = -1;
+            int players = 1, stage = 1, bossHp = 0, bossTimer = 0, blueprintIndex = -1;
             long gameTime = 0;
             for (String line : lines) {
                 String key = line.substring(0, line.indexOf("="));
@@ -236,7 +233,6 @@ public class FileManager {
                 else if (key.equals("bossHp")) bossHp = Integer.parseInt(value);
                 else if (key.equals("bossTimer")) bossTimer = Integer.parseInt(value);
                 else if (key.equals("blueprint")) blueprintIndex = Integer.parseInt(value);
-                else if (key.equals("blueprintP1")) blueprintIndexP1 = Integer.parseInt(value);
                 else if (key.equals("gameTime")) gameTime = Long.parseLong(value);
                 else if (key.equals("p1")) p1 = value;
                 else if (key.equals("p1Next")) p1Next = value;
@@ -249,7 +245,7 @@ public class FileManager {
             }
             p.newGame(players == 2);
             p.stage = stage;
-            p.startStage(blueprintIndex, blueprintIndexP1);
+            p.startStage(blueprintIndex);
             p.bossHp = bossHp;
             p.restoreBossPatternTimer(bossTimer);
             p.gameTime = gameTime;
