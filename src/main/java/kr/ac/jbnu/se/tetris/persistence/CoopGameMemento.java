@@ -16,6 +16,12 @@ public class CoopGameMemento {
 	public boolean stageClear;
 	public long blizzardEnd;
 	public int blueprintIndex = -1;
+	/** 스테이지 4 가속 등 */
+	public int gravityMultiplier = 1;
+	/** 스테이지 5 조작키 뒤섞기 (gameTime 기준 만료) */
+	public long randomKeyEnd;
+	public int[] randomKeyForPlayer0;
+	public int[] randomKeyForPlayer1;
 
 	public SessionMemento player0;
 	public SessionMemento player1;

@@ -154,13 +154,13 @@ public final class CoopNetworkBridge {
 
 			} else {
 
-				CoopSnapshot snap = CoopSnapshotMapper.fromMemento(mem);
+				if (panel.coopEngineBridge == null) {
 
-				if (snap != null) {
-
-					CoopSnapshotMapper.applyToPanel(snap, panel, true);
+					panel.coopEngineBridge = new CoopEngineBridge(panel);
 
 				}
+
+				panel.coopEngineBridge.syncGuestFromMemento(mem);
 
 				panel.screen = 5;
 
@@ -294,13 +294,6 @@ public final class CoopNetworkBridge {
 
 		snapshotTick++;
 
-		// 매 2틱(32ms)마다 스냅샷 전송 (더 부드러운 동기화)
-		if (snapshotTick % 2 != 0) {
-
-			return;
-
-		}
-
 		try {
 
 			if (panel.useCoopEngineHost() && panel.coopEngineBridge != null) {
@@ -369,15 +362,14 @@ public final class CoopNetworkBridge {
 
 		}
 
-		CoopSnapshot snap = CoopSnapshotMapper.fromMemento(mem);
+		if (panel.coopEngineBridge == null) {
 
-		if (snap != null) {
-
-			CoopSnapshotMapper.applyToPanel(snap, panel, false);
-			// 참가자: 스냅샷 받으면 바로 화면 갱신!
-			panel.repaint();
+			panel.coopEngineBridge = new CoopEngineBridge(panel);
 
 		}
+
+		panel.coopEngineBridge.syncGuestFromMemento(mem);
+		panel.repaint();
 
 	}
 

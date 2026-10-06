@@ -107,4 +107,16 @@ public final class CoopGameEngine {
 		started = true;
 	}
 
+	public void applyMementoState(CoopGameMemento m) {
+		if (m == null) {
+			return;
+		}
+		if (!started) {
+			restoreCoop(m);
+			return;
+		}
+		MementoMapper.restoreSession(session(0), m.player0);
+		MementoMapper.restoreSession(session(1), m.player1);
+	}
+
 }

@@ -153,7 +153,7 @@ public final class CoopSnapshotMapper {
 		Tetrominoes active = Tetrominoes.valueOf(sm.activeShape);
 		dst.type = GamePanel.engineType(active);
 		dst.x = sm.curX;
-		dst.y = sm.curY + 4;
+		dst.y = 23 - sm.curY;
 		Tetrominoes hold = Tetrominoes.valueOf(sm.holdShape);
 		dst.hold = hold == Tetrominoes.NoShape ? -1 : GamePanel.engineType(hold);
 		dst.rot = 0;
@@ -177,7 +177,7 @@ public final class CoopSnapshotMapper {
 					sb.append('0');
 					continue;
 				}
-				int ey = pr - 4;
+				int ey = 23 - pr;
 				int v = 0;
 				if (sm.cells != null && ey < GameSession.HEIGHT) {
 					Tetrominoes t = Tetrominoes.valueOf(sm.cells[ey * GameSession.WIDTH + x]);

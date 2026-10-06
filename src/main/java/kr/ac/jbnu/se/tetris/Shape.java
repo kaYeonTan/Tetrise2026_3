@@ -162,4 +162,16 @@ public class Shape {
 		}
 		return c;
 	}
+
+	/** 스냅샷 복원용 — 블록 로컬 좌표를 그대로 되살린다. */
+	public void applyLocalCoords(int[][] layout) {
+		if (layout == null || layout.length == 0) {
+			return;
+		}
+		blockCount = Math.min(layout.length, coords.length);
+		for (int i = 0; i < blockCount; i++) {
+			coords[i][0] = layout[i][0];
+			coords[i][1] = layout[i][1];
+		}
+	}
 }

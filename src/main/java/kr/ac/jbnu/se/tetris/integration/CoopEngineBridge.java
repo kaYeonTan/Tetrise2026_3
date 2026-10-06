@@ -20,6 +20,7 @@ public final class CoopEngineBridge {
 	// 낙하 속도 조절용 타이머 (학부생 스타일: 간단한 카운터)
 	private int dropTimer0 = 0;  // P1 낙하 타이머
 	private int dropTimer1 = 0;  // P2 낙하 타이머
+	private int guestDropTimer = 0;
 
 	public CoopEngineBridge(GamePanel panel) {
 		this.panel = panel;
@@ -98,6 +99,39 @@ public final class CoopEngineBridge {
 		}
 		engine.applyAction(playerIndex, action);
 		syncHudFromEngine();
+	}
+
+	/** 참가자: 내 보드 입력을 스냅샷 도착 전 로컬 엔진에 먼저 반영한다. */
+	public void applyGuestOptimistic(int playerIndex, PlayerAction action) {
+		if (drivingHost || engine == null || action == null) {
+			return;
+		}
+		engine.applyAction(playerIndex, action);
+		syncHudForPlayer(playerIndex);
+	}
+
+	/** 참가자: 내 플레이어 보드만 중력 틱(방장과 동일 간격). */
+	public void tickGuestPrediction(int localPlayerIndex) {
+		if (drivingHost || engine == null || localPlayerIndex < 0 || localPlayerIndex > 1) {
+			return;
+		}
+		int dropSpeed = getDropSpeed();
+		guestDropTimer += 16;
+		if (guestDropTimer >= dropSpeed) {
+			guestDropTimer = 0;
+			engine.engine(localPlayerIndex).tick();
+			syncHudForPlayer(localPlayerIndex);
+		}
+	}
+
+	private void syncHudForPlayer(int playerIndex) {
+		if (playerIndex == 0) {
+			panel.p1Score = engine.session(0).score;
+			panel.p1Lines = engine.session(0).linesRemoved;
+		} else {
+			panel.p2Score = engine.session(1).score;
+			panel.p2Lines = engine.session(1).linesRemoved;
+		}
 	}
 
 	/** Applies the stage 2 boss garbage row to both authoritative online boards. */
@@ -188,11 +222,36 @@ public final class CoopEngineBridge {
 	}
 
 	public GameSession session(int player) {
-		return isDrivingHost() ? engine.session(player) : null;
+		return engine != null ? engine.session(player) : null;
+	}
+
+	public boolean hasRenderEngine() {
+		return engine != null;
+	}
+
+	public void syncGuestFromMemento(CoopGameMemento mem) {
+		if (mem == null || mem.player0 == null || mem.player1 == null) {
+			return;
+		}
+		if (engine == null) {
+			engine = new CoopGameEngine();
+		}
+		drivingHost = false;
+		engine.applyMementoState(mem);
+		panel.stage = mem.stage;
+		panel.bossHp = mem.bossHp;
+		panel.bossMax = mem.bossMax;
+		panel.bossTimer = mem.bossTimer;
+		panel.gameTime = mem.gameTime;
+		panel.stageClear = mem.stageClear;
+		panel.blizzardEnd = mem.blizzardEnd;
+		panel.applyOnlineBossSync(mem);
+		guestDropTimer = 0;
+		syncHudFromEngine();
 	}
 
 	public boolean isLineClearBlinkOn(int player) {
-		if (!isDrivingHost()) {
+		if (engine == null) {
 			return false;
 		}
 		GameEngineAdapter a = new GameEngineAdapter(engine.engine(player));
@@ -223,8 +282,8 @@ public final class CoopEngineBridge {
 			}
 		}
 		for (int ey = 0; ey < GameSession.HEIGHT; ey++) {
-			int pr = ey + 4;
-			if (pr >= 24) {
+			int pr = 23 - ey;
+			if (pr < 0 || pr >= 24) {
 				continue;
 			}
 			for (int x = 0; x < GameSession.WIDTH; x++) {

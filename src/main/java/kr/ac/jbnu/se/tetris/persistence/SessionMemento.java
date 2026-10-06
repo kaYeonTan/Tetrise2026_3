@@ -10,6 +10,10 @@ public class SessionMemento {
 	public int linesRemoved;
 	public String[] cells;
 	public String activeShape;
+	/** SRS 회전 상태 (SPAWN, R, TWO, L). 구 저장 파일은 null일 수 있음. */
+	public String activeRotation;
+	/** 활성 피스 로컬 좌표 [x0,y0,x1,y1,...] */
+	public int[] activeCoords;
 	public int curX;
 	public int curY;
 	public String holdShape;

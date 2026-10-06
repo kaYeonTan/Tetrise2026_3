@@ -4,6 +4,7 @@ import kr.ac.jbnu.se.tetris.GamePanel;
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.CoopGameEngine;
 import kr.ac.jbnu.se.tetris.core.GameSession;
+import kr.ac.jbnu.se.tetris.piece.RotationState;
 
 /** GameSession / CoopGameEngine ↔ Memento. */
 public final class MementoMapper {
@@ -23,6 +24,13 @@ public final class MementoMapper {
 			}
 		}
 		m.activeShape = s.curPiece.getShape().name();
+		m.activeRotation = s.curPiece.getRotationState().name();
+		int blocks = s.curPiece.blockCount();
+		m.activeCoords = new int[blocks * 2];
+		for (int i = 0; i < blocks; i++) {
+			m.activeCoords[i * 2] = s.curPiece.x(i);
+			m.activeCoords[i * 2 + 1] = s.curPiece.y(i);
+		}
 		m.curX = s.curX;
 		m.curY = s.curY;
 		m.holdShape = s.hold.getStored().name();
@@ -46,6 +54,22 @@ public final class MementoMapper {
 			}
 		}
 		s.curPiece.setShape(Tetrominoes.valueOf(m.activeShape));
+		if (m.activeRotation != null && !m.activeRotation.isBlank()) {
+			try {
+				s.curPiece.setRotationState(RotationState.valueOf(m.activeRotation));
+			} catch (IllegalArgumentException ignored) {
+				// legacy snapshot without valid rotation
+			}
+		}
+		if (m.activeCoords != null && m.activeCoords.length >= 2) {
+			int blocks = m.activeCoords.length / 2;
+			int[][] layout = new int[blocks][2];
+			for (int i = 0; i < blocks; i++) {
+				layout[i][0] = m.activeCoords[i * 2];
+				layout[i][1] = m.activeCoords[i * 2 + 1];
+			}
+			s.curPiece.applyLocalCoords(layout);
+		}
 		s.curX = m.curX;
 		s.curY = m.curY;
 		s.hold.setStored(Tetrominoes.valueOf(m.holdShape));
@@ -67,6 +91,14 @@ public final class MementoMapper {
 		m.stageClear = panel.stageClear;
 		m.blizzardEnd = panel.blizzardEnd;
 		m.blueprintIndex = panel.bossPattern.blueprintIndex();
+		m.gravityMultiplier = panel.gravityMultiplier;
+		m.randomKeyEnd = panel.randomKeyEnd;
+		if (panel.randomKeyEnd > panel.gameTime && panel.temporaryPrimaryKeys != null) {
+			m.randomKeyForPlayer0 = panel.temporaryPrimaryKeys.clone();
+			m.randomKeyForPlayer1 = panel.temporarySecondaryKeys != null
+					? panel.temporarySecondaryKeys.clone()
+					: null;
+		}
 		m.player0 = fromSession(engine.session(0));
 		m.player1 = fromSession(engine.session(1));
 		m.onlineResume = panel.isOnlineCoop;
