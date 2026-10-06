@@ -26,5 +26,6 @@ public enum LobbyMessageType {
 	PEER_DISCONNECTED,
 	START_GAME_OK,
 	COOP_SAVE_OK,
+	COOP_SAVE_PUSH,
 	ERROR
 }

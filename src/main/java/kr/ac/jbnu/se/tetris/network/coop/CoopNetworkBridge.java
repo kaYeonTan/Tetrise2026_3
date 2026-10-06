@@ -259,6 +259,12 @@ public final class CoopNetworkBridge {
 
 				break;
 
+			case COOP_SAVE_PUSH:
+
+				SwingUtilities.invokeLater(() -> panel.onHostCoopSavePush(msg.saveSlot, msg.snapshotJson));
+
+				break;
+
 			default:
 
 				break;
@@ -421,6 +427,19 @@ public final class CoopNetworkBridge {
 	}
 
 
+
+	public void pushLoadedState(CoopGameMemento mem) {
+		if (!isActive() || !host || mem == null) {
+			return;
+		}
+		try {
+			LobbyMessage req = LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT);
+			req.coopId = coopId != null ? coopId : mem.coopId;
+			req.snapshotJson = GSON.toJson(mem);
+			client.sendCoopSnapshot(req);
+		} catch (Exception ignored) {
+		}
+	}
 
 	public void notifySaved(int slot, CoopGameMemento mem) throws Exception {
 

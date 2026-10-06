@@ -88,8 +88,23 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public String lastOnlineRoomId;
     public CoopGameMemento pendingCoopResume;
     java.util.List<SaveSlotMeta> coopSlotList = new ArrayList<>();
-    /** 8=협동 슬롯 UI (저장/불러오기) */
+    /** 8=협동 슬롯 UI — 1 저장, 2 불러오기, 3 온라인 참가자 필수 저장 */
     int coopSlotMode;
+    /** 슬롯 UI 닫기/완료 후 돌아갈 화면 (0 메인, 6 일시정지) */
+    int coopSlotReturnScreen;
+    static final int PAUSE_BTN_X = 490;
+    static final int PAUSE_BTN_W = 300;
+    static final int PAUSE_BTN_H = 54;
+    static final int PAUSE_BTN_GAP = 18;
+    static final int PAUSE_Y_CONTINUE = 210;
+    static final int PAUSE_Y_SAVE = PAUSE_Y_CONTINUE + PAUSE_BTN_H + PAUSE_BTN_GAP;
+    static final int PAUSE_Y_LOAD = PAUSE_Y_SAVE + PAUSE_BTN_H + PAUSE_BTN_GAP;
+    static final int PAUSE_Y_SETTINGS = PAUSE_Y_LOAD + PAUSE_BTN_H + PAUSE_BTN_GAP;
+    static final int PAUSE_Y_MAIN = PAUSE_Y_SETTINGS + PAUSE_BTN_H + PAUSE_BTN_GAP;
+    /** 방장이 선택한 슬롯 (참가자 저장 UI) */
+    int onlineCoopHostSaveSlot;
+    CoopGameMemento pendingGuestCoopSave;
+    boolean awaitingGuestCoopSave;
     public int stage = 1;
     public int bossHp;
     public int bossMax;
@@ -533,9 +548,68 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void openCoopSlotScreen(int mode) {
+        openCoopSlotScreen(mode, 0);
+    }
+
+    void openCoopSlotScreen(int mode, int returnScreen) {
         coopSlotMode = mode;
+        coopSlotReturnScreen = returnScreen;
         coopSlotList = SaveService.listCoopSlots(loginUser);
         screen = 8;
+    }
+
+    void openCoopGuestSaveScreen(int hostSlot, CoopGameMemento memento) {
+        awaitingGuestCoopSave = true;
+        onlineCoopHostSaveSlot = hostSlot;
+        pendingGuestCoopSave = memento;
+        coopSlotMode = 3;
+        coopSlotList = SaveService.listCoopSlots(loginUser);
+        if (screen != 6) {
+            screen = 6;
+        }
+        screen = 8;
+        msg = "방장이 슬롯 " + hostSlot + "에 저장했어요. 이어서 저장해 주세요.";
+        msgTimer = 260;
+    }
+
+    public void onHostCoopSavePush(int hostSlot, String snapshotJson) {
+        if (!isOnlineCoop || coopBridge == null || coopBridge.isHost() || snapshotJson == null || snapshotJson.isBlank()) {
+            return;
+        }
+        CoopGameMemento mem = new Gson().fromJson(snapshotJson, CoopGameMemento.class);
+        if (mem == null) {
+            return;
+        }
+        openCoopGuestSaveScreen(hostSlot, mem);
+    }
+
+    boolean confirmCoopSlotOverwrite(int slot) {
+        if (slot < 1 || slot > 3 || coopSlotList.size() < slot) {
+            return true;
+        }
+        SaveSlotMeta meta = coopSlotList.get(slot - 1);
+        if (!meta.occupied) {
+            return true;
+        }
+        int r = JOptionPane.showConfirmDialog(this,
+                "슬롯 " + slot + "의 기존 저장을 덮어씌울까요?\n\n" + meta.summary,
+                "덮어쓰기", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        return r == JOptionPane.YES_OPTION;
+    }
+
+    void fillCoopAccountIds(CoopGameMemento mem) {
+        if (!isOnlineCoop || mem == null || loginUser == null) {
+            return;
+        }
+        String host = onlineCoopHostNick != null && !onlineCoopHostNick.isBlank() ? onlineCoopHostNick : loginUser;
+        String guest = onlineCoopGuestNick;
+        if (coopBridge != null && coopBridge.isHost()) {
+            host = loginUser;
+        } else if (coopBridge != null && !coopBridge.isHost()) {
+            guest = loginUser;
+        }
+        mem.hostAccountId = host;
+        mem.guestAccountId = guest;
     }
 
     int[] currentSecondaryKeys() {
@@ -1707,18 +1781,24 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 performCoopAction(localPlayerIndex, PlayerAction.STAGE_READY, false);
             }
         } else if (screen == 6) {
-            if (clicked(490, 210, 300, 54)) {
-                if (isOnlineCoop && coopBridge != null) {
+            if (clicked(PAUSE_BTN_X, PAUSE_Y_CONTINUE, PAUSE_BTN_W, PAUSE_BTN_H)) {
+                if (isOnlineCoop && awaitingGuestCoopSave) {
+                    msg = "방장 저장에 이어 참가자 저장을 먼저 완료해 주세요.";
+                    msgTimer = 200;
+                } else if (isOnlineCoop && coopBridge != null) {
                     performCoopAction(localPlayerIndex, PlayerAction.RESUME, false);
                 } else {
                     resumeLocalPause();
                 }
-            } else if (clicked(490, 282, 300, 54)) {
-                if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
-                    msg = "방장만 협동 저장을 할 수 있어요.";
+            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_SAVE, PAUSE_BTN_W, PAUSE_BTN_H)) {
+                if (isOnlineCoop && loginUser == null) {
+                    msg = "온라인 협동 저장은 로그인 후 이용할 수 있어요.";
+                    msgTimer = 200;
+                } else if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+                    msg = "방장만 협동 저장을 시작할 수 있어요.";
                     msgTimer = 180;
                 } else if (isTwoPlayer || isOnlineCoop) {
-                    openCoopSlotScreen(1);
+                    openCoopSlotScreen(1, 6);
                 } else if (loginUser == null) {
                     msg = "게스트는 1인 저장을 할 수 없어요. 로그인 후 이용해 주세요.";
                     msgTimer = 180;
@@ -1732,9 +1812,19 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     msg = "저장하지 못했어요.";
                     msgTimer = 180;
                 }
-            } else if (clicked(490, 354, 300, 54)) {
+            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_LOAD, PAUSE_BTN_W, PAUSE_BTN_H)) {
+                if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+                    msg = "방장만 불러올 수 있어요.";
+                    msgTimer = 180;
+                } else if (isOnlineCoop && loginUser == null) {
+                    msg = "온라인 협동은 로그인 후 불러올 수 있어요.";
+                    msgTimer = 200;
+                } else if (isTwoPlayer || isOnlineCoop) {
+                    openCoopSlotScreen(2, 6);
+                }
+            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_SETTINGS, PAUSE_BTN_W, PAUSE_BTN_H)) {
                 openSettings();
-            } else if (clicked(490, 426, 300, 54)) {
+            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H)) {
                 if (loginUser != null) {
                     int r = JOptionPane.showOptionDialog(this, "저장하지 않은 진행은 사라져요.", "메인으로",
                             JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
@@ -1771,7 +1861,16 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     void handleCoopSlotClick() {
         if (clicked(490, 560, 300, 48)) {
-            screen = coopSlotMode == 1 ? 6 : 0;
+            if (coopSlotMode == 3) {
+                msg = "참가자 저장을 완료해야 합니다.";
+                msgTimer = 180;
+                return;
+            }
+            if (coopSlotMode == 1 || coopSlotMode == 3) {
+                screen = 6;
+            } else {
+                screen = coopSlotReturnScreen;
+            }
             return;
         }
         for (int i = 0; i < 3; i++) {
@@ -1783,10 +1882,44 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void pickCoopSlot(int slot) {
-        if (coopSlotMode == 1) {
+        if (coopSlotMode == 1 || coopSlotMode == 3) {
+            if (coopSlotMode == 3) {
+                if (loginUser == null) {
+                    msg = "로그인 후 저장할 수 있어요.";
+                    msgTimer = 180;
+                    return;
+                }
+                boolean allFull = SaveService.allCoopSlotsOccupied(loginUser);
+                if (!allFull && slot != onlineCoopHostSaveSlot) {
+                    msg = "방장과 같은 슬롯 " + onlineCoopHostSaveSlot + "에 저장해 주세요.";
+                    msgTimer = 220;
+                    return;
+                }
+                if (!confirmCoopSlotOverwrite(slot)) {
+                    return;
+                }
+                try {
+                    SaveService.saveCoop(loginUser, slot, pendingGuestCoopSave);
+                    pendingGuestCoopSave = null;
+                    awaitingGuestCoopSave = false;
+                    msg = "협동 슬롯 " + slot + "에 저장했어요.";
+                    msgTimer = 200;
+                    screen = 6;
+                } catch (Exception ex) {
+                    msg = "저장 실패: " + ex.getMessage();
+                    msgTimer = 200;
+                    screen = 6;
+                }
+                return;
+            }
+            if (!confirmCoopSlotOverwrite(slot)) {
+                return;
+            }
             try {
                 saveCoopToSlot(slot);
-                msg = "협동 슬롯 " + slot + "에 저장했어요.";
+                msg = isOnlineCoop
+                        ? "협동 슬롯 " + slot + "에 저장했어요. 참가자도 저장할 때까지 기다려 주세요."
+                        : "협동 슬롯 " + slot + "에 저장했어요.";
                 msgTimer = 200;
                 screen = 6;
             } catch (Exception ex) {
@@ -1797,7 +1930,20 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else {
             try {
                 CoopGameMemento mem = SaveService.loadCoop(loginUser, slot);
-                if (mem.onlineResume) {
+                if (isOnlineCoop && coopBridge != null && coopBridge.isHost() && coopSlotReturnScreen == 6) {
+                    if (!mem.onlineResume) {
+                        throw new LoadException("온라인 협동 저장 슬롯만 불러올 수 있어요.");
+                    }
+                    SaveService.assertOnlineRoomMatchesSave(mem, onlineCoopHostNick, onlineCoopGuestNick);
+                    CoopGameMemento remapped = SaveService.remapForCurrentOnlineHost(mem, onlineCoopHostNick,
+                            onlineCoopGuestNick);
+                    onlineCoopId = remapped.coopId;
+                    CoopEngineBridge.applyLoadedMemento(this, remapped);
+                    screen = 6;
+                    coopBridge.pushLoadedState(remapped);
+                    msg = "슬롯 " + slot + " · 온라인 협동 저장을 불러왔어요.";
+                    msgTimer = 220;
+                } else if (mem.onlineResume) {
                     pendingCoopResume = mem;
                     msg = "슬롯 " + slot + "을 불러왔어요. 방을 만든 뒤 「저장 이어하기」를 누르세요.";
                     msgTimer = 260;
@@ -1809,12 +1955,20 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 } else {
                     isOnlineCoop = false;
                     CoopEngineBridge.applyLoadedMemento(this, mem);
-                    msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 이어합니다.";
+                    if (coopSlotReturnScreen == 6) {
+                        screen = 6;
+                        msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 불러왔어요.";
+                    } else {
+                        msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 이어합니다.";
+                    }
                     msgTimer = 150;
                 }
             } catch (LoadException ex) {
                 msg = ex.getMessage();
                 msgTimer = 180;
+                if (coopSlotReturnScreen == 6) {
+                    screen = 6;
+                }
             }
         }
     }
@@ -1828,6 +1982,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         mem.onlineResume = isOnlineCoop;
         mem.lastRoomId = lastOnlineRoomId;
+        fillCoopAccountIds(mem);
         SaveService.saveCoop(loginUser, slot, mem);
         if (coopBridge != null && coopBridge.isHost()) {
             coopBridge.notifySaved(slot, mem);
@@ -2017,17 +2172,30 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.fillRect(0, 0, 1280, 720);
         drawPanel(g, 300, 100, 680, 520);
         g.setFont(fontBold.deriveFont(30f));
-        centerText(g, coopSlotMode == 1 ? "협동 저장 · 슬롯 선택" : "협동 불러오기 · 슬롯 선택",
-                640, 150, new Color(0x1a1216), new Color(0xefe0bf));
+        String title = coopSlotMode == 1 ? "협동 저장 · 슬롯 선택"
+                : coopSlotMode == 3 ? "참가자 저장 · 슬롯 선택" : "협동 불러오기 · 슬롯 선택";
+        centerText(g, title, 640, 150, new Color(0x1a1216), new Color(0xefe0bf));
         g.setFont(font.deriveFont(16f));
         g.setColor(new Color(0x1a1216));
-        String hint = loginUser == null ? "게스트도 `_local` 슬롯에 저장됩니다." : "로그인: " + loginUser;
+        String hint;
+        if (coopSlotMode == 3) {
+            boolean allFull = loginUser != null && SaveService.allCoopSlotsOccupied(loginUser);
+            hint = allFull
+                    ? "슬롯이 가득 찼어요. 덮어쓸 슬롯을 고르세요. (기본: 슬롯 " + onlineCoopHostSaveSlot + ")"
+                    : "방장과 같은 슬롯 " + onlineCoopHostSaveSlot + "에 저장해 주세요.";
+        } else if (isOnlineCoop || coopSlotMode == 2) {
+            hint = loginUser == null ? "온라인 협동은 로그인이 필요해요." : "로그인: " + loginUser;
+        } else {
+            hint = loginUser == null ? "게스트는 `_local` 슬롯에 저장됩니다." : "로그인: " + loginUser;
+        }
         g.drawString(hint, 640 - g.getFontMetrics().stringWidth(hint) / 2, 188);
         for (int i = 0; i < 3; i++) {
             SaveSlotMeta meta = i < coopSlotList.size() ? coopSlotList.get(i) : new SaveSlotMeta(i + 1, false, "비어 있음", 0);
             drawButton(g, "슬롯 " + meta.slot + " — " + meta.summary, 340, 220 + i * 92, 600, 72, i, 17f);
         }
-        drawButton(g, "닫기", 490, 560, 300, 48, 3, 20f);
+        if (coopSlotMode != 3) {
+            drawButton(g, "닫기", 490, 560, 300, 48, 3, 20f);
+        }
     }
 
     void drawCastle(Graphics2D g, boolean dark) {
@@ -2969,17 +3137,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     void drawPause(Graphics2D g) {
         g.setColor(new Color(8, 6, 10, 170));
         g.fillRect(0, 0, 1280, 720);
-        drawPanel(g, 420, 120, 440, 480);
+        drawPanel(g, 420, 120, 440, 520);
         g.setFont(fontBold.deriveFont(33f));
         centerText(g, "일시정지", 640, 180, new Color(0x1a1216), new Color(0xefe0bf));
-        drawButton(g, "계속하기", 490, 210, 300, 54, 1, 22f);
-        drawButton(g, "저장하기", 490, 282, 300, 54, 0, 22f);
-        drawButton(g, "환경설정", 490, 354, 300, 54, 0, 22f);
-        drawButton(g, "메인으로", 490, 426, 300, 54, 0, 22f);
+        drawButton(g, "계속하기", PAUSE_BTN_X, PAUSE_Y_CONTINUE, PAUSE_BTN_W, PAUSE_BTN_H, 1, 22f);
+        drawButton(g, "저장하기", PAUSE_BTN_X, PAUSE_Y_SAVE, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
+        boolean showLoad = isTwoPlayer || isOnlineCoop;
+        if (showLoad) {
+            drawButton(g, "불러오기", PAUSE_BTN_X, PAUSE_Y_LOAD, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
+        }
+        drawButton(g, "환경설정", PAUSE_BTN_X, PAUSE_Y_SETTINGS, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
+        drawButton(g, "메인으로", PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x1a1216));
         String t = msgTimer > 0 ? msg : "";
-        g.drawString(t, 640 - g.getFontMetrics().stringWidth(t) / 2, 530);
+        g.drawString(t, 640 - g.getFontMetrics().stringWidth(t) / 2, 565);
     }
 
     void drawResult(Graphics2D g) {
@@ -3085,6 +3257,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 new String[]{"온라인 (로비)", "로컬 (단일 PC)", "취소"},
                 "온라인 (로비)");
         if (choice == 0) {
+            if (loginUser == null || loginUser.isBlank()) {
+                JOptionPane.showMessageDialog(this,
+                        "온라인 협동은 로그인 후 이용할 수 있어요.\n메인 화면에서 로그인해 주세요.",
+                        "로그인 필요", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
             onlineLobbyFrame = new LobbyFrame(this);
             onlineLobbyFrame.setVisible(true);
         } else if (choice == 1) {
@@ -3097,6 +3275,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         localPlayerIndex = 0;
         onlineCoopId = null;
         pendingCoopResume = null;
+        pendingGuestCoopSave = null;
+        awaitingGuestCoopSave = false;
         if (coopBridge != null) {
             coopBridge.detach();
             coopBridge = null;
@@ -3225,6 +3405,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         if (action == PlayerAction.RESUME) {
+            if (screen == 6 && isOnlineCoop && awaitingGuestCoopSave && !fromNetwork
+                    && coopBridge != null && !coopBridge.isHost()) {
+                msg = "참가자 저장을 먼저 완료해 주세요.";
+                msgTimer = 200;
+                return;
+            }
             if (screen == 6) {
                 resumeLocalPause();
             }

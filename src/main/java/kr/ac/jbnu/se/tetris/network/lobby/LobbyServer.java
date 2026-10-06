@@ -302,6 +302,14 @@ public class LobbyServer implements AutoCloseable {
 		if (room == null || !clientId.equals(room.hostClientId)) {
 			return error("NOT_HOST", "방장만 저장을 요청할 수 있어요.");
 		}
+		if (!ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SAVE_PUSH), push -> {
+			push.coopId = req.coopId;
+			push.saveSlot = req.saveSlot;
+			push.snapshotJson = req.snapshotJson;
+		});
 		LobbyMessage ok = LobbyMessage.of(LobbyMessageType.COOP_SAVE_OK);
 		ok.coopId = req.coopId;
 		ok.saveSlot = req.saveSlot;

@@ -42,4 +42,8 @@ public class CoopGameMemento {
 	public long savedAtMs;
 	/** GamePanel 레거시 2P (엔진 미사용) 스냅샷 JSON */
 	public String panelSnapshotJson;
+
+	/** 온라인 협동 저장 시 당시 방장·참가 계정 (로그인 ID) */
+	public String hostAccountId;
+	public String guestAccountId;
 }

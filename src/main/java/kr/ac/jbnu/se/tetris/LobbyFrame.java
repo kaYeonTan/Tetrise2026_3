@@ -685,7 +685,21 @@ public class LobbyFrame extends JDialog {
 
 
 
+	private boolean ensureLoggedInForOnline() {
+		if (panel.loginUser != null && !panel.loginUser.isBlank()) {
+			return true;
+		}
+		JOptionPane.showMessageDialog(this,
+				"온라인 협동은 로그인 후 이용할 수 있어요.\n메인 화면에서 로그인한 뒤 다시 시도해 주세요.",
+				"로그인 필요", JOptionPane.INFORMATION_MESSAGE);
+		return false;
+	}
+
 	private void connect() {
+
+		if (!ensureLoggedInForOnline()) {
+			return;
+		}
 
 		normalizeHostPortFields();
 
@@ -725,7 +739,7 @@ public class LobbyFrame extends JDialog {
 
 			client = new LobbyClient();
 
-			client.connect(host, port, displayNick());
+			client.connect(host, port, panel.loginUser.trim());
 			CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
 			bridge.attach(client);
 			panel.coopBridge = bridge;
@@ -966,6 +980,9 @@ public class LobbyFrame extends JDialog {
 	}
 
 	private void openCoopSaveSlots() {
+		if (!ensureLoggedInForOnline()) {
+			return;
+		}
 		dispose();
 		panel.openCoopSlotScreen(2);
 	}
@@ -977,6 +994,28 @@ public class LobbyFrame extends JDialog {
 			return;
 		}
 		try {
+			if (panel.pendingCoopResume != null) {
+				LobbyMessage room = client.fetchMyRoom();
+				if (room == null || room.players == null || room.players.size() < 2) {
+					JOptionPane.showMessageDialog(this, "2명이 모여야 저장 이어하기를 할 수 있어요.");
+					return;
+				}
+				var mem = panel.pendingCoopResume;
+				if (mem.hostAccountId == null || mem.guestAccountId == null) {
+					JOptionPane.showMessageDialog(this, "예전 형식 저장이라 온라인 이어하기를 할 수 없어요.");
+					return;
+				}
+				String hostNick = room.players.get(0);
+				String guestNick = room.players.get(1);
+				try {
+					kr.ac.jbnu.se.tetris.persistence.SaveService.assertOnlineRoomMatchesSave(mem, hostNick, guestNick);
+				} catch (kr.ac.jbnu.se.tetris.persistence.LoadException ex) {
+					JOptionPane.showMessageDialog(this, ex.getMessage());
+					return;
+				}
+				panel.pendingCoopResume = kr.ac.jbnu.se.tetris.persistence.SaveService.remapForCurrentOnlineHost(mem,
+						hostNick, guestNick);
+			}
 			LobbyMessage resp;
 			if (panel.pendingCoopResume != null) {
 				Gson gson = new Gson();
