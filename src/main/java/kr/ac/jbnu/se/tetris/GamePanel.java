@@ -323,9 +323,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                         ensureNextStagePreviewLoaded(stage + 1);
                     }
                     tryAdvanceOnlineCoopStage();
-                    return;
-                }
-                if (stage == 5) {
+                } else if (stage == 5) {
                     gameEnd(true);
                 } else {
                     stage++;
@@ -333,6 +331,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                     msg = "STAGE " + stage + " 시작!";
                     msgTimer = 90;
                 }
+            }
+            // 클리어 팝업은 여기서 켜지는데, 예전에는 return 때문에 참가자에게 스냅샷이 안 갔다
+            if (coopBridge != null) {
+                coopBridge.maybeSendSnapshot();
             }
             return;
         }
