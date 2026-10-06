@@ -382,27 +382,50 @@ public final class CoopNetworkBridge {
 		sendMyBoard(false);
 	}
 
+	public void syncEliminationState(int eliminatedPlayerIndex) {
+		if (!isActive()) {
+			return;
+		}
+		try {
+			if (host) {
+				pushEliminationSnapshot();
+			} else if (eliminatedPlayerIndex == localPlayerIndex) {
+				sendMyBoard(true);
+			}
+		} catch (Exception ignored) {
+		}
+	}
+
 	public void sendGameOver() {
 		if (!isActive()) {
 			return;
 		}
 		try {
 			if (host) {
-				if (panel.coopEngineBridge == null) {
-					return;
-				}
-				CoopGameMemento mem = panel.coopEngineBridge.createMemento(coopId);
-				if (mem == null) {
-					return;
-				}
-				mem.gameOver = true;
-				LobbyMessage req = LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT);
-				req.coopId = coopId;
-				req.snapshotJson = GSON.toJson(mem);
-				client.sendCoopSnapshot(req);
+				pushEliminationSnapshot();
 			} else {
 				sendMyBoard(true);
 			}
+		} catch (Exception ignored) {
+		}
+	}
+
+	private void pushEliminationSnapshot() {
+		if (!host || panel.coopEngineBridge == null) {
+			return;
+		}
+		try {
+			CoopGameMemento mem = panel.coopEngineBridge.createMemento(coopId);
+			if (mem == null) {
+				return;
+			}
+			mem.player0Eliminated = panel.coopEliminated0;
+			mem.player1Eliminated = panel.coopEliminated1;
+			mem.gameOver = panel.coopEliminated0 && panel.coopEliminated1;
+			LobbyMessage req = LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT);
+			req.coopId = coopId;
+			req.snapshotJson = GSON.toJson(mem);
+			client.sendCoopSnapshot(req);
 		} catch (Exception ignored) {
 		}
 	}
@@ -435,7 +458,7 @@ public final class CoopNetworkBridge {
 			panel.coopEngineBridge.showGuestBoard(board);
 		}
 		if ("GAMEOVER".equals(message)) {
-			panel.notifyEngineGameOver();
+			panel.onCoopPlayerEliminated(1);
 		}
 		panel.repaint();
 	}

@@ -129,6 +129,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public boolean stageAdvancePrompt = false;
     public boolean stageReadyPlayer0 = false;
     public boolean stageReadyPlayer1 = false;
+    /** 협동 엔진: P0/P1 보드 탈락 (둘 다 true일 때만 결과 화면) */
+    public boolean coopEliminated0;
+    public boolean coopEliminated1;
     int nextStagePreview = 0;
     static final int STAGE_ADVANCE_BTN_X = 490;
     static final int STAGE_ADVANCE_BTN_Y = 470;
@@ -523,6 +526,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     boolean controlsPlayer(int playerIndex) {
+        if (useCoopEngineRender() && isCoopPlayerEliminated(playerIndex)) {
+            return false;
+        }
         if (!isTwoPlayer) {
             return playerIndex == 0;
         }
@@ -1052,9 +1058,74 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void notifyEngineGameOver() {
+        if (useCoopEngineRender() || (isOnlineCoop && coopEngineBridge != null)) {
+            onCoopPlayerEliminated(localPlayerIndex >= 0 ? localPlayerIndex : 0);
+            return;
+        }
         if (screen == 5 && !stageClear) {
             gameEnd(false);
         }
+    }
+
+    public boolean isCoopPlayerEliminated(int playerIndex) {
+        return playerIndex == 0 ? coopEliminated0 : coopEliminated1;
+    }
+
+    public void applyCoopEliminationSync(boolean p0, boolean p1) {
+        applyCoopEliminationFromSave(p0, p1, true);
+    }
+
+    public void applyCoopEliminationFromSave(boolean p0, boolean p1, boolean endIfBothDead) {
+        coopEliminated0 = p0;
+        coopEliminated1 = p1;
+        if (coopEngineBridge != null) {
+            if (p0) {
+                coopEngineBridge.freezeEngine(0);
+            }
+            if (p1) {
+                coopEngineBridge.freezeEngine(1);
+            }
+        }
+        if (endIfBothDead && coopEliminated0 && coopEliminated1 && screen == 5 && !stageClear) {
+            gameEnd(false);
+        }
+        repaint();
+    }
+
+    public void onCoopPlayerEliminated(int playerIndex) {
+        if (screen != 5 || stageClear) {
+            return;
+        }
+        if (playerIndex == 0) {
+            if (coopEliminated0) {
+                return;
+            }
+            coopEliminated0 = true;
+        } else {
+            if (coopEliminated1) {
+                return;
+            }
+            coopEliminated1 = true;
+        }
+        if (isOnlineCoop && coopBridge != null) {
+            coopBridge.syncEliminationState(playerIndex);
+        }
+        if (coopEliminated0 && coopEliminated1) {
+            gameEnd(false);
+            return;
+        }
+        if (playerIndex == localPlayerIndex) {
+            msg = "보드가 가득 찼어요. 상대가 끝낼 때까지 대기합니다.";
+        } else {
+            msg = onlineCoopPlayerLabel(playerIndex) + " 보드가 가득 찼어요.";
+        }
+        msgTimer = 280;
+        repaint();
+    }
+
+    void resetCoopElimination() {
+        coopEliminated0 = false;
+        coopEliminated1 = false;
     }
 
     public void newGame(boolean two) {
@@ -1114,6 +1185,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         stageAdvancePrompt = false;
         stageReadyPlayer0 = false;
         stageReadyPlayer1 = false;
+        resetCoopElimination();
         stageClearSoundPlayed = false;
         hitEffect = 0;
         bossAwakeningEffect = 0;
@@ -2064,6 +2136,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         m.blueprintIndex = bossPattern.blueprintIndex();
         m.onlineResume = isOnlineCoop;
         m.lastRoomId = lastOnlineRoomId;
+        m.player0Eliminated = coopEliminated0;
+        m.player1Eliminated = coopEliminated1;
+        m.gameOver = coopEliminated0 && coopEliminated1;
         m.panelSnapshotJson = new Gson().toJson(CoopSnapshotMapper.fromPanel(this, cid));
         return m;
     }
@@ -2558,6 +2633,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.fillRect(x + 2, y + 2, 3, size - 4);
     }
 
+    void drawCellGray(Graphics2D g, int x, int y, int size) {
+        Color c = new Color(0x5c5c66);
+        g.setColor(c.darker());
+        g.fillRect(x, y, size, size);
+        g.setColor(c);
+        g.fillRect(x + 2, y + 2, size - 4, size - 4);
+        g.setColor(new Color(0x787882));
+        g.fillRect(x + 2, y + 2, size - 4, 3);
+        g.fillRect(x + 2, y + 2, 3, size - 4);
+    }
+
     void drawGhostCell(Graphics2D g, int x, int y, int size, int v) {
         Color c = blockColor(v);
         g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 36));
@@ -2624,13 +2710,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
-    void drawEngineSessionBoard(Graphics2D g, GameSession session, int boardX, int boardY, boolean blinkOn) {
+    void drawEngineSessionBoard(Graphics2D g, GameSession session, int boardX, int boardY, boolean blinkOn,
+            int playerIndex) {
         if (session == null) {
             return;
         }
+        boolean gray = isCoopPlayerEliminated(playerIndex);
         for (int screenRow = 0; screenRow < 20; screenRow++) {
             int engineY = 19 - screenRow;
-            boolean blinkRow = blinkOn && session.lineClearBlinkRows[engineY];
+            boolean blinkRow = !gray && blinkOn && session.lineClearBlinkRows[engineY];
             for (int column = 0; column < 10; column++) {
                 Tetrominoes shape = session.shapeAt(column, engineY);
                 if (shape == Tetrominoes.NoShape) {
@@ -2641,13 +2729,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 if (blinkRow) {
                     g.setColor(Color.WHITE);
                     g.fillRect(x + 2, y + 2, 26, 26);
+                } else if (gray) {
+                    drawCellGray(g, x, y, 30);
                 } else {
                     drawCell(g, x, y, 30, engineBlockValue(shape));
                 }
             }
         }
 
-        if (screen == 7 || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
+        if (gray || screen == 7 || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
             return;
         }
         int blockVal = engineBlockValue(session.curPiece.getShape());
@@ -2674,7 +2764,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (aEngineBridge == null) {
             return;
         }
-        drawEngineSessionBoard(g, aEngineBridge.session(), boardX, boardY, aEngineBridge.isLineClearBlinkOn());
+        drawEngineSessionBoard(g, aEngineBridge.session(), boardX, boardY, aEngineBridge.isLineClearBlinkOn(), 0);
     }
 
     boolean isPlayerBlueprintCellOccupied(int player, int row, int column) {
@@ -2923,16 +3013,23 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         if (useCoopEngineRender()) {
             drawEngineSessionBoard(g, coopEngineBridge.session(0), bx, by,
-                    coopEngineBridge.isLineClearBlinkOn(0));
+                    coopEngineBridge.isLineClearBlinkOn(0), 0);
         } else if (!useAEngine()) {
+            boolean gray0 = isCoopPlayerEliminated(0);
             for (int r = 4; r < 24; r++) {
                 for (int c = 0; c < 10; c++) {
                     if (board1[r][c] != 0) {
-                        drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board1[r][c]);
+                        int x = bx + c * 30;
+                        int y = by + (r - 4) * 30;
+                        if (gray0) {
+                            drawCellGray(g, x, y, 30);
+                        } else {
+                            drawCell(g, x, y, 30, board1[r][c]);
+                        }
                     }
                 }
             }
-            if (screen != 7 && !stageClear) {
+            if (!gray0 && screen != 7 && !stageClear) {
                 drawLegacyActivePiece(g, bx, by, board1, p1Type, p1Rot, p1X, p1Y);
             }
         } else {
@@ -3018,16 +3115,23 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
             if (useCoopEngineRender()) {
                 drawEngineSessionBoard(g, coopEngineBridge.session(1), bx, by,
-                        coopEngineBridge.isLineClearBlinkOn(1));
+                        coopEngineBridge.isLineClearBlinkOn(1), 1);
             } else {
+                boolean gray1 = isCoopPlayerEliminated(1);
                 for (int r = 4; r < 24; r++) {
                     for (int c = 0; c < 10; c++) {
                         if (board2[r][c] != 0) {
-                            drawCell(g, bx + c * 30, by + (r - 4) * 30, 30, board2[r][c]);
+                            int x = bx + c * 30;
+                            int y = by + (r - 4) * 30;
+                            if (gray1) {
+                                drawCellGray(g, x, y, 30);
+                            } else {
+                                drawCell(g, x, y, 30, board2[r][c]);
+                            }
                         }
                     }
                 }
-                if (screen != 7 && !stageClear) {
+                if (!gray1 && screen != 7 && !stageClear) {
                     drawLegacyActivePiece(g, bx, by, board2, p2Type, p2Rot, p2X, p2Y);
                 }
             }

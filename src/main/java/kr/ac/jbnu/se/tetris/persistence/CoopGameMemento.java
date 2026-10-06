@@ -16,6 +16,9 @@ public class CoopGameMemento {
 	public boolean stageClear;
 	/** 한쪽이 게임오버면 상대도 결과 화면으로 */
 	public boolean gameOver;
+	/** 협동: 플레이어별 탈락 (둘 다 true일 때만 gameOver) */
+	public boolean player0Eliminated;
+	public boolean player1Eliminated;
 	/** 클리어 연출 후 다음 스테이지 확인 패널 (온라인, 방장 권위) */
 	public boolean stageAdvancePrompt;
 	public boolean stageReadyPlayer0;

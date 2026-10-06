@@ -67,6 +67,10 @@ public final class CoopEngineBridge {
 		if (!isDrivingHost()) {
 			return;
 		}
+		if (panel.coopEliminated0) {
+			syncHudFromEngine();
+			return;
+		}
 		// 학부생 스타일: 간단한 시간 기반 낙하
 		// 스테이지에 따라 낙하 속도가 달라짐 (1000ms → 400ms)
 		int dropSpeed = getDropSpeed();
@@ -113,6 +117,9 @@ public final class CoopEngineBridge {
 	/** 참가자: 내 플레이어 보드만 중력·줄삭제 등 엔진 틱. */
 	public void tickGuestLocal(int localPlayerIndex) {
 		if (drivingHost || engine == null || localPlayerIndex < 0 || localPlayerIndex > 1) {
+			return;
+		}
+		if (panel.isCoopPlayerEliminated(localPlayerIndex)) {
 			return;
 		}
 		int dropSpeed = getDropSpeed();
@@ -214,7 +221,7 @@ public final class CoopEngineBridge {
 			syncHudFromEngine();
 			panel.notifyBossBoardChanged();
 		});
-		engine.getBus().subscribe(GameEventType.GAME_OVER, e -> panel.notifyEngineGameOver());
+		engine.getBus().subscribe(GameEventType.GAME_OVER, e -> panel.onCoopPlayerEliminated(e.playerIndex));
 	}
 
 	private void wireGuestEvents() {
@@ -233,7 +240,7 @@ public final class CoopEngineBridge {
 		});
 		engine.getBus().subscribe(GameEventType.GAME_OVER, e -> {
 			if (e.playerIndex == panel.localPlayerIndex) {
-				panel.notifyEngineGameOver();
+				panel.onCoopPlayerEliminated(e.playerIndex);
 			}
 		});
 	}
@@ -288,6 +295,28 @@ public final class CoopEngineBridge {
 		}
 		panel.screen = 5;
 		panel.startBattleBgm();
+		if (m.player0 != null && m.player1 != null && panel.coopEngineBridge != null) {
+			panel.coopEngineBridge.applyEliminationFromMemento(m);
+			panel.applyCoopEliminationFromSave(m.player0Eliminated, m.player1Eliminated, true);
+		}
+	}
+
+	public void applyEliminationFromMemento(CoopGameMemento m) {
+		if (m == null || engine == null) {
+			return;
+		}
+		if (m.player0Eliminated) {
+			freezeEngine(0);
+		}
+		if (m.player1Eliminated) {
+			freezeEngine(1);
+		}
+	}
+
+	public void freezeEngine(int playerIndex) {
+		if (engine != null) {
+			engine.engine(playerIndex).freezeAfterElimination();
+		}
 	}
 
 	public GameSession session(int player) {
@@ -337,9 +366,8 @@ public final class CoopEngineBridge {
 			panel.clearTimer = 2000;
 		}
 		panel.stageClear = mem.stageClear;
-		if (mem.gameOver) {
-			panel.notifyEngineGameOver();
-		}
+		applyEliminationFromMemento(mem);
+		panel.applyCoopEliminationFromSave(mem.player0Eliminated, mem.player1Eliminated, true);
 		panel.stageAdvancePrompt = mem.stageAdvancePrompt;
 		panel.stageReadyPlayer0 = mem.stageReadyPlayer0;
 		panel.stageReadyPlayer1 = mem.stageReadyPlayer1;

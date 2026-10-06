@@ -211,12 +211,19 @@ public class GameEngine {
 	}
 
 	void handleGameOver() {
+		if (gameOverSent) {
+			return;
+		}
+		freezeAfterElimination();
+		int idx = sessions.isEmpty() ? 0 : sessions.get(0).playerIndex;
+		bus.publish(new GameEvent(GameEventType.GAME_OVER, idx, 0));
+	}
+
+	/** 저장 불러오기 등: 이벤트 없이 해당 엔진만 정지 */
+	public void freezeAfterElimination() {
 		isStarted = false;
 		lineClearAnim = false;
-		if (!gameOverSent) {
-			gameOverSent = true;
-			bus.publish(new GameEvent(GameEventType.GAME_OVER, 0, 0));
-		}
+		gameOverSent = true;
 	}
 
 	/** C파트 보스 연동용 (추후 BossBrain에서 호출) */

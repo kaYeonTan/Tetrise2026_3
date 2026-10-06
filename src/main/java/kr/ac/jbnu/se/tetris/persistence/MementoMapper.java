@@ -89,7 +89,10 @@ public final class MementoMapper {
 		m.bossTimer = panel.bossTimer;
 		m.gameTime = panel.gameTime;
 		m.stageClear = panel.stageClear;
-		m.gameOver = panel.screen == 7;
+		m.gameOver = panel.screen == 7
+				|| (panel.coopEliminated0 && panel.coopEliminated1);
+		m.player0Eliminated = panel.coopEliminated0;
+		m.player1Eliminated = panel.coopEliminated1;
 		m.stageAdvancePrompt = panel.stageAdvancePrompt;
 		m.stageReadyPlayer0 = panel.stageReadyPlayer0;
 		m.stageReadyPlayer1 = panel.stageReadyPlayer1;

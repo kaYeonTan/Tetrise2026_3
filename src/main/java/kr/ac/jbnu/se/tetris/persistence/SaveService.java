@@ -245,6 +245,9 @@ public final class SaveService {
 		int[] keys0 = out.randomKeyForPlayer0;
 		out.randomKeyForPlayer0 = out.randomKeyForPlayer1;
 		out.randomKeyForPlayer1 = keys0;
+		boolean elim0 = out.player0Eliminated;
+		out.player0Eliminated = out.player1Eliminated;
+		out.player1Eliminated = elim0;
 		out.hostAccountId = curHost;
 		out.guestAccountId = curGuest;
 		return out;
