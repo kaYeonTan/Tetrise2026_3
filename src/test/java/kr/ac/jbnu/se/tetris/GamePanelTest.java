@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.HashSet;
 import java.util.Random;
 import javax.swing.JLabel;
@@ -213,6 +215,22 @@ class GamePanelTest {
         } finally {
             GamePanel.keySingle = savedSingleKeys;
         }
+    }
+
+    @Test
+    void stageFiveRandomKeyGuideRendersAboveBoss() {
+        p.stage = 5;
+        p.startStage();
+        p.applyTemporaryKeyMappings(new int[]{1, 2, 3, 4, 5, 6, 0}, null, 10_000);
+        BufferedImage image = new BufferedImage(1280, 720, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            p.drawRandomKeyGuide(graphics, 1100, 592);
+        } finally {
+            graphics.dispose();
+        }
+
+        assertTrue((image.getRGB(970, 398) >>> 24) > 0);
     }
 
     private static int occupiedCells(GameSession session, int y) {
