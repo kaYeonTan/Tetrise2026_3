@@ -21,7 +21,7 @@ public interface BossPatternTarget {
 
     boolean isTwoPlayerMode();
 
-    void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis);
+    void applyTemporaryKeyMappings(int[] primaryMapping, int[] secondaryMapping, int durationMillis);
 
     void resetTemporaryBossEffects();
 

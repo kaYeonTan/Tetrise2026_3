@@ -36,6 +36,7 @@ import javax.swing.Timer;
 import kr.ac.jbnu.se.tetris.boss.BossPatternController;
 import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
+import kr.ac.jbnu.se.tetris.boss.RandomKeyMappingGenerator;
 import kr.ac.jbnu.se.tetris.audio.BgmType;
 import kr.ac.jbnu.se.tetris.audio.SfxType;
 import kr.ac.jbnu.se.tetris.audio.SoundManager;
@@ -198,8 +199,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     boolean p2FastNext;
     boolean p1FastCurrent;
     boolean p2FastCurrent;
-    int[] temporaryPrimaryKeys;
-    int[] temporarySecondaryKeys;
+    int[] temporaryPrimaryKeyMapping;
+    int[] temporarySecondaryKeyMapping;
     long randomKeyEnd;
 
     /** 1인: A GameEngine + Board (B UI 위에 올림) */
@@ -506,23 +507,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     int[] currentPrimaryKeys() {
-        if (temporaryPrimaryKeys != null) {
-            return temporaryPrimaryKeys;
-        }
-        if (isOnlineCoop) {
-            return keySingle;
-        }
-        return isTwoPlayer ? keyP1 : keySingle;
+        int[] originalKeys = isOnlineCoop || !isTwoPlayer ? keySingle : keyP1;
+        return applyTemporaryKeyMapping(originalKeys, temporaryPrimaryKeyMapping);
     }
 
     int[] onlineCoopKeysForP2() {
         if (isOnlineCoop) {
-            if (temporaryPrimaryKeys != null && localPlayerIndex == 1) {
-                return temporaryPrimaryKeys;
-            }
-            return keySingle;
+            return localPlayerIndex == 1 ? currentPrimaryKeys() : keySingle;
         }
         return currentSecondaryKeys();
+    }
+
+    private int[] applyTemporaryKeyMapping(int[] originalKeys, int[] mapping) {
+        return mapping == null
+                ? originalKeys
+                : RandomKeyMappingGenerator.applyPermutation(originalKeys, mapping);
     }
 
     boolean controlsPlayer(int playerIndex) {
@@ -666,7 +665,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     int[] currentSecondaryKeys() {
-        return temporarySecondaryKeys == null ? keyP2 : temporarySecondaryKeys;
+        return applyTemporaryKeyMapping(keyP2, temporarySecondaryKeyMapping);
     }
 
     void updateTemporaryBossEffects() {
@@ -677,9 +676,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 aEngineBridge.setGravityMultiplier(1);
             }
         }
-        if (temporaryPrimaryKeys != null && gameTime >= randomKeyEnd) {
-            temporaryPrimaryKeys = null;
-            temporarySecondaryKeys = null;
+        if (temporaryPrimaryKeyMapping != null && gameTime >= randomKeyEnd) {
+            temporaryPrimaryKeyMapping = null;
+            temporarySecondaryKeyMapping = null;
             randomKeyEnd = 0;
             clearInputRepeatState();
         }
@@ -796,12 +795,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public int[] primaryOriginalKeys() {
-        return (isTwoPlayer ? keyP1 : keySingle).clone();
+        return (isOnlineCoop || !isTwoPlayer ? keySingle : keyP1).clone();
     }
 
     @Override
     public int[] secondaryOriginalKeys() {
-        return keyP2.clone();
+        return (isOnlineCoop ? keySingle : keyP2).clone();
     }
 
     @Override
@@ -810,9 +809,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     @Override
-    public void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis) {
-        temporaryPrimaryKeys = primaryKeys.clone();
-        temporarySecondaryKeys = secondaryKeys == null ? null : secondaryKeys.clone();
+    public void applyTemporaryKeyMappings(int[] primaryMapping, int[] secondaryMapping, int durationMillis) {
+        temporaryPrimaryKeyMapping = primaryMapping.clone();
+        temporarySecondaryKeyMapping = secondaryMapping == null ? null : secondaryMapping.clone();
         randomKeyEnd = gameTime + durationMillis;
         clearInputRepeatState();
     }
@@ -826,8 +825,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2FastNext = false;
         p1FastCurrent = false;
         p2FastCurrent = false;
-        temporaryPrimaryKeys = null;
-        temporarySecondaryKeys = null;
+        temporaryPrimaryKeyMapping = null;
+        temporarySecondaryKeyMapping = null;
         randomKeyEnd = 0;
         clearInputRepeatState();
         if (aEngineBridge != null) {
@@ -3379,9 +3378,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         mem.garbageHole0 = garbageHole0;
         mem.garbageHole1 = garbageHole1;
         mem.randomKeyEnd = randomKeyEnd;
-        if (randomKeyEnd > gameTime && temporaryPrimaryKeys != null) {
-            mem.randomKeyForPlayer0 = temporaryPrimaryKeys.clone();
-            mem.randomKeyForPlayer1 = temporarySecondaryKeys != null ? temporarySecondaryKeys.clone() : null;
+        if (randomKeyEnd > gameTime && temporaryPrimaryKeyMapping != null) {
+            mem.randomKeyMappingForPlayer0 = temporaryPrimaryKeyMapping.clone();
+            mem.randomKeyMappingForPlayer1 = temporarySecondaryKeyMapping != null
+                    ? temporarySecondaryKeyMapping.clone() : null;
         }
     }
 
@@ -3398,16 +3398,29 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         bossPattern.restoreElapsed(mem.bossTimer, this);
         bossTimer = mem.bossTimer;
         if (mem.randomKeyEnd > mem.gameTime) {
-            int[] keys = localPlayerIndex == 0 ? mem.randomKeyForPlayer0 : mem.randomKeyForPlayer1;
-            if (keys != null) {
-                temporaryPrimaryKeys = keys.clone();
+            int[] mapping = onlineKeyMapping(mem, localPlayerIndex);
+            if (mapping != null) {
+                temporaryPrimaryKeyMapping = mapping;
+                temporarySecondaryKeyMapping = null;
                 randomKeyEnd = mem.randomKeyEnd;
                 return;
             }
         }
-        temporaryPrimaryKeys = null;
-        temporarySecondaryKeys = null;
+        temporaryPrimaryKeyMapping = null;
+        temporarySecondaryKeyMapping = null;
         randomKeyEnd = 0;
+    }
+
+    private int[] onlineKeyMapping(CoopGameMemento mem, int playerIndex) {
+        int[] mapping = playerIndex == 0
+                ? mem.randomKeyMappingForPlayer0 : mem.randomKeyMappingForPlayer1;
+        if (mapping != null) {
+            return mapping.clone();
+        }
+
+        int[] legacyKeys = playerIndex == 0 ? mem.randomKeyForPlayer0 : mem.randomKeyForPlayer1;
+        int[] legacyOriginal = playerIndex == 0 ? keyP1 : keyP2;
+        return RandomKeyMappingGenerator.toPermutation(legacyOriginal, legacyKeys);
     }
 
     void promptTwoPlayerMode() {

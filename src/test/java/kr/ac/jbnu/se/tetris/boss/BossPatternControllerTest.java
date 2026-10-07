@@ -146,8 +146,9 @@ class BossPatternControllerTest {
         controller.startStage(5, target);
         controller.tick(20_000, target);
         assertEquals(10_000, target.keyDuration);
-        assertFalse(java.util.Arrays.equals(target.primaryOriginalKeys(), target.primaryKeys));
-        assertFalse(java.util.Arrays.equals(target.secondaryOriginalKeys(), target.secondaryKeys));
+        int[] identity = {0, 1, 2, 3, 4, 5, 6};
+        assertFalse(java.util.Arrays.equals(identity, target.primaryMapping));
+        assertFalse(java.util.Arrays.equals(identity, target.secondaryMapping));
     }
 
     private static final class FakeTarget implements BossPatternTarget {
@@ -157,8 +158,8 @@ class BossPatternControllerTest {
         int accelerationDuration;
         int gravityMultiplier;
         int nextPieceMultiplier;
-        int[] primaryKeys;
-        int[] secondaryKeys;
+        int[] primaryMapping;
+        int[] secondaryMapping;
         int keyDuration;
         boolean[][] occupied = new boolean[Blueprint.ROWS][Blueprint.COLUMNS];
         boolean blueprintCompleted;
@@ -205,9 +206,9 @@ class BossPatternControllerTest {
         }
 
         @Override
-        public void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis) {
-            this.primaryKeys = primaryKeys;
-            this.secondaryKeys = secondaryKeys;
+        public void applyTemporaryKeyMappings(int[] primaryMapping, int[] secondaryMapping, int durationMillis) {
+            this.primaryMapping = primaryMapping;
+            this.secondaryMapping = secondaryMapping;
             keyDuration = durationMillis;
         }
 
