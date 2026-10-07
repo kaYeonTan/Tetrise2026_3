@@ -36,6 +36,7 @@ import javax.swing.Timer;
 import kr.ac.jbnu.se.tetris.boss.BossPatternController;
 import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
+import kr.ac.jbnu.se.tetris.boss.RandomKeyMappingGenerator;
 import kr.ac.jbnu.se.tetris.audio.BgmType;
 import kr.ac.jbnu.se.tetris.audio.SfxType;
 import kr.ac.jbnu.se.tetris.audio.SoundManager;
@@ -198,8 +199,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     boolean p2FastNext;
     boolean p1FastCurrent;
     boolean p2FastCurrent;
-    int[] temporaryPrimaryKeys;
-    int[] temporarySecondaryKeys;
+    int[] temporaryPrimaryKeyMapping;
+    int[] temporarySecondaryKeyMapping;
     long randomKeyEnd;
 
     /** 1인: A GameEngine + Board (B UI 위에 올림) */
@@ -506,23 +507,21 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     int[] currentPrimaryKeys() {
-        if (temporaryPrimaryKeys != null) {
-            return temporaryPrimaryKeys;
-        }
-        if (isOnlineCoop) {
-            return keySingle;
-        }
-        return isTwoPlayer ? keyP1 : keySingle;
+        int[] originalKeys = isOnlineCoop || !isTwoPlayer ? keySingle : keyP1;
+        return applyTemporaryKeyMapping(originalKeys, temporaryPrimaryKeyMapping);
     }
 
     int[] onlineCoopKeysForP2() {
         if (isOnlineCoop) {
-            if (temporaryPrimaryKeys != null && localPlayerIndex == 1) {
-                return temporaryPrimaryKeys;
-            }
-            return keySingle;
+            return localPlayerIndex == 1 ? currentPrimaryKeys() : keySingle;
         }
         return currentSecondaryKeys();
+    }
+
+    private int[] applyTemporaryKeyMapping(int[] originalKeys, int[] mapping) {
+        return mapping == null
+                ? originalKeys
+                : RandomKeyMappingGenerator.applyPermutation(originalKeys, mapping);
     }
 
     boolean controlsPlayer(int playerIndex) {
@@ -666,7 +665,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     int[] currentSecondaryKeys() {
-        return temporarySecondaryKeys == null ? keyP2 : temporarySecondaryKeys;
+        return applyTemporaryKeyMapping(keyP2, temporarySecondaryKeyMapping);
     }
 
     void updateTemporaryBossEffects() {
@@ -677,9 +676,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 aEngineBridge.setGravityMultiplier(1);
             }
         }
-        if (temporaryPrimaryKeys != null && gameTime >= randomKeyEnd) {
-            temporaryPrimaryKeys = null;
-            temporarySecondaryKeys = null;
+        if (temporaryPrimaryKeyMapping != null && gameTime >= randomKeyEnd) {
+            temporaryPrimaryKeyMapping = null;
+            temporarySecondaryKeyMapping = null;
             randomKeyEnd = 0;
             clearInputRepeatState();
         }
@@ -796,12 +795,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public int[] primaryOriginalKeys() {
-        return (isTwoPlayer ? keyP1 : keySingle).clone();
+        return (isOnlineCoop || !isTwoPlayer ? keySingle : keyP1).clone();
     }
 
     @Override
     public int[] secondaryOriginalKeys() {
-        return keyP2.clone();
+        return (isOnlineCoop ? keySingle : keyP2).clone();
     }
 
     @Override
@@ -810,9 +809,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     @Override
-    public void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis) {
-        temporaryPrimaryKeys = primaryKeys.clone();
-        temporarySecondaryKeys = secondaryKeys == null ? null : secondaryKeys.clone();
+    public void applyTemporaryKeyMappings(int[] primaryMapping, int[] secondaryMapping, int durationMillis) {
+        temporaryPrimaryKeyMapping = primaryMapping.clone();
+        temporarySecondaryKeyMapping = secondaryMapping == null ? null : secondaryMapping.clone();
         randomKeyEnd = gameTime + durationMillis;
         clearInputRepeatState();
     }
@@ -826,8 +825,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2FastNext = false;
         p1FastCurrent = false;
         p2FastCurrent = false;
-        temporaryPrimaryKeys = null;
-        temporarySecondaryKeys = null;
+        temporaryPrimaryKeyMapping = null;
+        temporarySecondaryKeyMapping = null;
         randomKeyEnd = 0;
         clearInputRepeatState();
         if (aEngineBridge != null) {
@@ -3236,6 +3235,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             g.setColor(new Color(0xe9c98f));
             g.drawString(msg, 640 - w / 2, 161);
         }
+        drawRandomKeyGuide(g, mx + m.getWidth() / 2, my);
         if (stageAdvancePrompt && isOnlineCoop) {
             drawStageAdvancePrompt(g, stageNames, bossNames);
         } else if (stageClear) {
@@ -3253,6 +3253,94 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.fillRect(8, 696, hw + 20, 20);
         g.setColor(new Color(0xd9c29a));
         g.drawString(help, 18, 711);
+    }
+
+    void drawRandomKeyGuide(Graphics2D g, int bossCenterX, int bossTopY) {
+        if (stage != 5 || screen != 5 || stageClear
+                || temporaryPrimaryKeyMapping == null || gameTime >= randomKeyEnd) {
+            return;
+        }
+
+        String[] actions = {
+                "왼쪽 이동", "오른쪽 이동", "빠르게 내리기", "즉시 내리기",
+                "오른쪽 회전", "왼쪽 회전", "홀드"
+        };
+        int[] primaryKeys = currentPrimaryKeys();
+        boolean showLocalTwoPlayer = isTwoPlayer && !isOnlineCoop;
+        int[] secondaryKeys = showLocalTwoPlayer ? currentSecondaryKeys() : null;
+
+        int panelWidth = showLocalTwoPlayer ? 300 : 272;
+        int headerHeight = showLocalTwoPlayer ? 54 : 38;
+        int rowHeight = 20;
+        int panelHeight = headerHeight + actions.length * rowHeight + 10;
+        int panelX = Math.max(8, Math.min(1280 - panelWidth - 8, bossCenterX - panelWidth / 2));
+        int panelY = Math.max(174, bossTopY - panelHeight - 12);
+
+        g.setColor(new Color(8, 6, 12, 225));
+        g.fillRoundRect(panelX, panelY, panelWidth, panelHeight, 14, 14);
+        g.setStroke(new BasicStroke(2f));
+        g.setColor(new Color(0xb65cff));
+        g.drawRoundRect(panelX, panelY, panelWidth, panelHeight, 14, 14);
+
+        int pointerX = Math.max(panelX + 14, Math.min(panelX + panelWidth - 14, bossCenterX));
+        int panelBottom = panelY + panelHeight;
+        g.setColor(new Color(8, 6, 12, 225));
+        g.fillPolygon(new int[]{pointerX - 8, pointerX + 8, pointerX},
+                new int[]{panelBottom - 1, panelBottom - 1, panelBottom + 9}, 3);
+        g.setColor(new Color(0xb65cff));
+        g.drawLine(pointerX - 8, panelBottom, pointerX, panelBottom + 9);
+        g.drawLine(pointerX, panelBottom + 9, pointerX + 8, panelBottom);
+
+        long remainingMillis = Math.max(0, randomKeyEnd - gameTime);
+        String titlePrefix = isOnlineCoop ? "내 조작키 · 혼란  " : "조작키 혼란  ";
+        String title = titlePrefix + String.format("%.1f초", remainingMillis / 1000.0);
+        g.setFont(fontBold.deriveFont(16.5f));
+        g.setColor(new Color(0xffd7ff));
+        g.drawString(title, panelX + 12, panelY + 24);
+
+        if (showLocalTwoPlayer) {
+            g.setFont(fontBold.deriveFont(12.5f));
+            g.setColor(new Color(0x7fc8ff));
+            centerPlainText(g, "P1", panelX + 190, panelY + 45, new Color(0x7fc8ff));
+            centerPlainText(g, "P2", panelX + 259, panelY + 45, new Color(0xffa07a));
+        }
+
+        g.setFont(fontSmall.deriveFont(12.5f));
+        int firstRowY = panelY + headerHeight;
+        for (int i = 0; i < actions.length; i++) {
+            int rowY = firstRowY + i * rowHeight;
+            g.setColor(i % 2 == 0 ? new Color(255, 255, 255, 12) : new Color(255, 255, 255, 4));
+            g.fillRect(panelX + 7, rowY, panelWidth - 14, rowHeight);
+            g.setFont(fontSmall.deriveFont(12.5f));
+            g.setColor(new Color(0xeee4f0));
+            g.drawString(actions[i], panelX + 13, rowY + 14);
+
+            if (showLocalTwoPlayer) {
+                drawRandomKeyCap(g, keyName(primaryKeys[i]), panelX + 157, rowY + 2, 66, rowHeight - 4,
+                        new Color(0x7fc8ff));
+                drawRandomKeyCap(g, keyName(secondaryKeys[i]), panelX + 226, rowY + 2, 66, rowHeight - 4,
+                        new Color(0xffa07a));
+            } else {
+                drawRandomKeyCap(g, keyName(primaryKeys[i]), panelX + 166, rowY + 2, 94, rowHeight - 4,
+                        new Color(0xe9c98f));
+            }
+        }
+    }
+
+    private void drawRandomKeyCap(Graphics2D g, String key, int x, int y, int width, int height, Color accent) {
+        g.setColor(new Color(33, 27, 38, 245));
+        g.fillRoundRect(x, y, width, height, 7, 7);
+        g.setColor(accent);
+        g.drawRoundRect(x, y, width, height, 7, 7);
+        float keyFontSize = 11.5f;
+        g.setFont(fontSmall.deriveFont(keyFontSize));
+        while (g.getFontMetrics().stringWidth(key) > width - 6 && keyFontSize > 8f) {
+            keyFontSize -= 0.5f;
+            g.setFont(fontSmall.deriveFont(keyFontSize));
+        }
+        int textX = x + (width - g.getFontMetrics().stringWidth(key)) / 2;
+        int textY = y + (height - g.getFontMetrics().getHeight()) / 2 + g.getFontMetrics().getAscent();
+        g.drawString(key, textX, textY);
     }
 
     void drawStageAdvancePrompt(Graphics2D g, String[] stageNames, String[] bossNames) {
@@ -3379,9 +3467,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         mem.garbageHole0 = garbageHole0;
         mem.garbageHole1 = garbageHole1;
         mem.randomKeyEnd = randomKeyEnd;
-        if (randomKeyEnd > gameTime && temporaryPrimaryKeys != null) {
-            mem.randomKeyForPlayer0 = temporaryPrimaryKeys.clone();
-            mem.randomKeyForPlayer1 = temporarySecondaryKeys != null ? temporarySecondaryKeys.clone() : null;
+        if (randomKeyEnd > gameTime && temporaryPrimaryKeyMapping != null) {
+            mem.randomKeyMappingForPlayer0 = temporaryPrimaryKeyMapping.clone();
+            mem.randomKeyMappingForPlayer1 = temporarySecondaryKeyMapping != null
+                    ? temporarySecondaryKeyMapping.clone() : null;
         }
     }
 
@@ -3398,16 +3487,29 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         bossPattern.restoreElapsed(mem.bossTimer, this);
         bossTimer = mem.bossTimer;
         if (mem.randomKeyEnd > mem.gameTime) {
-            int[] keys = localPlayerIndex == 0 ? mem.randomKeyForPlayer0 : mem.randomKeyForPlayer1;
-            if (keys != null) {
-                temporaryPrimaryKeys = keys.clone();
+            int[] mapping = onlineKeyMapping(mem, localPlayerIndex);
+            if (mapping != null) {
+                temporaryPrimaryKeyMapping = mapping;
+                temporarySecondaryKeyMapping = null;
                 randomKeyEnd = mem.randomKeyEnd;
                 return;
             }
         }
-        temporaryPrimaryKeys = null;
-        temporarySecondaryKeys = null;
+        temporaryPrimaryKeyMapping = null;
+        temporarySecondaryKeyMapping = null;
         randomKeyEnd = 0;
+    }
+
+    private int[] onlineKeyMapping(CoopGameMemento mem, int playerIndex) {
+        int[] mapping = playerIndex == 0
+                ? mem.randomKeyMappingForPlayer0 : mem.randomKeyMappingForPlayer1;
+        if (mapping != null) {
+            return mapping.clone();
+        }
+
+        int[] legacyKeys = playerIndex == 0 ? mem.randomKeyForPlayer0 : mem.randomKeyForPlayer1;
+        int[] legacyOriginal = playerIndex == 0 ? keyP1 : keyP2;
+        return RandomKeyMappingGenerator.toPermutation(legacyOriginal, legacyKeys);
     }
 
     void promptTwoPlayerMode() {

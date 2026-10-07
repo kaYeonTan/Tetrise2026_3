@@ -1,5 +1,6 @@
 package kr.ac.jbnu.se.tetris.persistence;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,11 +71,15 @@ class SaveServiceTest {
 		guestBoard.score = 222;
 		m.player0 = hostBoard;
 		m.player1 = guestBoard;
+		m.randomKeyMappingForPlayer0 = new int[]{1, 0, 2, 3, 4, 5, 6};
+		m.randomKeyMappingForPlayer1 = new int[]{6, 1, 2, 3, 4, 5, 0};
 
 		CoopGameMemento remapped = SaveService.remapForCurrentOnlineHost(m, "B", "A");
 		assertEquals("B", remapped.hostAccountId);
 		assertEquals("A", remapped.guestAccountId);
 		assertEquals(222, remapped.player0.score);
 		assertEquals(111, remapped.player1.score);
+		assertArrayEquals(m.randomKeyMappingForPlayer1, remapped.randomKeyMappingForPlayer0);
+		assertArrayEquals(m.randomKeyMappingForPlayer0, remapped.randomKeyMappingForPlayer1);
 	}
 }

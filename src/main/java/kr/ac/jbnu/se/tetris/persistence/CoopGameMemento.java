@@ -29,7 +29,13 @@ public class CoopGameMemento {
 	public int gravityMultiplier = 1;
 	/** 스테이지 5 조작키 뒤섞기 (gameTime 기준 만료) */
 	public long randomKeyEnd;
+	/** Action-to-key-slot permutations. These are independent of each client's key codes. */
+	public int[] randomKeyMappingForPlayer0;
+	public int[] randomKeyMappingForPlayer1;
+	/** Legacy fields containing shuffled raw key codes from older saves. */
+	@Deprecated
 	public int[] randomKeyForPlayer0;
+	@Deprecated
 	public int[] randomKeyForPlayer1;
 	/** 스테이지 2: 방장이 올린 쓰레기 줄. 참가자는 seq가 늘면 자기 보드에만 적용 */
 	public int garbageSeq;

@@ -5,8 +5,8 @@ import java.util.Random;
 public final class RandomKeyPattern implements BossPattern {
 
     private final RandomKeyMappingGenerator generator;
-    private int[] previousPrimary;
-    private int[] previousSecondary;
+    private int[] previousPrimaryMapping;
+    private int[] previousSecondaryMapping;
 
     public RandomKeyPattern(Random random) {
         generator = new RandomKeyMappingGenerator(random);
@@ -29,14 +29,16 @@ public final class RandomKeyPattern implements BossPattern {
 
     @Override
     public void attack(BossPatternTarget target) {
-        int[] primary = generator.generate(target.primaryOriginalKeys(), previousPrimary);
-        int[] secondary = null;
+        int[] primaryMapping = generator.generatePermutation(
+                target.primaryOriginalKeys().length, previousPrimaryMapping);
+        int[] secondaryMapping = null;
         if (target.isTwoPlayerMode()) {
-            secondary = generator.generate(target.secondaryOriginalKeys(), previousSecondary);
+            secondaryMapping = generator.generatePermutation(
+                    target.secondaryOriginalKeys().length, previousSecondaryMapping);
         }
-        previousPrimary = primary.clone();
-        previousSecondary = secondary == null ? null : secondary.clone();
-        target.applyTemporaryKeys(primary, secondary, 10_000);
+        previousPrimaryMapping = primaryMapping.clone();
+        previousSecondaryMapping = secondaryMapping == null ? null : secondaryMapping.clone();
+        target.applyTemporaryKeyMappings(primaryMapping, secondaryMapping, 10_000);
         target.showBossMessage("악의 신의 저주! 10초 동안 조작키가 뒤섞인다");
     }
 }
