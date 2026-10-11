@@ -136,11 +136,11 @@ public final class CoopEngineBridge {
 			return false;
 		}
 		boolean player0Raised = engine.engine(0).raiseGarbageLine(player0Hole);
-		// P2 줄은 참가자 엔진이 올리고, 그 결과가 스냅샷으로 돌아온다
+		boolean player1Raised = engine.engine(1).raiseGarbageLine(player1Hole);
 		panel.garbageSeq++;
 		panel.garbageHole0 = player0Hole;
 		panel.garbageHole1 = player1Hole;
-		return player0Raised;
+		return player0Raised && player1Raised;
 	}
 
 	/** 참가자가 보낸 P2 보드를 화면에만 붙인다. 점수·줄 수는 방장 값을 유지. */

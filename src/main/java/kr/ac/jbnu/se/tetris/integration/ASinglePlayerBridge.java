@@ -4,6 +4,9 @@ import javax.swing.JLabel;
 
 import kr.ac.jbnu.se.tetris.Board;
 import kr.ac.jbnu.se.tetris.GamePanel;
+import kr.ac.jbnu.se.tetris.Tetrominoes;
+import kr.ac.jbnu.se.tetris.boss.brain.BossBrainRunner;
+import kr.ac.jbnu.se.tetris.boss.brain.Grid;
 import kr.ac.jbnu.se.tetris.core.GameEngine;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.event.GameEventType;
@@ -16,6 +19,7 @@ public final class ASinglePlayerBridge {
 	private final GamePanel host;
 	private final JLabel hiddenStatus = new JLabel(" ");
 	private Board board;
+	private BossBrainRunner bossBrainRunner;
 	private boolean attached;
 	private boolean active;
 
@@ -36,6 +40,7 @@ public final class ASinglePlayerBridge {
 		board.setFocusable(false);
 
 		GameEngine engine = board.getEngine();
+		bossBrainRunner = new BossBrainRunner(engine);
 		engine.getBus().subscribe(GameEventType.PIECE_LOCKED, e -> {
 			host.playBlockLockSound();
 			host.notifyBossBoardChanged();
@@ -79,7 +84,16 @@ public final class ASinglePlayerBridge {
 		engine.setStage(stage);
 		board.setBaseGravityDelay(baseGravityDelayMillis);
 		board.start();
+		bossBrainRunner.refresh(engine);
 		syncHud();
+	}
+
+	public Grid brainSnapshot() {
+		return bossBrainRunner == null ? null : bossBrainRunner.latestGrid();
+	}
+
+	public BossBrainRunner.Decision brainDecision() {
+		return bossBrainRunner == null ? null : bossBrainRunner.latestDecision();
 	}
 
 	public boolean raiseGarbageLine(int hole) {
@@ -88,6 +102,13 @@ public final class ASinglePlayerBridge {
 		boolean raised = board.getEngine().raiseGarbageLine(hole);
 		board.repaint();
 		return raised;
+	}
+
+	public void replaceCurrentPiece(Tetrominoes type) {
+		if (attached && board != null) {
+			board.getEngine().replaceCurrentPiece(type);
+			board.repaint();
+		}
 	}
 
 	public void setGravityMultiplier(int multiplier) {

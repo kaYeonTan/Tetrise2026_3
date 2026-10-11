@@ -37,6 +37,9 @@ import kr.ac.jbnu.se.tetris.boss.BossPatternController;
 import kr.ac.jbnu.se.tetris.boss.BossPatternTarget;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
 import kr.ac.jbnu.se.tetris.boss.RandomKeyMappingGenerator;
+import kr.ac.jbnu.se.tetris.boss.brain.BossBrainRunner;
+import kr.ac.jbnu.se.tetris.boss.brain.Grid;
+import kr.ac.jbnu.se.tetris.boss.brain.MaxMinBrain;
 import kr.ac.jbnu.se.tetris.audio.BgmType;
 import kr.ac.jbnu.se.tetris.audio.SfxType;
 import kr.ac.jbnu.se.tetris.audio.SoundManager;
@@ -193,6 +196,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     Random random = new Random();
     public final BossPatternController bossPattern = new BossPatternController(random);
+    private final MaxMinBrain maxMinBrain = new MaxMinBrain();
     private final transient SoundManager soundManager;
     public int gravityMultiplier = 1;
     boolean p1FastNext;
@@ -764,7 +768,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         if (useAEngine()) {
-            if (!aEngineBridge.raiseGarbageLine(random.nextInt(10))) {
+            if (!aEngineBridge.raiseGarbageLine(selectGarbageHole())) {
                 gameEnd(false);
             }
             return;
@@ -775,6 +779,49 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         if (isTwoPlayer && !raiseBoardAndPiece(board2, false)) {
             gameEnd(false);
+        }
+    }
+
+    @Override
+    public int selectGarbageHole() {
+        if (useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            if (session != null) {
+                BossBrainRunner.Decision decision = aEngineBridge.brainDecision();
+                if (decision != null && decision.responsePiece() == session.curPiece.getShape()) {
+                    return decision.garbageHole();
+                }
+                Grid board = aEngineBridge.brainSnapshot();
+                return maxMinBrain.chooseGarbageHole(board == null ? Grid.from(session) : board,
+                        session.curPiece.getShape());
+            }
+        }
+        return random.nextInt(10);
+    }
+
+    @Override
+    public Tetrominoes selectForcedPiece() {
+        if (useAEngine()) {
+            GameSession session = aEngineBridge.session();
+            if (session != null) {
+                BossBrainRunner.Decision decision = aEngineBridge.brainDecision();
+                if (decision != null && decision.responsePiece() == session.curPiece.getShape()) {
+                    return decision.forcedPiece();
+                }
+                Grid board = aEngineBridge.brainSnapshot();
+                return maxMinBrain.chooseForcedPiece(board == null ? Grid.from(session) : board);
+            }
+        }
+        return Tetrominoes.values()[1 + random.nextInt(7)];
+    }
+
+    @Override
+    public void replaceCurrentPiece(Tetrominoes type) {
+        if (type == null || type == Tetrominoes.NoShape) {
+            return;
+        }
+        if (useAEngine()) {
+            aEngineBridge.replaceCurrentPiece(type);
         }
     }
 

@@ -8,8 +8,19 @@
   "bossTimer": 0,
   "gameTime": 0,
   "stageClear": false,
+  "gameOver": false,
+  "player0Eliminated": false,
+  "player1Eliminated": false,
+  "stageAdvancePrompt": false,
+  "stageReadyPlayer0": false,
+  "stageReadyPlayer1": false,
   "blizzardEnd": 0,
   "blueprintIndex": -1,
+  "gravityMultiplier": 1,
+  "randomKeyEnd": 0,
+  "garbageSeq": 0,
+  "garbageHole0": -1,
+  "garbageHole1": -1,
   "onlineResume": false,
-  "savedAtMs": 1791022832552
+  "savedAtMs": 1791708773178
 }
