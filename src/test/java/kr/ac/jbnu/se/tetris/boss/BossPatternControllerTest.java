@@ -68,6 +68,7 @@ class BossPatternControllerTest {
     @Test
     void stageTwoWarnsThreeSecondsBeforeRaisingBlocks() {
         FakeTarget target = new FakeTarget();
+        target.garbageHole = 6;
         BossPatternController controller = new BossPatternController(new Random(1));
         controller.startStage(2, target);
 
@@ -78,6 +79,7 @@ class BossPatternControllerTest {
         controller.tick(3_000, target);
 
         assertEquals(1, target.raised);
+        assertEquals(6, target.raisedHole);
         assertFalse(target.warning);
         assertEquals(0, controller.elapsedMillis());
     }
@@ -154,6 +156,8 @@ class BossPatternControllerTest {
     private static final class FakeTarget implements BossPatternTarget {
         boolean warning;
         int raised;
+        int garbageHole;
+        int raisedHole = -1;
         boolean twoPlayer;
         int accelerationDuration;
         int gravityMultiplier;
@@ -181,6 +185,17 @@ class BossPatternControllerTest {
         @Override
         public void raiseBlocks() {
             raised++;
+        }
+
+        @Override
+        public void raiseBlocks(int hole) {
+            raised++;
+            raisedHole = hole;
+        }
+
+        @Override
+        public int selectGarbageHole() {
+            return garbageHole;
         }
 
         @Override

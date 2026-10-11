@@ -52,6 +52,7 @@ public final class ASinglePlayerBridge {
 			}
 			syncHud();
 			host.notifyBossBoardChanged();
+			bossBrainRunner.refresh(engine);
 		});
 		engine.getBus().subscribe(GameEventType.GAME_OVER, e -> host.notifyEngineGameOver());
 

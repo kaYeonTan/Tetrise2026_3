@@ -15,6 +15,10 @@ public interface BossPatternTarget {
 
     void raiseBlocks();
 
+    default void raiseBlocks(int garbageHole) {
+        raiseBlocks();
+    }
+
     default int selectGarbageHole() {
         return 0;
     }

@@ -698,7 +698,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         p2DownCount = 0;
     }
 
-    boolean raiseBoardAndPiece(int[][] board, boolean playerOne) {
+    boolean raiseBoardAndPiece(int[][] board, boolean playerOne, int hole) {
         for (int c = 0; c < 10; c++) {
             if (board[0][c] != 0) {
                 return false;
@@ -716,7 +716,6 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             board[r] = board[r + 1];
         }
         board[23] = new int[10];
-        int hole = random.nextInt(10);
         for (int c = 0; c < 10; c++) {
             if (c != hole) {
                 board[23][c] = 8;
@@ -761,23 +760,31 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public void raiseBlocks() {
+        raiseBlocks(random.nextInt(10));
+    }
+
+    @Override
+    public void raiseBlocks(int garbageHole) {
+        if (garbageHole < 0 || garbageHole >= GameSession.WIDTH) {
+            throw new IllegalArgumentException("Garbage hole must be on the board");
+        }
         if (useCoopEngineHost()) {
-            if (!coopEngineBridge.raiseGarbageLines(random.nextInt(10), random.nextInt(10))) {
+            if (!coopEngineBridge.raiseGarbageLines(garbageHole, garbageHole)) {
                 gameEnd(false);
             }
             return;
         }
         if (useAEngine()) {
-            if (!aEngineBridge.raiseGarbageLine(selectGarbageHole())) {
+            if (!aEngineBridge.raiseGarbageLine(garbageHole)) {
                 gameEnd(false);
             }
             return;
         }
-        if (!raiseBoardAndPiece(board1, true)) {
+        if (!raiseBoardAndPiece(board1, true, garbageHole)) {
             gameEnd(false);
             return;
         }
-        if (isTwoPlayer && !raiseBoardAndPiece(board2, false)) {
+        if (isTwoPlayer && !raiseBoardAndPiece(board2, false, garbageHole)) {
             gameEnd(false);
         }
     }
