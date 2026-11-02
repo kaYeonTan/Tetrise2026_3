@@ -4,8 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
 
-/** 게임 클라이언트용 로비 API (UI·GamePanel과 분리). */
-public class LobbyClient implements AutoCloseable {
+public class LobbyClient implements LobbyService, AutoCloseable {
 
 	private LobbyClientConnection conn;
 	private String clientId;

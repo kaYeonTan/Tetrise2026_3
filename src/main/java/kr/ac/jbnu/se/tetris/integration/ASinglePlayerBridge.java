@@ -11,10 +11,7 @@ import kr.ac.jbnu.se.tetris.core.GameEngine;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.event.GameEventType;
 
-/**
- * 1인 플레이: B {@link GamePanel} 화면 위에 A {@link Board}/{@link GameEngine} 연결.
- */
-public final class ASinglePlayerBridge {
+public final class ASinglePlayerBridge implements GameEngineBridge {
 
 	private final GamePanel host;
 	private final JLabel hiddenStatus = new JLabel(" ");
@@ -69,6 +66,21 @@ public final class ASinglePlayerBridge {
 
 	public GameSession session() {
 		return attached && board != null ? board.getEngine().getSession(0) : null;
+	}
+
+	@Override
+	public boolean hasActiveEngine() {
+		return attached && board != null && board.getEngine().isStarted();
+	}
+
+	@Override
+	public GameSession session(int playerIndex) {
+		return playerIndex == 0 ? session() : null;
+	}
+
+	@Override
+	public boolean isLineClearBlinkOn(int playerIndex) {
+		return playerIndex == 0 && isLineClearBlinkOn();
 	}
 
 	public boolean isLineClearBlinkOn() {

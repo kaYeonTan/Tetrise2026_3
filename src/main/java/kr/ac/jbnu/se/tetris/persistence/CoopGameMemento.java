@@ -52,7 +52,27 @@ public class CoopGameMemento {
 	/** GamePanel 레거시 2P (엔진 미사용) 스냅샷 JSON */
 	public String panelSnapshotJson;
 
-	/** 온라인 협동 저장 시 당시 방장·참가 계정 (로그인 ID) */
 	public String hostAccountId;
 	public String guestAccountId;
+
+	public void swapEnginePlayerSlots() {
+		SessionMemento p0 = player0;
+		player0 = player1;
+		player1 = p0;
+		boolean ready0 = stageReadyPlayer0;
+		stageReadyPlayer0 = stageReadyPlayer1;
+		stageReadyPlayer1 = ready0;
+		int hole0 = garbageHole0;
+		garbageHole0 = garbageHole1;
+		garbageHole1 = hole0;
+		int[] keys0 = randomKeyForPlayer0;
+		randomKeyForPlayer0 = randomKeyForPlayer1;
+		randomKeyForPlayer1 = keys0;
+		int[] mapping0 = randomKeyMappingForPlayer0;
+		randomKeyMappingForPlayer0 = randomKeyMappingForPlayer1;
+		randomKeyMappingForPlayer1 = mapping0;
+		boolean elim0 = player0Eliminated;
+		player0Eliminated = player1Eliminated;
+		player1Eliminated = elim0;
+	}
 }

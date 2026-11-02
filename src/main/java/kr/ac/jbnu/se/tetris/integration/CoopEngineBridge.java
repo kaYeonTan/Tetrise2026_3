@@ -10,10 +10,10 @@ import kr.ac.jbnu.se.tetris.event.GameEventType;
 import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshot;
 import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshotMapper;
 import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
+import kr.ac.jbnu.se.tetris.persistence.MementoMapper;
 import kr.ac.jbnu.se.tetris.persistence.SessionMemento;
 
-/** 온라인 방장: CoopGameEngine 2세션이 권위, GamePanel은 HUD·보스·렌더. */
-public final class CoopEngineBridge {
+public final class CoopEngineBridge implements GameEngineBridge {
 
 	private final GamePanel panel;
 	private CoopGameEngine engine;
@@ -265,24 +265,7 @@ public final class CoopEngineBridge {
 	}
 
 	public static void applyLoadedMemento(GamePanel panel, CoopGameMemento m) {
-		panel.isTwoPlayer = true;
-		panel.stage = m.stage;
-		panel.bossHp = m.bossHp;
-		panel.bossMax = m.bossMax;
-		panel.bossTimer = m.bossTimer;
-		panel.gameTime = m.gameTime;
-		panel.stageClear = m.stageClear;
-		panel.stageAdvancePrompt = m.stageAdvancePrompt;
-		panel.stageReadyPlayer0 = m.stageReadyPlayer0;
-		panel.stageReadyPlayer1 = m.stageReadyPlayer1;
-		if (m.stageAdvancePrompt) {
-			panel.ensureNextStagePreviewLoaded(m.stage + 1);
-		}
-		panel.blizzardEnd = m.blizzardEnd;
-		panel.onlineCoopId = m.coopId;
-		panel.lastOnlineRoomId = m.lastRoomId;
-		panel.pendingCoopResume = m.onlineResume ? m : null;
-		panel.bossPattern.startStage(m.stage, panel, m.blueprintIndex);
+		MementoMapper.applyCoopResumeShellToPanel(panel, m);
 		if (m.player0 != null && m.player1 != null) {
 			if (panel.coopEngineBridge == null) {
 				panel.coopEngineBridge = new CoopEngineBridge(panel);
@@ -319,6 +302,7 @@ public final class CoopEngineBridge {
 		}
 	}
 
+	@Override
 	public GameSession session(int player) {
 		return engine != null ? engine.session(player) : null;
 	}
@@ -357,35 +341,18 @@ public final class CoopEngineBridge {
 			}
 		}
 
-		panel.stage = mem.stage;
-		panel.bossHp = mem.bossHp;
-		panel.bossMax = mem.bossMax;
-		panel.bossTimer = mem.bossTimer;
-		panel.gameTime = mem.gameTime;
-		if (mem.stageClear && !panel.stageClear) {
-			panel.clearTimer = 2000;
-		}
-		panel.stageClear = mem.stageClear;
+		MementoMapper.applySharedCoopProgressToPanel(panel, mem);
 		applyEliminationFromMemento(mem);
 		panel.applyCoopEliminationFromSave(mem.player0Eliminated, mem.player1Eliminated, true);
-		panel.stageAdvancePrompt = mem.stageAdvancePrompt;
-		panel.stageReadyPlayer0 = mem.stageReadyPlayer0;
-		panel.stageReadyPlayer1 = mem.stageReadyPlayer1;
-		if (mem.stageAdvancePrompt) {
-			panel.ensureNextStagePreviewLoaded(mem.stage + 1);
-		}
-		panel.blizzardEnd = mem.blizzardEnd;
-		panel.applyOnlineBossSync(mem);
-		syncHudFromHostMem(mem);
+		MementoMapper.applyHudFromCoopMemento(panel, mem);
 	}
 
-	private void syncHudFromHostMem(CoopGameMemento mem) {
-		panel.p1Score = mem.player0.score;
-		panel.p1Lines = mem.player0.linesRemoved;
-		panel.p2Score = mem.player1.score;
-		panel.p2Lines = mem.player1.linesRemoved;
+	@Override
+	public boolean hasActiveEngine() {
+		return hasRenderEngine();
 	}
 
+	@Override
 	public boolean isLineClearBlinkOn(int player) {
 		if (engine == null) {
 			return false;

@@ -54,7 +54,7 @@ import kr.ac.jbnu.se.tetris.persistence.SaveSlotMeta;
 import kr.ac.jbnu.se.tetris.network.coop.CoopNetworkBridge;
 import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshotMapper;
 import com.google.gson.Gson;
-import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyService;
 
 public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener, BossPatternTarget {
 
@@ -86,7 +86,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public String onlineCoopGuestNick;
     public String onlineCoopId;
     public transient CoopNetworkBridge coopBridge;
-    public transient LobbyClient onlineLobbyClient;
+    public transient LobbyService onlineLobbyClient;
     transient LobbyFrame onlineLobbyFrame;
     public transient CoopEngineBridge coopEngineBridge;
     public String lastOnlineRoomId;

@@ -109,4 +109,49 @@ public final class MementoMapper {
 		return m;
 	}
 
+	public static void applySharedCoopProgressToPanel(GamePanel panel, CoopGameMemento m) {
+		if (panel == null || m == null) {
+			return;
+		}
+		panel.stage = m.stage;
+		panel.bossHp = m.bossHp;
+		panel.bossMax = m.bossMax;
+		panel.bossTimer = m.bossTimer;
+		panel.gameTime = m.gameTime;
+		if (m.stageClear && !panel.stageClear) {
+			panel.clearTimer = 2000;
+		}
+		panel.stageClear = m.stageClear;
+		panel.stageAdvancePrompt = m.stageAdvancePrompt;
+		panel.stageReadyPlayer0 = m.stageReadyPlayer0;
+		panel.stageReadyPlayer1 = m.stageReadyPlayer1;
+		if (m.stageAdvancePrompt) {
+			panel.ensureNextStagePreviewLoaded(m.stage + 1);
+		}
+		panel.blizzardEnd = m.blizzardEnd;
+		panel.applyOnlineBossSync(m);
+	}
+
+	public static void applyHudFromCoopMemento(GamePanel panel, CoopGameMemento m) {
+		if (panel == null || m == null || m.player0 == null || m.player1 == null) {
+			return;
+		}
+		panel.p1Score = m.player0.score;
+		panel.p1Lines = m.player0.linesRemoved;
+		panel.p2Score = m.player1.score;
+		panel.p2Lines = m.player1.linesRemoved;
+	}
+
+	public static void applyCoopResumeShellToPanel(GamePanel panel, CoopGameMemento m) {
+		if (panel == null || m == null) {
+			return;
+		}
+		panel.isTwoPlayer = true;
+		panel.onlineCoopId = m.coopId;
+		panel.lastOnlineRoomId = m.lastRoomId;
+		panel.pendingCoopResume = m.onlineResume ? m : null;
+		panel.bossPattern.startStage(m.stage, panel, m.blueprintIndex);
+		applySharedCoopProgressToPanel(panel, m);
+	}
+
 }

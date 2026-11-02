@@ -17,7 +17,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
-import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyService;
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyMessage;
 import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 import kr.ac.jbnu.se.tetris.persistence.LoadException;
@@ -30,7 +30,7 @@ public final class CoopSlotPickerDialog {
 	private CoopSlotPickerDialog() {
 	}
 
-	public static void showLobbyLoad(java.awt.Window owner, GamePanel panel, LobbyClient client, Runnable onApplied) {
+	public static void showLobbyLoad(java.awt.Window owner, GamePanel panel, LobbyService client, Runnable onApplied) {
 		if (panel.loginUser == null || panel.loginUser.isBlank()) {
 			JOptionPane.showMessageDialog(owner, "로그인 후 이용할 수 있어요.", "저장 불러오기",
 					JOptionPane.INFORMATION_MESSAGE);

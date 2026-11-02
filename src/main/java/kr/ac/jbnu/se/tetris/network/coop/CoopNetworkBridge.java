@@ -23,7 +23,7 @@ import kr.ac.jbnu.se.tetris.core.PlayerAction;
 
 import kr.ac.jbnu.se.tetris.integration.CoopEngineBridge;
 
-import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyService;
 
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyMessage;
 
@@ -51,7 +51,7 @@ public final class CoopNetworkBridge {
 
 	private final GamePanel panel;
 
-	private LobbyClient client;
+	private LobbyService client;
 
 	private String coopId;
 
@@ -71,7 +71,7 @@ public final class CoopNetworkBridge {
 
 
 
-	public void attach(LobbyClient client) {
+	public void attach(LobbyService client) {
 
 		this.client = client;
 

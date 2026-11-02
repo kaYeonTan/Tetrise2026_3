@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -15,17 +14,24 @@ import java.util.Set;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
 
-/** F-06 — 협동 슬롯 1~3 (게스트는 `_local` 계정). */
 public final class SaveService {
 
 	public static final int MIN_SLOT = 1;
 	public static final int MAX_SLOT = 3;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static CoopGameRepository repository = new JsonCoopGameRepository();
 
 	private SaveService() {
+	}
+
+	static void setRepositoryForTests(CoopGameRepository repo) {
+		repository = repo;
+	}
+
+	static void resetRepositoryForTests() {
+		repository = new JsonCoopGameRepository();
 	}
 
 	public static String storageUserId(String loginUser) {
@@ -40,26 +46,7 @@ public final class SaveService {
 	}
 
 	public static void saveCoop(String loginUser, int slot, CoopGameMemento memento) throws IOException {
-		if (slot < MIN_SLOT || slot > MAX_SLOT) {
-			throw new IOException("슬롯은 1~3만 사용할 수 있어요.");
-		}
-		if (memento == null || memento.coopId == null || memento.coopId.isEmpty()) {
-			throw new IOException("coopId가 없어요.");
-		}
-		memento.savedAtMs = System.currentTimeMillis();
-		String userId = storageUserId(loginUser);
-		Path dir = Paths.get("data", "saves", userId);
-		Files.createDirectories(dir);
-		Path target = slotPath(userId, slot);
-		Path tmp = dir.resolve("slot" + slot + ".json.tmp");
-		Files.writeString(tmp, GSON.toJson(memento), StandardCharsets.UTF_8);
-		Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-
-		Path coopBody = Paths.get("data", "coop", memento.coopId + ".json");
-		Files.createDirectories(coopBody.getParent());
-		Path coopTmp = Paths.get("data", "coop", memento.coopId + ".json.tmp");
-		Files.writeString(coopTmp, GSON.toJson(memento), StandardCharsets.UTF_8);
-		Files.move(coopTmp, coopBody, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+		repository.saveCoop(loginUser, slot, memento);
 	}
 
 	public static CoopGameMemento loadCoop(String loginUser, int slot) throws LoadException {
@@ -69,22 +56,7 @@ public final class SaveService {
 	}
 
 	static CoopGameMemento readCoopSlot(String loginUser, int slot) throws LoadException {
-		if (slot < MIN_SLOT || slot > MAX_SLOT) {
-			throw new LoadException("슬롯 번호가 올바르지 않아요.");
-		}
-		Path path = slotPath(storageUserId(loginUser), slot);
-		if (!Files.isRegularFile(path)) {
-			throw new LoadException("비어 있는 슬롯이에요.");
-		}
-		try {
-			CoopGameMemento m = GSON.fromJson(Files.readString(path, StandardCharsets.UTF_8), CoopGameMemento.class);
-			if (m == null || m.version != CoopGameMemento.VERSION) {
-				throw new LoadException("저장 형식이 맞지 않아요.");
-			}
-			return m;
-		} catch (JsonSyntaxException | IOException e) {
-			throw new LoadException("저장 파일을 읽지 못했어요.", e);
-		}
+		return repository.readCoopSlot(loginUser, slot);
 	}
 
 	public static void assertCanLoadCoop(CoopGameMemento m, String loginUser) throws LoadException {
@@ -179,15 +151,11 @@ public final class SaveService {
 	}
 
 	public static void deleteSlot(String loginUser, int slot) throws IOException {
-		Path path = slotPath(storageUserId(loginUser), slot);
-		Files.deleteIfExists(path);
+		repository.deleteSlot(loginUser, slot);
 	}
 
 	public static CoopGameMemento copyCoopMemento(CoopGameMemento m) {
-		if (m == null) {
-			return null;
-		}
-		return GSON.fromJson(GSON.toJson(m), CoopGameMemento.class);
+		return repository.copyMemento(m);
 	}
 
 	public static void assertOnlineRoomMatchesSave(CoopGameMemento m, String roomHostNick, String roomGuestNick)
@@ -212,9 +180,6 @@ public final class SaveService {
 		}
 	}
 
-	/**
-	 * 저장 시 player0=방장·player1=참가 보드. 방장/참가 계정이 바뀌었으면 엔진 슬롯을 현재 로스터에 맞게 바꾼다.
-	 */
 	public static CoopGameMemento remapForCurrentOnlineHost(CoopGameMemento m, String currentHostNick,
 			String currentGuestNick) {
 		CoopGameMemento out = copyCoopMemento(m);
@@ -233,24 +198,7 @@ public final class SaveService {
 		if (!curHost.equals(out.guestAccountId.trim()) || !curGuest.equals(out.hostAccountId.trim())) {
 			return out;
 		}
-		SessionMemento p0 = out.player0;
-		out.player0 = out.player1;
-		out.player1 = p0;
-		boolean ready0 = out.stageReadyPlayer0;
-		out.stageReadyPlayer0 = out.stageReadyPlayer1;
-		out.stageReadyPlayer1 = ready0;
-		int hole0 = out.garbageHole0;
-		out.garbageHole0 = out.garbageHole1;
-		out.garbageHole1 = hole0;
-		int[] keys0 = out.randomKeyForPlayer0;
-		out.randomKeyForPlayer0 = out.randomKeyForPlayer1;
-		out.randomKeyForPlayer1 = keys0;
-		int[] mapping0 = out.randomKeyMappingForPlayer0;
-		out.randomKeyMappingForPlayer0 = out.randomKeyMappingForPlayer1;
-		out.randomKeyMappingForPlayer1 = mapping0;
-		boolean elim0 = out.player0Eliminated;
-		out.player0Eliminated = out.player1Eliminated;
-		out.player1Eliminated = elim0;
+		out.swapEnginePlayerSlots();
 		out.hostAccountId = curHost;
 		out.guestAccountId = curGuest;
 		return out;
