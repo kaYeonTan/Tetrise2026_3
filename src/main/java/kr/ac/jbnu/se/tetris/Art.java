@@ -1,43 +1,183 @@
 package kr.ac.jbnu.se.tetris;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Random;
+import javax.imageio.ImageIO;
 
 public class Art {
 
+    public enum MonsterPose {
+        IDLE, HIT, DEATH
+    }
+
     static BufferedImage[] bgImg = new BufferedImage[6];
     static BufferedImage[] monsterImg = new BufferedImage[6];
+    static BufferedImage[][] monsterFileImg = new BufferedImage[6][MonsterPose.values().length];
     static BufferedImage[] flameImg;
 
     public static BufferedImage background(int stage) {
         if (bgImg[stage] == null) {
-            Pix c = new Pix(427, 240);
-            Random rnd = new Random(stage * 101);
-            switch (stage) {
-                case 1:
-                    desertBg(c, rnd);
-                    break;
-                case 2:
-                    islandBg(c, rnd);
-                    break;
-                case 3:
-                    grassBg(c, rnd);
-                    break;
-                case 4:
-                    snowBg(c, rnd);
-                    break;
-                default:
-                    skyBg(c, rnd);
-                    break;
-            }
-            bgImg[stage] = c.toImage(3);
+            bgImg[stage] = loadBackgroundFile(stage);
+        }
+        if (bgImg[stage] == null) {
+            bgImg[stage] = proceduralBackground(stage);
         }
         return bgImg[stage];
     }
 
+    static BufferedImage loadBackgroundFile(int stage) {
+        if (stage < 1 || stage > 5) {
+            return null;
+        }
+        String base = "/images/background/stage" + stage;
+        for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
+            BufferedImage img = readResourceImage(base + ext);
+            if (img != null) {
+                return img;
+            }
+        }
+        return null;
+    }
+
+    static BufferedImage proceduralBackground(int stage) {
+        Pix c = new Pix(427, 240);
+        Random rnd = new Random(stage * 101);
+        switch (stage) {
+            case 1:
+                desertBg(c, rnd);
+                break;
+            case 2:
+                islandBg(c, rnd);
+                break;
+            case 3:
+                grassBg(c, rnd);
+                break;
+            case 4:
+                snowBg(c, rnd);
+                break;
+            default:
+                skyBg(c, rnd);
+                break;
+        }
+        return c.toImage(3);
+    }
+
     public static BufferedImage monster(int stage) {
+        return monster(stage, MonsterPose.IDLE);
+    }
+
+    public static BufferedImage monster(int stage, MonsterPose pose) {
+        if (stage < 1 || stage > 5) {
+            stage = Math.max(1, Math.min(5, stage));
+        }
+        int poseIndex = pose.ordinal();
+        if (monsterFileImg[stage][poseIndex] == null) {
+            monsterFileImg[stage][poseIndex] = loadMonsterFile(stage, pose);
+        }
+        if (monsterFileImg[stage][poseIndex] != null) {
+            return monsterFileImg[stage][poseIndex];
+        }
+        if (pose != MonsterPose.IDLE && monsterFileImg[stage][MonsterPose.IDLE.ordinal()] != null) {
+            return monsterFileImg[stage][MonsterPose.IDLE.ordinal()];
+        }
+        return proceduralMonster(stage);
+    }
+
+    static BufferedImage loadMonsterFile(int stage, MonsterPose pose) {
+        String name = pose.name().toLowerCase();
+        for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
+            BufferedImage img = readResourceImage("/images/boss/stage" + stage + "/" + name + ext);
+            if (img != null) {
+                return flipHorizontal(solidifySpriteAlpha(img));
+            }
+        }
+        if (pose == MonsterPose.DEATH) {
+            System.err.println("Art: could not load boss death sprite for stage " + stage);
+        }
+        return null;
+    }
+
+    static BufferedImage toArgb(BufferedImage src) {
+        if (src.getType() == BufferedImage.TYPE_INT_ARGB) {
+            return src;
+        }
+        BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.setComposite(AlphaComposite.Src);
+        g.drawImage(src, 0, 0, null);
+        g.dispose();
+        return out;
+    }
+
+    static BufferedImage flipHorizontal(BufferedImage src) {
+        int w = src.getWidth();
+        int h = src.getHeight();
+        BufferedImage flipped = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = flipped.createGraphics();
+        AffineTransform flip = AffineTransform.getScaleInstance(-1.0, 1.0);
+        flip.translate(-w, 0);
+        g.drawImage(src, flip, null);
+        g.dispose();
+        return flipped;
+    }
+
+    /** Fixes nukki/feather exports: unpremultiply and force visible pixels to opaque alpha. */
+    static BufferedImage solidifySpriteAlpha(BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        int[] pixels = img.getRGB(0, 0, w, h, null, 0, w);
+        for (int i = 0; i < pixels.length; i++) {
+            int argb = pixels[i];
+            int alpha = argb >>> 24;
+            if (alpha <= 24) {
+                pixels[i] = 0;
+                continue;
+            }
+            int r = (argb >> 16) & 0xff;
+            int g = (argb >> 8) & 0xff;
+            int b = argb & 0xff;
+            r = Math.min(255, (r * 255 + alpha / 2) / alpha);
+            g = Math.min(255, (g * 255 + alpha / 2) / alpha);
+            b = Math.min(255, (b * 255 + alpha / 2) / alpha);
+            pixels[i] = 0xff000000 | (r << 16) | (g << 8) | b;
+        }
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        out.setRGB(0, 0, w, h, pixels, 0, w);
+        return out;
+    }
+
+    /** Clears cached boss sprites after PNG assets change (call on new game session if needed). */
+    public static void resetMonsterCache() {
+        for (int stage = 0; stage < monsterFileImg.length; stage++) {
+            for (int pose = 0; pose < monsterFileImg[stage].length; pose++) {
+                monsterFileImg[stage][pose] = null;
+            }
+        }
+        monsterImg = new BufferedImage[6];
+    }
+
+    static BufferedImage readResourceImage(String resourcePath) {
+        try (InputStream in = Art.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return null;
+            }
+            BufferedImage img = ImageIO.read(in);
+            if (img == null) {
+                return null;
+            }
+            return toArgb(img);
+        } catch (IOException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    static BufferedImage proceduralMonster(int stage) {
         if (monsterImg[stage] == null) {
             Pix c;
             Random rnd = new Random(stage * 101 + 1);
@@ -62,7 +202,7 @@ public class Art {
                 skyMonster(c, rnd);
                 c.outline(0x0a0510);
             }
-            monsterImg[stage] = c.toImage(3);
+            monsterImg[stage] = flipHorizontal(toArgb(c.toImage(3)));
         }
         return monsterImg[stage];
     }
