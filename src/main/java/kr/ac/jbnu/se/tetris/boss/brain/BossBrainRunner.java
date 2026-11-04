@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.GameEngine;
+import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.event.GameEventType;
 
 /**
@@ -30,11 +31,7 @@ public final class BossBrainRunner implements AutoCloseable {
 
     public BossBrainRunner(GameEngine engine) {
         latestGrid.set(Grid.from(engine.getSession(0)));
-        engine.getBus().subscribe(GameEventType.PIECE_LOCKED, event -> {
-            Grid snapshot = Grid.from(engine.getSession(0));
-            Tetrominoes responsePiece = engine.getSession(0).peekNextBlock();
-            submit(snapshot, responsePiece);
-        });
+        engine.getBus().subscribe(GameEventType.PIECE_LOCKED, event -> submitCurrentBoard(engine));
     }
 
     public Grid latestGrid() {
@@ -42,8 +39,12 @@ public final class BossBrainRunner implements AutoCloseable {
     }
 
     public void refresh(GameEngine engine) {
-        Grid snapshot = Grid.from(engine.getSession(0));
-        submit(snapshot, engine.getSession(0).peekNextBlock());
+        submitCurrentBoard(engine);
+    }
+
+    private void submitCurrentBoard(GameEngine engine) {
+        GameSession session = engine.getSession(0);
+        submit(Grid.from(session), session.peekNextBlock());
     }
 
     public Decision latestDecision() {

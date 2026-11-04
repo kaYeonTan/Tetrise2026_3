@@ -9,6 +9,8 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -18,6 +20,8 @@ public class FileManager {
     private static final Logger LOG = Logger.getLogger(FileManager.class.getName());
 
     static String DIR = "data/";
+    private static final int BOARD_ROWS = 24;
+    private static final int BOARD_COLS = 10;
 
     /** 읽기에 실패하면 로그를 남기고 지금까지 읽은 줄(없으면 빈 목록)을 돌려준다. */
     static ArrayList<String> readLines(String path) {
@@ -41,8 +45,11 @@ public class FileManager {
 
     /** 저장에 성공하면 true. 실패하면 로그를 남기고 false. */
     static boolean writeLines(String path, ArrayList<String> lines, boolean append) {
-        new File(DIR).mkdirs();
-        new File(DIR + "save/").mkdirs();
+        try {
+            Files.createDirectories(Paths.get(DIR + "save/"));
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "디렉터리 생성 실패", e);
+        }
         try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(path, append), StandardCharsets.UTF_8))) {
             for (String s : lines) {
                 pw.println(s);
@@ -54,30 +61,28 @@ public class FileManager {
         }
     }
 
-    // 로그인
-    public static boolean checkUser(String nick, String pw) {
-        return accounts().login(nick, pw);
+    public static boolean login(String nickname, String password) {
+        return accountService().login(nickname, password);
     }
 
-    // 대소문자 맞춰서 원래 닉네임 돌려줌
-    public static String getNick(String nick) {
-        return accounts().canonicalNick(nick);
+    /** 대소문자가 다르게 입력돼도 가입 때 저장한 닉네임을 돌려준다. */
+    public static String findStoredNickname(String nickname) {
+        return accountService().canonicalNick(nickname);
     }
 
-    // 회원가입. 문제 있으면 메시지 리턴, 성공하면 null
-    public static String addUser(String nick, String email, String pw) {
-        return accounts().signUp(nick, email, pw);
+    /** 문제가 있으면 안내 메시지를, 성공하면 null을 돌려준다. */
+    public static String signUp(String nickname, String email, String password) {
+        return accountService().signUp(nickname, email, password);
     }
 
-    static AccountService accounts() {
+    static AccountService accountService() {
         return new AccountService(new FileUserRepository());
     }
 
-    public static void addRecord(String nick, int score, int stage, int players, boolean clear) {
-        new FileRecordRepository().add(new RecordEntry(nick, score, stage, players, clear, System.currentTimeMillis()));
+    public static void addRecord(String nickname, int score, int stage, int players, boolean cleared) {
+        new FileRecordRepository().add(new RecordEntry(nickname, score, stage, players, cleared, System.currentTimeMillis()));
     }
 
-    // 키설정
     public static void saveKeys() {
         writeLines(DIR + "keys.txt", new ArrayList<>(KeyBindingsCodec.encode(KeyBindings.current())), false);
     }
@@ -89,37 +94,50 @@ public class FileManager {
         }
     }
 
-    static int[] split(String s) {
-        if (s.trim().length() == 0) {
+    private static int[] parseIntList(String csv) {
+        if (csv.trim().isEmpty()) {
             return new int[0];
         }
-        String[] parts = s.split(",");
-        int[] arr = new int[parts.length];
+        String[] parts = csv.split(",");
+        int[] values = new int[parts.length];
         for (int i = 0; i < parts.length; i++) {
-            arr[i] = Integer.parseInt(parts[i].trim());
+            values[i] = Integer.parseInt(parts[i].trim());
         }
-        return arr;
+        return values;
     }
 
-    static String listToString(ArrayList<Integer> list) {
-        String s = "";
-        for (int i = 0; i < list.size(); i++) {
+    private static String joinIntegers(ArrayList<Integer> values) {
+        StringBuilder joined = new StringBuilder();
+        for (int i = 0; i < values.size(); i++) {
             if (i > 0) {
-                s += ",";
+                joined.append(',');
             }
-            s += list.get(i);
+            joined.append(values.get(i));
         }
-        return s;
+        return joined.toString();
     }
 
-    static String boardToString(int[][] board) {
-        String s = "";
-        for (int r = 0; r < 24; r++) {
-            for (int c = 0; c < 10; c++) {
-                s += board[r][c];
+    private static String encodeBoard(int[][] board) {
+        StringBuilder encoded = new StringBuilder();
+        for (int row = 0; row < BOARD_ROWS; row++) {
+            for (int col = 0; col < BOARD_COLS; col++) {
+                encoded.append(board[row][col]);
             }
         }
-        return s;
+        return encoded.toString();
+    }
+
+    private static void decodeBoard(String encoded, int[][] board) {
+        for (int i = 0; i < BOARD_ROWS * BOARD_COLS; i++) {
+            board[i / BOARD_COLS][i % BOARD_COLS] = encoded.charAt(i) - '0';
+        }
+    }
+
+    private static void replaceAll(ArrayList<Integer> target, String csv) {
+        target.clear();
+        for (int value : parseIntList(csv)) {
+            target.add(value);
+        }
     }
 
     // 세이브
@@ -139,15 +157,15 @@ public class FileManager {
         lines.add("gameTime=" + p.gameTime);
         lines.add("p1=" + p.p1Type + "," + p.p1Rot + "," + p.p1X + "," + p.p1Y + "," + p.p1Hold + "," + (p.p1HoldUsed ? 1 : 0)
                 + "," + p.p1Score + "," + p.p1Lines + "," + p.p1Garbage);
-        lines.add("p1Next=" + listToString(p.p1Next));
-        lines.add("p1Bag=" + listToString(p.p1Bag));
-        lines.add("p1Board=" + boardToString(p.board1));
+        lines.add("p1Next=" + joinIntegers(p.p1Next));
+        lines.add("p1Bag=" + joinIntegers(p.p1Bag));
+        lines.add("p1Board=" + encodeBoard(p.board1));
         if (p.isTwoPlayer) {
             lines.add("p2=" + p.p2Type + "," + p.p2Rot + "," + p.p2X + "," + p.p2Y + "," + p.p2Hold + "," + (p.p2HoldUsed ? 1 : 0)
                     + "," + p.p2Score + "," + p.p2Lines + "," + p.p2Garbage);
-            lines.add("p2Next=" + listToString(p.p2Next));
-            lines.add("p2Bag=" + listToString(p.p2Bag));
-            lines.add("p2Board=" + boardToString(p.board2));
+            lines.add("p2Next=" + joinIntegers(p.p2Next));
+            lines.add("p2Bag=" + joinIntegers(p.p2Bag));
+            lines.add("p2Board=" + encodeBoard(p.board2));
         }
         return writeLines(p.saveFile, lines, false);
     }
@@ -163,22 +181,26 @@ public class FileManager {
             int players = 1, stage = 1, bossHp = 0, bossTimer = 0, blueprintIndex = -1;
             long gameTime = 0;
             for (String line : lines) {
-                String key = line.substring(0, line.indexOf("="));
-                String value = line.substring(line.indexOf("=") + 1);
-                if (key.equals("players")) players = Integer.parseInt(value);
-                else if (key.equals("stage")) stage = Integer.parseInt(value);
-                else if (key.equals("bossHp")) bossHp = Integer.parseInt(value);
-                else if (key.equals("bossTimer")) bossTimer = Integer.parseInt(value);
-                else if (key.equals("blueprint")) blueprintIndex = Integer.parseInt(value);
-                else if (key.equals("gameTime")) gameTime = Long.parseLong(value);
-                else if (key.equals("p1")) p1 = value;
-                else if (key.equals("p1Next")) p1Next = value;
-                else if (key.equals("p1Bag")) p1Bag = value;
-                else if (key.equals("p1Board")) p1Board = value;
-                else if (key.equals("p2")) p2 = value;
-                else if (key.equals("p2Next")) p2Next = value;
-                else if (key.equals("p2Bag")) p2Bag = value;
-                else if (key.equals("p2Board")) p2Board = value;
+                int separator = line.indexOf("=");
+                String key = line.substring(0, separator);
+                String value = line.substring(separator + 1);
+                switch (key) {
+                    case "players" -> players = Integer.parseInt(value);
+                    case "stage" -> stage = Integer.parseInt(value);
+                    case "bossHp" -> bossHp = Integer.parseInt(value);
+                    case "bossTimer" -> bossTimer = Integer.parseInt(value);
+                    case "blueprint" -> blueprintIndex = Integer.parseInt(value);
+                    case "gameTime" -> gameTime = Long.parseLong(value);
+                    case "p1" -> p1 = value;
+                    case "p1Next" -> p1Next = value;
+                    case "p1Bag" -> p1Bag = value;
+                    case "p1Board" -> p1Board = value;
+                    case "p2" -> p2 = value;
+                    case "p2Next" -> p2Next = value;
+                    case "p2Bag" -> p2Bag = value;
+                    case "p2Board" -> p2Board = value;
+                    default -> { }
+                }
             }
             p.newGame(players == 2);
             p.stage = stage;
@@ -186,67 +208,58 @@ public class FileManager {
             p.bossHp = bossHp;
             p.restoreBossPatternTimer(bossTimer);
             p.gameTime = gameTime;
-            int[] a = split(p1);
-            p.p1Type = a[0];
-            p.p1Rot = a[1];
-            p.p1X = a[2];
-            p.p1Y = a[3];
-            p.p1Hold = a[4];
-            p.p1HoldUsed = a[5] == 1;
-            p.p1Score = a[6];
-            p.p1Lines = a[7];
-            p.p1Garbage = a[8];
-            p.p1Next.clear();
-            for (int n : split(p1Next)) p.p1Next.add(n);
-            p.p1Bag.clear();
-            for (int n : split(p1Bag)) p.p1Bag.add(n);
-            for (int i = 0; i < 240; i++) {
-                p.board1[i / 10][i % 10] = p1Board.charAt(i) - '0';
-            }
+            int[] state1 = parseIntList(p1);
+            p.p1Type = state1[0];
+            p.p1Rot = state1[1];
+            p.p1X = state1[2];
+            p.p1Y = state1[3];
+            p.p1Hold = state1[4];
+            p.p1HoldUsed = state1[5] == 1;
+            p.p1Score = state1[6];
+            p.p1Lines = state1[7];
+            p.p1Garbage = state1[8];
+            replaceAll(p.p1Next, p1Next);
+            replaceAll(p.p1Bag, p1Bag);
+            decodeBoard(p1Board, p.board1);
             if (players == 2) {
-                // 2p도 똑같이
-                int[] b = split(p2);
-                p.p2Type = b[0];
-                p.p2Rot = b[1];
-                p.p2X = b[2];
-                p.p2Y = b[3];
-                p.p2Hold = b[4];
-                p.p2HoldUsed = b[5] == 1;
-                p.p2Score = b[6];
-                p.p2Lines = b[7];
-                p.p2Garbage = b[8];
-                p.p2Next.clear();
-                for (int n : split(p2Next)) p.p2Next.add(n);
-                p.p2Bag.clear();
-                for (int n : split(p2Bag)) p.p2Bag.add(n);
-                for (int i = 0; i < 240; i++) {
-                    p.board2[i / 10][i % 10] = p2Board.charAt(i) - '0';
-                }
+                int[] state2 = parseIntList(p2);
+                p.p2Type = state2[0];
+                p.p2Rot = state2[1];
+                p.p2X = state2[2];
+                p.p2Y = state2[3];
+                p.p2Hold = state2[4];
+                p.p2HoldUsed = state2[5] == 1;
+                p.p2Score = state2[6];
+                p.p2Lines = state2[7];
+                p.p2Garbage = state2[8];
+                replaceAll(p.p2Next, p2Next);
+                replaceAll(p.p2Bag, p2Bag);
+                decodeBoard(p2Board, p.board2);
             }
             p.saveFile = path;
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            LOG.log(Level.WARNING, "저장 불러오기 실패", e);
             p.resetTemporaryBossEffects();
             return false;
         }
     }
 
     // 저장목록 {파일경로, 날짜, 스테이지, 점수, 인원}
-    public static ArrayList<String[]> getSaveList(String nick) {
-        ArrayList<String[]> list = new ArrayList<>();
+    public static ArrayList<String[]> getSaveList(String nickname) {
+        ArrayList<String[]> saves = new ArrayList<>();
         File[] files = new File(DIR + "save/").listFiles();
         if (files == null) {
-            return list;
+            return saves;
         }
-        for (File f : files) {
-            if (!f.getName().endsWith(".txt")) {
+        for (File file : files) {
+            if (!file.getName().endsWith(".txt")) {
                 continue;
             }
             String user = "";
             String date = "0", stage = "1", players = "1";
             int score = 0;
-            for (String line : readLines(f.getPath())) {
+            for (String line : readLines(file.getPath())) {
                 if (line.startsWith("user=")) user = line.substring(5);
                 if (line.startsWith("date=")) date = line.substring(5);
                 if (line.startsWith("stage=")) stage = line.substring(6);
@@ -255,28 +268,19 @@ public class FileManager {
                     score += Integer.parseInt(line.substring(3).split(",")[6]);
                 }
             }
-            if (!user.equals(nick)) {
-                continue;
-            }
-            list.add(new String[]{f.getPath(), date, stage, "" + score, players});
-        }
-        // 최근꺼 위로
-        for (int i = 0; i < list.size(); i++) {
-            for (int j = i + 1; j < list.size(); j++) {
-                if (Long.parseLong(list.get(j)[1]) > Long.parseLong(list.get(i)[1])) {
-                    String[] temp = list.get(i);
-                    list.set(i, list.get(j));
-                    list.set(j, temp);
-                }
+            if (user.equals(nickname)) {
+                saves.add(new String[]{file.getPath(), date, stage, String.valueOf(score), players});
             }
         }
-        return list;
+        saves.sort((a, b) -> Long.compare(Long.parseLong(b[1]), Long.parseLong(a[1])));
+        return saves;
     }
 
     public static void deleteSave(String path) {
-        File f = new File(path);
-        if (f.exists()) {
-            f.delete();
+        try {
+            Files.deleteIfExists(Paths.get(path));
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "저장 파일 삭제 실패: " + path, e);
         }
     }
 }

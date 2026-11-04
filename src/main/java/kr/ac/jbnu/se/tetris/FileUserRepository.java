@@ -28,13 +28,13 @@ public class FileUserRepository implements UserRepository {
     }
 
     @Override
-    public boolean replacePassword(String nick, String storedPassword) {
+    public boolean replacePassword(String nickname, String storedPassword) {
         String path = FileManager.DIR + FILE_NAME;
         ArrayList<String> rewritten = new ArrayList<>();
         boolean found = false;
         for (String line : FileManager.readLines(path)) {
             UserRecord user = UserRecord.fromLine(line);
-            if (user != null && user.nick().equalsIgnoreCase(nick)) {
+            if (user != null && user.nick().equalsIgnoreCase(nickname)) {
                 rewritten.add(new UserRecord(user.nick(), user.email(), storedPassword).toLine());
                 found = true;
             } else {

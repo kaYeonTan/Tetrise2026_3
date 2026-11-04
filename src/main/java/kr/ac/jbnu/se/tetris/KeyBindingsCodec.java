@@ -15,14 +15,14 @@ public final class KeyBindingsCodec {
     public static List<String> encode(KeyBindings keys) {
         List<String> lines = new ArrayList<>();
         for (int tab = 0; tab < KeyBindings.COMMON; tab++) {
-            StringBuilder sb = new StringBuilder();
+            StringBuilder line = new StringBuilder();
             for (int row = 0; row < keys.rowCount(tab); row++) {
                 if (row > 0) {
-                    sb.append(',');
+                    line.append(',');
                 }
-                sb.append(keys.get(tab, row));
+                line.append(keys.get(tab, row));
             }
-            lines.add(sb.toString());
+            lines.add(line.toString());
         }
         lines.add(String.valueOf(keys.get(KeyBindings.COMMON, 0)));
         return lines;

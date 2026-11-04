@@ -15,8 +15,8 @@ public final class SignUpValidator {
     }
 
     /** 규칙을 모두 만족하면 null, 아니면 화면에 보여줄 안내 문구를 돌려준다. 검사 순서는 1차와 같다. */
-    public static String validate(String nick, String email, String password, String passwordConfirm) {
-        if (!NICKNAME.matcher(nick).matches()) {
+    public static String validate(String nickname, String email, String password, String passwordConfirm) {
+        if (!NICKNAME.matcher(nickname).matches()) {
             return "닉네임은 한글·영문·숫자 2~10자로 입력해 주세요.";
         }
         if (!EMAIL.matcher(email).matches()) {
@@ -35,8 +35,8 @@ public final class SignUpValidator {
     }
 
     /** 로그인 입력이 비어 있으면 안내 문구, 아니면 null. */
-    public static String validateLoginInput(String nick, String password) {
-        if (nick.isEmpty() || password.isEmpty()) {
+    public static String validateLoginInput(String nickname, String password) {
+        if (nickname.isEmpty() || password.isEmpty()) {
             return "닉네임과 비밀번호를 모두 입력해 주세요.";
         }
         return null;

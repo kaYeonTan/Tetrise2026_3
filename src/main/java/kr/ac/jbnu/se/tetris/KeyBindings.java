@@ -25,21 +25,16 @@ public final class KeyBindings {
 
     /** 왼 오 아래 스페이스 회전 반대회전 홀드 순서. */
     public static int[] defaultKeys(int tab) {
-        switch (tab) {
-            case SINGLE:
-                return new int[]{KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_DOWN, KeyEvent.VK_SPACE,
-                        KeyEvent.VK_UP, KeyEvent.VK_Z, KeyEvent.VK_C};
-            case P1:
-                return new int[]{KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_S, KeyEvent.VK_SPACE,
-                        KeyEvent.VK_W, KeyEvent.VK_Q, KeyEvent.VK_E};
-            case P2:
-                return new int[]{KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_DOWN, KeyEvent.VK_ENTER,
-                        KeyEvent.VK_UP, KeyEvent.VK_SLASH, KeyEvent.VK_PERIOD};
-            case COMMON:
-                return new int[]{KeyEvent.VK_P};
-            default:
-                throw new IllegalArgumentException("unknown tab: " + tab);
-        }
+        return switch (tab) {
+            case SINGLE -> new int[]{KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_DOWN, KeyEvent.VK_SPACE,
+                    KeyEvent.VK_UP, KeyEvent.VK_Z, KeyEvent.VK_C};
+            case P1 -> new int[]{KeyEvent.VK_A, KeyEvent.VK_D, KeyEvent.VK_S, KeyEvent.VK_SPACE,
+                    KeyEvent.VK_W, KeyEvent.VK_Q, KeyEvent.VK_E};
+            case P2 -> new int[]{KeyEvent.VK_LEFT, KeyEvent.VK_RIGHT, KeyEvent.VK_DOWN, KeyEvent.VK_ENTER,
+                    KeyEvent.VK_UP, KeyEvent.VK_SLASH, KeyEvent.VK_PERIOD};
+            case COMMON -> new int[]{KeyEvent.VK_P};
+            default -> throw new IllegalArgumentException("unknown tab: " + tab);
+        };
     }
 
     public static KeyBindings defaults() {
@@ -53,11 +48,11 @@ public final class KeyBindings {
     }
 
     public KeyBindings copy() {
-        int[][] c = new int[TAB_COUNT][];
-        for (int t = 0; t < TAB_COUNT; t++) {
-            c[t] = sets[t].clone();
+        int[][] copiedSets = new int[TAB_COUNT][];
+        for (int tab = 0; tab < TAB_COUNT; tab++) {
+            copiedSets[tab] = sets[tab].clone();
         }
-        return new KeyBindings(c);
+        return new KeyBindings(copiedSets);
     }
 
     public int rowCount(int tab) {
@@ -73,8 +68,8 @@ public final class KeyBindings {
     }
 
     public boolean sameAs(KeyBindings other) {
-        for (int t = 0; t < TAB_COUNT; t++) {
-            if (!Arrays.equals(sets[t], other.sets[t])) {
+        for (int tab = 0; tab < TAB_COUNT; tab++) {
+            if (!Arrays.equals(sets[tab], other.sets[tab])) {
                 return false;
             }
         }
@@ -95,16 +90,14 @@ public final class KeyBindings {
 
     /** 같은 키를 이미 쓰는 동작의 이름("탭 · 동작"), 없으면 null. 같은 화면에서 동시에 눌릴 수 있는 탭끼리만 비교한다. */
     public String findConflict(int tab, int row, int code) {
-        for (int t = 0; t < TAB_COUNT; t++) {
-            if (!sharesKeyboard(tab, t)) {
+        for (int otherTab = 0; otherTab < TAB_COUNT; otherTab++) {
+            if (!sharesKeyboard(tab, otherTab)) {
                 continue;
             }
-            for (int r = 0; r < sets[t].length; r++) {
-                if (t == tab && r == row) {
-                    continue;
-                }
-                if (sets[t][r] == code) {
-                    return TAB_NAMES[t] + " · " + actionName(t, r);
+            for (int otherRow = 0; otherRow < sets[otherTab].length; otherRow++) {
+                boolean isSameSlot = otherTab == tab && otherRow == row;
+                if (!isSameSlot && sets[otherTab][otherRow] == code) {
+                    return TAB_NAMES[otherTab] + " · " + actionName(otherTab, otherRow);
                 }
             }
         }
