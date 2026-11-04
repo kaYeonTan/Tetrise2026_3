@@ -63,9 +63,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     private static final long serialVersionUID = 1L;
 
-    // 0 타이틀 1 1인 저장목록 3 랭킹 4 설정 5 게임 6 일시정지 7 결과
-    public int screen = 0;
-    int settingFrom = 0;
+    // 값은 팀원 코드(panel.screen == 5 등)와 호환되도록 숫자를 유지한다. 2번은 사용하지 않는다.
+    public static final int SCREEN_TITLE = 0;
+    public static final int SCREEN_SAVES = 1;
+    public static final int SCREEN_RANKING = 3;
+    public static final int SCREEN_SETTINGS = 4;
+    public static final int SCREEN_GAME = 5;
+    public static final int SCREEN_PAUSE = 6;
+    public static final int SCREEN_RESULT = 7;
+    public static final int SCREEN_COOP_SLOTS = 8;
+
+    public int screen = SCREEN_TITLE;
+    int settingFrom = SCREEN_TITLE;
 
     Timer timer;
     int tick = 0;
@@ -326,7 +335,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (msgTimer > 0) {
             msgTimer--;
         }
-        if (screen == 5) {
+        if (screen == SCREEN_GAME) {
             update();
         }
         syncSinglePlayerUiVisibility();
@@ -339,122 +348,102 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         // Swing children are painted after GamePanel, so they would otherwise
         // cover pause/settings/result overlays and remain visible on menus.
-        aEngineBridge.setVisible(screen == 5 && !stageClear);
+        aEngineBridge.setVisible(screen == SCREEN_GAME && !stageClear);
     }
 
     void update() {
         if (stageClear) {
-            if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
-                return;
-            }
-            clearTimer -= 16;
-            if (clearTimer <= 0) {
-                if (isOnlineCoop && coopBridge != null && stage < 5) {
-                    if (!stageAdvancePrompt) {
-                        stageAdvancePrompt = true;
-                        stageReadyPlayer0 = false;
-                        stageReadyPlayer1 = false;
-                        ensureNextStagePreviewLoaded(stage + 1);
-                    }
-                    tryAdvanceOnlineCoopStage();
-                } else if (stage == 5) {
-                    gameEnd(true);
-                } else {
-                    stage++;
-                    startStage();
-                    msg = "STAGE " + stage + " 시작!";
-                    msgTimer = 90;
-                }
-            }
-            // 클리어 팝업은 여기서 켜지는데, 예전에는 return 때문에 참가자에게 스냅샷이 안 갔다
-            if (coopBridge != null) {
-                coopBridge.maybeSendSnapshot();
-            }
+            updateStageClear();
             return;
         }
         if (!(isOnlineCoop && localPlayerIndex == 1)) {
             gameTime += 16;
         }
         updateTemporaryBossEffects();
-        int[] k = currentPrimaryKeys();
-        if (!useAEngine() && controlsPlayer(0)) {
-            if (pressed.contains(k[0])) {
-                p1LeftCount += 16;
-                if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
-                    performCoopAction(0, PlayerAction.MOVE_LEFT, false);
-                    p1LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
-                }
-            }
-            if (pressed.contains(k[1])) {
-                p1RightCount += 16;
-                if (p1RightCount >= HORIZONTAL_DAS_DELAY_MS) {
-                    performCoopAction(0, PlayerAction.MOVE_RIGHT, false);
-                    p1RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
-                }
-            }
-            if (pressed.contains(k[2])) {
-                p1DownCount += 16;
-                if (p1DownCount >= SOFT_DROP_REPEAT_MS) {
-                    performCoopAction(0, PlayerAction.SOFT_DROP, false);
-                    p1DownCount = 0;
-                }
-            }
-        } else if (useAEngine() && screen == 5 && !stageClear) {
-            if (pressed.contains(k[0])) {
-                p1LeftCount += 16;
-                if (p1LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
-                    aEngineBridge.handleKey(k[0], k);
-                    p1LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
-                }
-            }
-            if (pressed.contains(k[1])) {
-                p1RightCount += 16;
-                if (p1RightCount >= HORIZONTAL_DAS_DELAY_MS) {
-                    aEngineBridge.handleKey(k[1], k);
-                    p1RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
-                }
-            }
-            if (pressed.contains(k[2])) {
-                p1DownCount += 16;
-                if (p1DownCount >= SOFT_DROP_REPEAT_MS) {
-                    aEngineBridge.handleKey(k[2], k);
-                    p1DownCount = 0;
-                }
-            }
-        }
-        if (isTwoPlayer && controlsPlayer(1)) {
-            int[] p2Keys = onlineCoopKeysForP2();
-            if (pressed.contains(p2Keys[0])) {
-                p2LeftCount += 16;
-                if (p2LeftCount >= HORIZONTAL_DAS_DELAY_MS) {
-                    performCoopAction(1, PlayerAction.MOVE_LEFT, false);
-                    p2LeftCount -= HORIZONTAL_ARR_INTERVAL_MS;
-                }
-            }
-            if (pressed.contains(p2Keys[1])) {
-                p2RightCount += 16;
-                if (p2RightCount >= HORIZONTAL_DAS_DELAY_MS) {
-                    performCoopAction(1, PlayerAction.MOVE_RIGHT, false);
-                    p2RightCount -= HORIZONTAL_ARR_INTERVAL_MS;
-                }
-            }
-            if (pressed.contains(p2Keys[2])) {
-                p2DownCount += 16;
-                if (p2DownCount >= SOFT_DROP_REPEAT_MS) {
-                    performCoopAction(1, PlayerAction.SOFT_DROP, false);
-                    p2DownCount = 0;
-                }
-            }
-        }
-        if (screen == 6 && isOnlineCoop && coopBridge != null && coopBridge.isHost()) {
+        updateKeyRepeat();
+        if (screen == SCREEN_PAUSE && isOnlineCoop && coopBridge != null && coopBridge.isHost()) {
             coopBridge.maybeSendSnapshot();
             return;
         }
-        if (screen != 5 || stageClear) {
+        if (screen != SCREEN_GAME || stageClear) {
             return;
         }
+        updateGravity();
+        if (screen != SCREEN_GAME || stageClear) {
+            return;
+        }
+        updateBossAndNetwork();
+    }
 
-        // 블록 내리기
+    private void updateStageClear() {
+        if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+            return;
+        }
+        clearTimer -= 16;
+        if (clearTimer <= 0) {
+            if (isOnlineCoop && coopBridge != null && stage < 5) {
+                if (!stageAdvancePrompt) {
+                    stageAdvancePrompt = true;
+                    stageReadyPlayer0 = false;
+                    stageReadyPlayer1 = false;
+                    ensureNextStagePreviewLoaded(stage + 1);
+                }
+                tryAdvanceOnlineCoopStage();
+            } else if (stage == 5) {
+                gameEnd(true);
+            } else {
+                stage++;
+                startStage();
+                msg = "STAGE " + stage + " 시작!";
+                msgTimer = 90;
+            }
+        }
+        // 클리어 팝업은 여기서 켜지는데, 예전에는 return 때문에 참가자에게 스냅샷이 안 갔다
+        if (coopBridge != null) {
+            coopBridge.maybeSendSnapshot();
+        }
+    }
+
+    private void updateKeyRepeat() {
+        int[] k = currentPrimaryKeys();
+        if (!useAEngine() && controlsPlayer(0)) {
+            repeatHeldKeys(0, k, i -> performCoopAction(0, KEY_ACTIONS[i], false));
+        } else if (useAEngine() && screen == SCREEN_GAME && !stageClear) {
+            repeatHeldKeys(0, k, i -> aEngineBridge.handleKey(k[i], k));
+        }
+        if (isTwoPlayer && controlsPlayer(1)) {
+            repeatHeldKeys(1, onlineCoopKeysForP2(), i -> performCoopAction(1, KEY_ACTIONS[i], false));
+        }
+    }
+
+    /** 왼쪽/오른쪽/아래 키(0~2번)를 누르고 있는 동안 DAS·ARR 간격으로 fire를 호출한다. */
+    private void repeatHeldKeys(int player, int[] keys, java.util.function.IntConsumer fire) {
+        int[] counts = player == 0
+                ? new int[]{p1LeftCount, p1RightCount, p1DownCount}
+                : new int[]{p2LeftCount, p2RightCount, p2DownCount};
+        for (int i = 0; i < 3; i++) {
+            if (!pressed.contains(keys[i])) {
+                continue;
+            }
+            boolean softDrop = i == 2;
+            counts[i] += 16;
+            if (counts[i] >= (softDrop ? SOFT_DROP_REPEAT_MS : HORIZONTAL_DAS_DELAY_MS)) {
+                fire.accept(i);
+                counts[i] = softDrop ? 0 : counts[i] - HORIZONTAL_ARR_INTERVAL_MS;
+            }
+        }
+        if (player == 0) {
+            p1LeftCount = counts[0];
+            p1RightCount = counts[1];
+            p1DownCount = counts[2];
+        } else {
+            p2LeftCount = counts[0];
+            p2RightCount = counts[1];
+            p2DownCount = counts[2];
+        }
+    }
+
+    private void updateGravity() {
         int speed = baseDropIntervalMillis(stage);
         int p1Speed = Math.max(1, speed / (p1FastCurrent ? 10 : gravityMultiplier));
         if (!useAEngine() && runsLocalGravity(0)) {
@@ -470,7 +459,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else if (useAEngine()) {
             aEngineBridge.syncHud();
         }
-        if (screen != 5) {
+        if (screen != SCREEN_GAME) {
             return;
         }
         if (isTwoPlayer && runsLocalGravity(1)) {
@@ -485,10 +474,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
         }
-        if (screen != 5 || stageClear) {
-            return;
-        }
+    }
 
+    private void updateBossAndNetwork() {
         if (useCoopEngineHost()) {
             coopEngineBridge.tickHost();
         } else if (isOnlineCoop && useCoopEngineRender()) {
@@ -568,14 +556,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void openCoopSlotScreen(int mode) {
-        openCoopSlotScreen(mode, 0);
+        openCoopSlotScreen(mode, SCREEN_TITLE);
     }
 
     void openCoopSlotScreen(int mode, int returnScreen) {
         coopSlotMode = mode;
         coopSlotReturnScreen = returnScreen;
         coopSlotList = SaveService.listCoopSlots(loginUser);
-        screen = 8;
+        screen = SCREEN_COOP_SLOTS;
         if (mode == 1 && isOnlineCoop && coopBridge != null && coopBridge.isHost()) {
             coopBridge.notifyGuestSaveUiOpen();
         }
@@ -587,10 +575,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         pendingGuestCoopSave = memento;
         coopSlotMode = 3;
         coopSlotList = SaveService.listCoopSlots(loginUser);
-        if (screen != 6) {
-            screen = 6;
-        }
-        screen = 8;
+        screen = SCREEN_COOP_SLOTS;
         msg = "방장이 슬롯 " + hostSlot + "에 저장했어요. 이어서 저장해 주세요.";
         msgTimer = 260;
     }
@@ -608,8 +593,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         awaitingGuestCoopSave = false;
         pendingGuestCoopSave = null;
-        if (screen == 8 && coopSlotMode == 3) {
-            screen = 6;
+        if (screen == SCREEN_COOP_SLOTS && coopSlotMode == 3) {
+            screen = SCREEN_PAUSE;
             msg = "방장이 저장을 취소했어요.";
             msgTimer = 180;
         }
@@ -621,10 +606,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         pendingGuestCoopSave = null;
         coopSlotMode = 3;
         coopSlotList = SaveService.listCoopSlots(loginUser);
-        if (screen != 6) {
-            screen = 6;
-        }
-        screen = 8;
+        screen = SCREEN_COOP_SLOTS;
         msg = "방장과 함께 저장합니다. 방장이 슬롯을 고르면 이어서 저장해 주세요.";
         msgTimer = 280;
     }
@@ -637,7 +619,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (mem == null) {
             return;
         }
-        if (screen == 8 && coopSlotMode == 3 && awaitingGuestCoopSave) {
+        if (screen == SCREEN_COOP_SLOTS && coopSlotMode == 3 && awaitingGuestCoopSave) {
             pendingGuestCoopSave = mem;
             onlineCoopHostSaveSlot = hostSlot;
             msg = "방장이 슬롯 " + hostSlot + "을(를) 골랐어요. 같은 슬롯에 저장해 주세요.";
@@ -1123,7 +1105,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             onCoopPlayerEliminated(localPlayerIndex >= 0 ? localPlayerIndex : 0);
             return;
         }
-        if (screen == 5 && !stageClear) {
+        if (screen == SCREEN_GAME && !stageClear) {
             gameEnd(false);
         }
     }
@@ -1147,14 +1129,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 coopEngineBridge.freezeEngine(1);
             }
         }
-        if (endIfBothDead && coopEliminated0 && coopEliminated1 && screen == 5 && !stageClear) {
+        if (endIfBothDead && coopEliminated0 && coopEliminated1 && screen == SCREEN_GAME && !stageClear) {
             gameEnd(false);
         }
         repaint();
     }
 
     public void onCoopPlayerEliminated(int playerIndex) {
-        if (screen != 5 || stageClear) {
+        if (screen != SCREEN_GAME || stageClear) {
             return;
         }
         if (playerIndex == 0) {
@@ -1211,7 +1193,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         resultMsg = "";
         startStage();
         pressed.clear();
-        screen = 5;
+        screen = SCREEN_GAME;
     }
 
     public void startStage() {
@@ -1621,11 +1603,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void gameEnd(boolean clear) {
-        if (screen == 7) {
+        if (screen == SCREEN_RESULT) {
             return;
         }
         allClear = clear;
-        screen = 7;
+        screen = SCREEN_RESULT;
         pressed.clear();
         if (isOnlineCoop && coopBridge != null) {
             coopBridge.sendGameOver();
@@ -1648,111 +1630,118 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     @Override
     public void keyPressed(KeyEvent e) {
         int code = e.getKeyCode();
-        if (screen == 4) {
-            if (captureRow >= 0) {
-                if (code == KeyEvent.VK_ESCAPE) {
-                    captureRow = -1;
-                    setMsg = "변경을 취소했어요.";
-                    setMsgError = false;
-                    return;
-                }
-                if (KeyBindings.isIgnoredKey(code)) {
-                    return;
-                }
-                String used = editKeys.findConflict(setTab, captureRow, code);
-                if (used != null) {
-                    setMsg = "'" + keyName(code) + "' 키는 이미 [" + used + "]에 쓰이고 있어요.";
-                    setMsgError = true;
-                } else {
-                    editKeys.set(setTab, captureRow, code);
-                    setMsg = "[" + KeyBindings.actionName(setTab, captureRow) + "] → " + keyName(code) + "  (저장을 눌러야 적용돼요)";
-                    setMsgError = false;
-                }
-                captureRow = -1;
-                return;
-            }
+        if (screen == SCREEN_SETTINGS) {
+            handleSettingsKey(code);
+        } else if (screen == SCREEN_GAME) {
+            handleGameKey(code);
+        } else {
+            handleMenuEscape(code);
+        }
+    }
+
+    private void handleSettingsKey(int code) {
+        if (captureRow < 0) {
             if (code == KeyEvent.VK_ESCAPE) {
                 closeSettings();
             }
             return;
         }
-        if (screen == 5) {
-            if (code == KeyEvent.VK_ESCAPE || code == keyPause) {
-                if (!stageClear) {
-                    if (isOnlineCoop && coopBridge != null) {
-                        performCoopAction(localPlayerIndex, PlayerAction.PAUSE, false);
-                    } else {
-                        enterLocalPause("");
-                    }
-                }
-                return;
-            }
-            if (stageClear || pressed.contains(code)) {
-                return;
-            }
-            pressed.add(code);
-            int[] k = currentPrimaryKeys();
-            if (useAEngine()) {
-                aEngineBridge.handleKey(code, k);
-                if (code == k[0]) {
-                    p1LeftCount = 0;
-                } else if (code == k[1]) {
-                    p1RightCount = 0;
-                } else if (code == k[2]) {
-                    p1DownCount = 0;
-                }
-            } else if (controlsPlayer(0)) {
-                if (code == k[0]) {
-                    performCoopAction(0, PlayerAction.MOVE_LEFT, false);
-                    p1LeftCount = 0;
-                } else if (code == k[1]) {
-                    performCoopAction(0, PlayerAction.MOVE_RIGHT, false);
-                    p1RightCount = 0;
-                } else if (code == k[2]) {
-                    performCoopAction(0, PlayerAction.SOFT_DROP, false);
-                    p1DownCount = 0;
-                } else if (code == k[3]) {
-                    performCoopAction(0, PlayerAction.HARD_DROP, false);
-                } else if (code == k[4]) {
-                    performCoopAction(0, PlayerAction.ROTATE_CW, false);
-                } else if (code == k[5]) {
-                    performCoopAction(0, PlayerAction.ROTATE_CCW, false);
-                } else if (code == k[6]) {
-                    performCoopAction(0, PlayerAction.HOLD, false);
-                }
-            }
-            if (isTwoPlayer && screen == 5 && !stageClear && controlsPlayer(1)) {
-                int[] p2Keys = onlineCoopKeysForP2();
-                if (code == p2Keys[0]) {
-                    performCoopAction(1, PlayerAction.MOVE_LEFT, false);
-                    p2LeftCount = 0;
-                } else if (code == p2Keys[1]) {
-                    performCoopAction(1, PlayerAction.MOVE_RIGHT, false);
-                    p2RightCount = 0;
-                } else if (code == p2Keys[2]) {
-                    performCoopAction(1, PlayerAction.SOFT_DROP, false);
-                    p2DownCount = 0;
-                } else if (code == p2Keys[3]) {
-                    performCoopAction(1, PlayerAction.HARD_DROP, false);
-                } else if (code == p2Keys[4]) {
-                    performCoopAction(1, PlayerAction.ROTATE_CW, false);
-                } else if (code == p2Keys[5]) {
-                    performCoopAction(1, PlayerAction.ROTATE_CCW, false);
-                } else if (code == p2Keys[6]) {
-                    performCoopAction(1, PlayerAction.HOLD, false);
+        if (code == KeyEvent.VK_ESCAPE) {
+            captureRow = -1;
+            setMsg = "변경을 취소했어요.";
+            setMsgError = false;
+            return;
+        }
+        if (KeyBindings.isIgnoredKey(code)) {
+            return;
+        }
+        String used = editKeys.findConflict(setTab, captureRow, code);
+        if (used != null) {
+            setMsg = "'" + keyName(code) + "' 키는 이미 [" + used + "]에 쓰이고 있어요.";
+            setMsgError = true;
+        } else {
+            editKeys.set(setTab, captureRow, code);
+            setMsg = "[" + KeyBindings.actionName(setTab, captureRow) + "] → " + keyName(code) + "  (저장을 눌러야 적용돼요)";
+            setMsgError = false;
+        }
+        captureRow = -1;
+    }
+
+    private void handleGameKey(int code) {
+        if (code == KeyEvent.VK_ESCAPE || code == keyPause) {
+            if (!stageClear) {
+                if (isOnlineCoop && coopBridge != null) {
+                    performCoopAction(localPlayerIndex, PlayerAction.PAUSE, false);
+                } else {
+                    enterLocalPause("");
                 }
             }
             return;
         }
+        if (stageClear || pressed.contains(code)) {
+            return;
+        }
+        pressed.add(code);
+        int[] k = currentPrimaryKeys();
+        if (useAEngine()) {
+            aEngineBridge.handleKey(code, k);
+            resetRepeatCount(0, code, k);
+        } else if (controlsPlayer(0)) {
+            dispatchPlayerKey(0, code, k);
+        }
+        if (isTwoPlayer && screen == SCREEN_GAME && !stageClear && controlsPlayer(1)) {
+            dispatchPlayerKey(1, code, onlineCoopKeysForP2());
+        }
+    }
+
+    private static final PlayerAction[] KEY_ACTIONS = {
+        PlayerAction.MOVE_LEFT, PlayerAction.MOVE_RIGHT, PlayerAction.SOFT_DROP, PlayerAction.HARD_DROP,
+        PlayerAction.ROTATE_CW, PlayerAction.ROTATE_CCW, PlayerAction.HOLD
+    };
+
+    private void dispatchPlayerKey(int player, int code, int[] keys) {
+        for (int i = 0; i < KEY_ACTIONS.length; i++) {
+            if (code == keys[i]) {
+                performCoopAction(player, KEY_ACTIONS[i], false);
+                resetRepeatCount(player, code, keys);
+                return;
+            }
+        }
+    }
+
+    /** 왼쪽/오른쪽/아래 키의 반복 입력 카운터를 0으로 되돌린다. */
+    private void resetRepeatCount(int player, int code, int[] keys) {
+        if (code == keys[0]) {
+            if (player == 0) {
+                p1LeftCount = 0;
+            } else {
+                p2LeftCount = 0;
+            }
+        } else if (code == keys[1]) {
+            if (player == 0) {
+                p1RightCount = 0;
+            } else {
+                p2RightCount = 0;
+            }
+        } else if (code == keys[2]) {
+            if (player == 0) {
+                p1DownCount = 0;
+            } else {
+                p2DownCount = 0;
+            }
+        }
+    }
+
+    private void handleMenuEscape(int code) {
         if (code == KeyEvent.VK_ESCAPE) {
-            if (screen == 6) {
+            if (screen == SCREEN_PAUSE) {
                 if (isOnlineCoop && coopBridge != null) {
                     performCoopAction(localPlayerIndex, PlayerAction.RESUME, false);
                 } else {
                     resumeLocalPause();
                 }
-            } else if (screen == 1 || screen == 3) {
-                screen = 0;
+            } else if (screen == SCREEN_SAVES || screen == SCREEN_RANKING) {
+                screen = SCREEN_TITLE;
             }
         }
     }
@@ -1761,24 +1750,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public void keyReleased(KeyEvent e) {
         int code = e.getKeyCode();
         pressed.remove(code);
-        if (screen == 5) {
-            int[] k = currentPrimaryKeys();
-            if (code == k[0]) {
-                p1LeftCount = 0;
-            } else if (code == k[1]) {
-                p1RightCount = 0;
-            } else if (code == k[2]) {
-                p1DownCount = 0;
-            }
+        if (screen == SCREEN_GAME) {
+            resetRepeatCount(0, code, currentPrimaryKeys());
             if (isTwoPlayer) {
-                int[] p2Keys = onlineCoopKeysForP2();
-                if (code == p2Keys[0]) {
-                    p2LeftCount = 0;
-                } else if (code == p2Keys[1]) {
-                    p2RightCount = 0;
-                } else if (code == p2Keys[2]) {
-                    p2DownCount = 0;
-                }
+                resetRepeatCount(1, code, onlineCoopKeysForP2());
             }
         }
     }
@@ -1798,20 +1773,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     boolean in(int x, int y, int w, int h) {
-        boolean a = mouseX >= x;
-        boolean b = mouseX < x + w;
-        boolean c = mouseY >= y;
-        boolean d = mouseY < y + h;
-        if (a) {
-            if (b) {
-                if (c) {
-                    if (d) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
     }
 
     boolean clicked(int x, int y, int w, int h) {
@@ -1835,191 +1797,221 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         mouseX = e.getX();
         mouseY = e.getY();
         requestFocusInWindow();
-        if (screen == 0) {
-            if (clicked(TitleLayout.SINGLE)) {
-                saveList = loginUser == null ? new ArrayList<>() : FileManager.getSaveList(loginUser);
-                screen = 1;
-            } else if (clicked(TitleLayout.MULTI)) {
-                promptTwoPlayerMode();
-            } else if (clicked(TitleLayout.RANKING)) {
-                loadRanking();
-                screen = 3;
-            } else if (clicked(TitleLayout.SETTINGS)) {
-                settingFrom = 0;
-                editKeys = KeyBindings.current();
-                setTab = 0;
-                captureRow = -1;
-                setMsg = "";
-                screen = 4;
-            } else if (clicked(TitleLayout.QUIT)) {
-                int r = JOptionPane.showOptionDialog(this, "모험을 마치고 게임을 종료할까요?", "게임 종료",
-                        JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"종료", "취소"}, "취소");
-                if (r == 0) {
-                    System.exit(0);
-                }
-            } else if (loginUser == null && clicked(TitleLayout.LOGIN)) {
-                new LoginFrame(this, false).setVisible(true);
-            } else if (loginUser == null && clicked(TitleLayout.SIGN_UP)) {
-                new LoginFrame(this, true).setVisible(true);
-            } else if (loginUser != null && clicked(TitleLayout.LOGIN)) {
-                int r = JOptionPane.showOptionDialog(this, "로그아웃할까요?", "로그아웃",
-                        JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"로그아웃", "취소"}, "취소");
-                if (r == 0) {
-                    loginUser = null;
-                }
-            }
-        } else if (screen == 1) {
-            if (loginUser == null && clicked(UiLayout.GO_LOGIN)) {
-                new LoginFrame(this, false).setVisible(true);
-                if (loginUser != null) {
-                    saveList = FileManager.getSaveList(loginUser);
-                }
-            } else if (clicked(UiLayout.NEW_GAME)) {
-                newGame(false);
-            } else if (clicked(UiLayout.BACK)) {
-                screen = 0;
-            } else if (loginUser != null) {
-                for (int i = 0; i < saveList.size() && i < UiLayout.MAX_SAVE_ROWS; i++) {
-                    if (clicked(UiLayout.resumeButton(i))) {
-                        if (FileManager.loadGame(saveList.get(i)[0], this)) {
-                            screen = 5;
-                            pressed.clear();
-                        } else {
-                            JOptionPane.showMessageDialog(this, "저장 파일을 읽을 수 없어요.");
-                        }
-                        break;
-                    }
-                    if (clicked(UiLayout.deleteButton(i))) {
-                        int r = JOptionPane.showOptionDialog(this, "스테이지 " + saveList.get(i)[2] + " · 점수 " + saveList.get(i)[3]
-                                        + "\n이 저장을 지울까요? 되돌릴 수 없어요.", "저장 삭제",
-                                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"삭제", "취소"}, "취소");
-                        if (r == 0) {
-                            FileManager.deleteSave(saveList.get(i)[0]);
-                            saveList = FileManager.getSaveList(loginUser);
-                        }
-                        break;
-                    }
-                }
-            }
-        } else if (screen == 3) {
-            if (clicked(UiLayout.RANK_SCORE_TAB)) {
-                rankTab = 0;
-                loadRanking();
-            } else if (clicked(UiLayout.RANK_STAGE_TAB)) {
-                rankTab = 1;
-                loadRanking();
-            } else if (clicked(UiLayout.BACK)) {
-                screen = 0;
-            }
-        } else if (screen == 4) {
-            for (int t = 0; t < SettingsLayout.TAB_COUNT; t++) {
-                if (clicked(SettingsLayout.tab(t))) {
-                    setTab = t;
-                    captureRow = -1;
-                }
-            }
-            for (int r = 0; r < editKeys.rowCount(setTab); r++) {
-                if (clicked(SettingsLayout.keyButton(r))) {
-                    captureRow = r;
-                    setMsg = "새 키를 누르세요. 취소하려면 Esc를 누르세요.";
-                    setMsgError = false;
-                }
-            }
-            if (clicked(SettingsLayout.RESET)) {
-                editKeys = KeyBindings.defaults();
-                captureRow = -1;
-                setMsg = "기본 키 배치로 되돌렸어요. 저장을 눌러야 적용돼요.";
-                setMsgError = false;
-            } else if (clicked(SettingsLayout.SAVE)) {
-                editKeys.applyToGame();
-                FileManager.saveKeys();
-                setMsg = "저장했어요! 바로 게임에 적용돼요.";
-                setMsgError = false;
-            } else if (clicked(SettingsLayout.CLOSE)) {
-                closeSettings();
-            }
-        } else if (screen == 5 && stageAdvancePrompt && isOnlineCoop) {
+        if (screen == SCREEN_TITLE) {
+            handleTitleClick();
+        } else if (screen == SCREEN_SAVES) {
+            handleSavesClick();
+        } else if (screen == SCREEN_RANKING) {
+            handleRankingClick();
+        } else if (screen == SCREEN_SETTINGS) {
+            handleSettingsClick();
+        } else if (screen == SCREEN_GAME && stageAdvancePrompt && isOnlineCoop) {
             if (!isStageReady(localPlayerIndex)
                     && clicked(STAGE_ADVANCE_BTN_X, STAGE_ADVANCE_BTN_Y, STAGE_ADVANCE_BTN_W, STAGE_ADVANCE_BTN_H)) {
                 performCoopAction(localPlayerIndex, PlayerAction.STAGE_READY, false);
             }
-        } else if (screen == 6) {
-            if (clicked(PAUSE_BTN_X, PAUSE_Y_CONTINUE, PAUSE_BTN_W, PAUSE_BTN_H)) {
-                if (isOnlineCoop && awaitingGuestCoopSave) {
-                    msg = "방장 저장에 이어 참가자 저장을 먼저 완료해 주세요.";
-                    msgTimer = 200;
-                } else if (isOnlineCoop && coopBridge != null) {
-                    performCoopAction(localPlayerIndex, PlayerAction.RESUME, false);
-                } else {
-                    resumeLocalPause();
-                }
-            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_SAVE, PAUSE_BTN_W, PAUSE_BTN_H)) {
-                if (isOnlineCoop && loginUser == null) {
-                    msg = "온라인 협동 저장은 로그인 후 이용할 수 있어요.";
-                    msgTimer = 200;
-                } else if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
-                    msg = "방장만 협동 저장을 시작할 수 있어요.";
-                    msgTimer = 180;
-                } else if (isTwoPlayer || isOnlineCoop) {
-                    openCoopSlotScreen(1, 6);
-                } else if (loginUser == null) {
-                    msg = "게스트는 1인 저장을 할 수 없어요. 로그인 후 이용해 주세요.";
-                    msgTimer = 180;
-                } else if (saveFile == null && FileManager.getSaveList(loginUser).size() >= 5) {
-                    msg = "저장 칸이 가득 찼어요(최대 5개). 메인에서 지운 뒤 저장하세요.";
-                    msgTimer = 180;
-                } else if (FileManager.saveGame(this)) {
-                    msg = "저장했어요! [플레이]에서 이어할 수 있어요.";
-                    msgTimer = 180;
-                } else {
-                    msg = "저장하지 못했어요.";
-                    msgTimer = 180;
-                }
-            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_LOAD, PAUSE_BTN_W, PAUSE_BTN_H)) {
-                if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
-                    msg = "방장만 불러올 수 있어요.";
-                    msgTimer = 180;
-                } else if (isOnlineCoop && loginUser == null) {
-                    msg = "온라인 협동은 로그인 후 불러올 수 있어요.";
-                    msgTimer = 200;
-                } else if (isTwoPlayer || isOnlineCoop) {
-                    openCoopSlotScreen(2, 6);
-                }
-            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_SETTINGS, PAUSE_BTN_W, PAUSE_BTN_H)) {
-                openSettings();
-            } else if (clicked(PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H)) {
-                if (loginUser != null) {
-                    int r = JOptionPane.showOptionDialog(this, "저장하지 않은 진행은 사라져요.", "메인으로",
-                            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
-                            new String[]{"저장하고 나가기", "그냥 나가기", "취소"}, "취소");
-                    if (r == 0) {
-                        if (saveFile == null && FileManager.getSaveList(loginUser).size() >= 5) {
-                            JOptionPane.showMessageDialog(this, "저장 칸이 가득 찼어요(최대 5개).");
-                            return;
-                        }
-                        FileManager.saveGame(this);
-                        screen = 0;
-                        soundManager.stopBgm();
-                    } else if (r == 1) {
-                        screen = 0;
-                        soundManager.stopBgm();
-                    }
-                } else {
-                    int r = JOptionPane.showOptionDialog(this, "게스트 진행은 저장되지 않아요.\n메인 화면으로 갈까요?", "메인으로",
-                            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"나가기", "취소"}, "취소");
-                    if (r == 0) {
-                        screen = 0;
-                        soundManager.stopBgm();
-                    }
-                }
-            }
-        } else if (screen == 7) {
+        } else if (screen == SCREEN_PAUSE) {
+            handlePauseClick();
+        } else if (screen == SCREEN_RESULT) {
             if (clicked(490, 470, 300, 54)) {
-                screen = 0;
+                screen = SCREEN_TITLE;
             }
-        } else if (screen == 8) {
+        } else if (screen == SCREEN_COOP_SLOTS) {
             handleCoopSlotClick();
         }
+    }
+
+    private void handleTitleClick() {
+        if (clicked(TitleLayout.SINGLE)) {
+            saveList = loginUser == null ? new ArrayList<>() : FileManager.getSaveList(loginUser);
+            screen = SCREEN_SAVES;
+        } else if (clicked(TitleLayout.MULTI)) {
+            promptTwoPlayerMode();
+        } else if (clicked(TitleLayout.RANKING)) {
+            loadRanking();
+            screen = SCREEN_RANKING;
+        } else if (clicked(TitleLayout.SETTINGS)) {
+            settingFrom = SCREEN_TITLE;
+            editKeys = KeyBindings.current();
+            setTab = 0;
+            captureRow = -1;
+            setMsg = "";
+            screen = SCREEN_SETTINGS;
+        } else if (clicked(TitleLayout.QUIT)) {
+            int r = JOptionPane.showOptionDialog(this, "모험을 마치고 게임을 종료할까요?", "게임 종료",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"종료", "취소"}, "취소");
+            if (r == 0) {
+                System.exit(0);
+            }
+        } else if (loginUser == null && clicked(TitleLayout.LOGIN)) {
+            new LoginFrame(this, false).setVisible(true);
+        } else if (loginUser == null && clicked(TitleLayout.SIGN_UP)) {
+            new LoginFrame(this, true).setVisible(true);
+        } else if (loginUser != null && clicked(TitleLayout.LOGIN)) {
+            int r = JOptionPane.showOptionDialog(this, "로그아웃할까요?", "로그아웃",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"로그아웃", "취소"}, "취소");
+            if (r == 0) {
+                loginUser = null;
+            }
+        }
+    }
+
+    private void handleSavesClick() {
+        if (loginUser == null && clicked(UiLayout.GO_LOGIN)) {
+            new LoginFrame(this, false).setVisible(true);
+            if (loginUser != null) {
+                saveList = FileManager.getSaveList(loginUser);
+            }
+        } else if (clicked(UiLayout.NEW_GAME)) {
+            newGame(false);
+        } else if (clicked(UiLayout.BACK)) {
+            screen = SCREEN_TITLE;
+        } else if (loginUser != null) {
+            for (int i = 0; i < saveList.size() && i < UiLayout.MAX_SAVE_ROWS; i++) {
+                if (clicked(UiLayout.resumeButton(i))) {
+                    if (FileManager.loadGame(saveList.get(i)[0], this)) {
+                        screen = SCREEN_GAME;
+                        pressed.clear();
+                    } else {
+                        JOptionPane.showMessageDialog(this, "저장 파일을 읽을 수 없어요.");
+                    }
+                    break;
+                }
+                if (clicked(UiLayout.deleteButton(i))) {
+                    int r = JOptionPane.showOptionDialog(this, "스테이지 " + saveList.get(i)[2] + " · 점수 " + saveList.get(i)[3]
+                                    + "\n이 저장을 지울까요? 되돌릴 수 없어요.", "저장 삭제",
+                            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"삭제", "취소"}, "취소");
+                    if (r == 0) {
+                        FileManager.deleteSave(saveList.get(i)[0]);
+                        saveList = FileManager.getSaveList(loginUser);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    private void handleRankingClick() {
+        if (clicked(UiLayout.RANK_SCORE_TAB)) {
+            rankTab = 0;
+            loadRanking();
+        } else if (clicked(UiLayout.RANK_STAGE_TAB)) {
+            rankTab = 1;
+            loadRanking();
+        } else if (clicked(UiLayout.BACK)) {
+            screen = SCREEN_TITLE;
+        }
+    }
+
+    private void handleSettingsClick() {
+        for (int t = 0; t < SettingsLayout.TAB_COUNT; t++) {
+            if (clicked(SettingsLayout.tab(t))) {
+                setTab = t;
+                captureRow = -1;
+            }
+        }
+        for (int r = 0; r < editKeys.rowCount(setTab); r++) {
+            if (clicked(SettingsLayout.keyButton(r))) {
+                captureRow = r;
+                setMsg = "새 키를 누르세요. 취소하려면 Esc를 누르세요.";
+                setMsgError = false;
+            }
+        }
+        if (clicked(SettingsLayout.RESET)) {
+            editKeys = KeyBindings.defaults();
+            captureRow = -1;
+            setMsg = "기본 키 배치로 되돌렸어요. 저장을 눌러야 적용돼요.";
+            setMsgError = false;
+        } else if (clicked(SettingsLayout.SAVE)) {
+            editKeys.applyToGame();
+            FileManager.saveKeys();
+            setMsg = "저장했어요! 바로 게임에 적용돼요.";
+            setMsgError = false;
+        } else if (clicked(SettingsLayout.CLOSE)) {
+            closeSettings();
+        }
+    }
+
+    private void showMsg(String text, int frames) {
+        msg = text;
+        msgTimer = frames;
+    }
+
+    private void handlePauseClick() {
+        if (clicked(PAUSE_BTN_X, PAUSE_Y_CONTINUE, PAUSE_BTN_W, PAUSE_BTN_H)) {
+            if (isOnlineCoop && awaitingGuestCoopSave) {
+                showMsg("방장 저장에 이어 참가자 저장을 먼저 완료해 주세요.", 200);
+            } else if (isOnlineCoop && coopBridge != null) {
+                performCoopAction(localPlayerIndex, PlayerAction.RESUME, false);
+            } else {
+                resumeLocalPause();
+            }
+        } else if (clicked(PAUSE_BTN_X, PAUSE_Y_SAVE, PAUSE_BTN_W, PAUSE_BTN_H)) {
+            handlePauseSave();
+        } else if (clicked(PAUSE_BTN_X, PAUSE_Y_LOAD, PAUSE_BTN_W, PAUSE_BTN_H)) {
+            handlePauseLoad();
+        } else if (clicked(PAUSE_BTN_X, PAUSE_Y_SETTINGS, PAUSE_BTN_W, PAUSE_BTN_H)) {
+            openSettings();
+        } else if (clicked(PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H)) {
+            handlePauseToMain();
+        }
+    }
+
+    private void handlePauseSave() {
+        if (isOnlineCoop && loginUser == null) {
+            showMsg("온라인 협동 저장은 로그인 후 이용할 수 있어요.", 200);
+        } else if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+            showMsg("방장만 협동 저장을 시작할 수 있어요.", 180);
+        } else if (isTwoPlayer || isOnlineCoop) {
+            openCoopSlotScreen(1, 6);
+        } else if (loginUser == null) {
+            showMsg("게스트는 1인 저장을 할 수 없어요. 로그인 후 이용해 주세요.", 180);
+        } else if (saveFile == null && FileManager.getSaveList(loginUser).size() >= 5) {
+            showMsg("저장 칸이 가득 찼어요(최대 5개). 메인에서 지운 뒤 저장하세요.", 180);
+        } else if (FileManager.saveGame(this)) {
+            showMsg("저장했어요! [플레이]에서 이어할 수 있어요.", 180);
+        } else {
+            showMsg("저장하지 못했어요.", 180);
+        }
+    }
+
+    private void handlePauseLoad() {
+        if (isOnlineCoop && coopBridge != null && !coopBridge.isHost()) {
+            showMsg("방장만 불러올 수 있어요.", 180);
+        } else if (isOnlineCoop && loginUser == null) {
+            showMsg("온라인 협동은 로그인 후 불러올 수 있어요.", 200);
+        } else if (isTwoPlayer || isOnlineCoop) {
+            openCoopSlotScreen(2, 6);
+        }
+    }
+
+    private void handlePauseToMain() {
+        if (loginUser == null) {
+            int r = JOptionPane.showOptionDialog(this, "게스트 진행은 저장되지 않아요.\n메인 화면으로 갈까요?", "메인으로",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"나가기", "취소"}, "취소");
+            if (r == 0) {
+                leaveToTitle();
+            }
+            return;
+        }
+        int r = JOptionPane.showOptionDialog(this, "저장하지 않은 진행은 사라져요.", "메인으로",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
+                new String[]{"저장하고 나가기", "그냥 나가기", "취소"}, "취소");
+        if (r == 0) {
+            if (saveFile == null && FileManager.getSaveList(loginUser).size() >= 5) {
+                JOptionPane.showMessageDialog(this, "저장 칸이 가득 찼어요(최대 5개).");
+                return;
+            }
+            FileManager.saveGame(this);
+            leaveToTitle();
+        } else if (r == 1) {
+            leaveToTitle();
+        }
+    }
+
+    private void leaveToTitle() {
+        screen = SCREEN_TITLE;
+        soundManager.stopBgm();
     }
 
     void handleCoopSlotClick() {
@@ -2033,7 +2025,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 coopBridge.notifyGuestSaveUiCancelled();
             }
             if (coopSlotMode == 1 || coopSlotMode == 3) {
-                screen = 6;
+                screen = SCREEN_PAUSE;
             } else {
                 screen = coopSlotReturnScreen;
             }
@@ -2048,102 +2040,112 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void pickCoopSlot(int slot) {
-        if (coopSlotMode == 1 || coopSlotMode == 3) {
-            if (coopSlotMode == 3) {
-                if (loginUser == null) {
-                    msg = "로그인 후 저장할 수 있어요.";
-                    msgTimer = 180;
-                    return;
-                }
-                if (pendingGuestCoopSave == null) {
-                    msg = "방장이 슬롯을 선택할 때까지 기다려 주세요.";
-                    msgTimer = 200;
-                    return;
-                }
-                boolean allFull = SaveService.allCoopSlotsOccupied(loginUser);
-                if (!allFull && slot != onlineCoopHostSaveSlot) {
-                    msg = "방장과 같은 슬롯 " + onlineCoopHostSaveSlot + "에 저장해 주세요.";
-                    msgTimer = 220;
-                    return;
-                }
-                if (!confirmCoopSlotOverwrite(slot)) {
-                    return;
-                }
-                try {
-                    SaveService.saveCoop(loginUser, slot, pendingGuestCoopSave);
-                    pendingGuestCoopSave = null;
-                    awaitingGuestCoopSave = false;
-                    msg = "협동 슬롯 " + slot + "에 저장했어요.";
-                    msgTimer = 200;
-                    screen = 6;
-                } catch (Exception ex) {
-                    msg = "저장 실패: " + ex.getMessage();
-                    msgTimer = 200;
-                    screen = 6;
-                }
-                return;
-            }
-            if (!confirmCoopSlotOverwrite(slot)) {
-                return;
-            }
-            try {
-                saveCoopToSlot(slot);
-                msg = isOnlineCoop
-                        ? "협동 슬롯 " + slot + "에 저장했어요. 참가자도 저장할 때까지 기다려 주세요."
-                        : "협동 슬롯 " + slot + "에 저장했어요.";
-                msgTimer = 200;
-                screen = 6;
-            } catch (Exception ex) {
-                msg = "저장 실패: " + ex.getMessage();
-                msgTimer = 200;
-                screen = 6;
-            }
+        if (coopSlotMode == 3) {
+            saveCoopSlotAsGuest(slot);
+        } else if (coopSlotMode == 1) {
+            saveCoopSlotAsHost(slot);
         } else {
-            try {
-                CoopGameMemento mem = SaveService.loadCoop(loginUser, slot);
-                if (isOnlineCoop && coopBridge != null && coopBridge.isHost() && coopSlotReturnScreen == 6) {
-                    if (!mem.onlineResume) {
-                        throw new LoadException("온라인 협동 저장 슬롯만 불러올 수 있어요.");
-                    }
-                    SaveService.assertOnlineRoomMatchesSave(mem, onlineCoopHostNick, onlineCoopGuestNick);
-                    CoopGameMemento remapped = SaveService.remapForCurrentOnlineHost(mem, onlineCoopHostNick,
-                            onlineCoopGuestNick);
-                    onlineCoopId = remapped.coopId;
-                    CoopEngineBridge.applyLoadedMemento(this, remapped);
-                    screen = 6;
-                    coopBridge.pushLoadedState(remapped);
-                    msg = "슬롯 " + slot + " · 온라인 협동 저장을 불러왔어요.";
-                    msgTimer = 220;
-                } else if (mem.onlineResume) {
-                    pendingCoopResume = mem;
-                    msg = "슬롯 " + slot + "을 불러왔어요. 로비에서 「게임 시작 (방장)」으로 이어하세요.";
-                    msgTimer = 260;
-                    screen = coopSlotReturnScreen == 0 ? 0 : coopSlotReturnScreen;
-                    if (coopSlotReturnScreen == 0) {
-                        SwingUtilities.invokeLater(() -> {
-                            onlineLobbyFrame = new LobbyFrame(this);
-                            onlineLobbyFrame.setVisible(true);
-                        });
-                    }
-                } else {
-                    isOnlineCoop = false;
-                    CoopEngineBridge.applyLoadedMemento(this, mem);
-                    if (coopSlotReturnScreen == 6) {
-                        screen = 6;
-                        msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 불러왔어요.";
-                    } else {
-                        msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 이어합니다.";
-                    }
-                    msgTimer = 150;
-                }
-            } catch (LoadException ex) {
-                msg = ex.getMessage();
-                msgTimer = 180;
-                if (coopSlotReturnScreen == 6) {
-                    screen = 6;
-                }
+            loadCoopSlot(slot);
+        }
+    }
+
+    private void saveCoopSlotAsGuest(int slot) {
+        if (loginUser == null) {
+            showMsg("로그인 후 저장할 수 있어요.", 180);
+            return;
+        }
+        if (pendingGuestCoopSave == null) {
+            showMsg("방장이 슬롯을 선택할 때까지 기다려 주세요.", 200);
+            return;
+        }
+        boolean allFull = SaveService.allCoopSlotsOccupied(loginUser);
+        if (!allFull && slot != onlineCoopHostSaveSlot) {
+            showMsg("방장과 같은 슬롯 " + onlineCoopHostSaveSlot + "에 저장해 주세요.", 220);
+            return;
+        }
+        if (!confirmCoopSlotOverwrite(slot)) {
+            return;
+        }
+        try {
+            SaveService.saveCoop(loginUser, slot, pendingGuestCoopSave);
+            pendingGuestCoopSave = null;
+            awaitingGuestCoopSave = false;
+            showMsg("협동 슬롯 " + slot + "에 저장했어요.", 200);
+        } catch (Exception ex) {
+            showMsg("저장 실패: " + ex.getMessage(), 200);
+        }
+        screen = SCREEN_PAUSE;
+    }
+
+    private void saveCoopSlotAsHost(int slot) {
+        if (!confirmCoopSlotOverwrite(slot)) {
+            return;
+        }
+        try {
+            saveCoopToSlot(slot);
+            showMsg(isOnlineCoop
+                    ? "협동 슬롯 " + slot + "에 저장했어요. 참가자도 저장할 때까지 기다려 주세요."
+                    : "협동 슬롯 " + slot + "에 저장했어요.", 200);
+        } catch (Exception ex) {
+            showMsg("저장 실패: " + ex.getMessage(), 200);
+        }
+        screen = SCREEN_PAUSE;
+    }
+
+    private void loadCoopSlot(int slot) {
+        try {
+            CoopGameMemento mem = SaveService.loadCoop(loginUser, slot);
+            if (isOnlineCoop && coopBridge != null &&             coopBridge.isHost() && coopSlotReturnScreen == SCREEN_PAUSE) {
+                resumeOnlineCoopAsHost(slot, mem);
+            } else if (mem.onlineResume) {
+                openLobbyForCoopResume(slot, mem);
+            } else {
+                resumeLocalCoop(slot, mem);
+            }
+        } catch (LoadException ex) {
+            showMsg(ex.getMessage(), 180);
+            if (coopSlotReturnScreen == SCREEN_PAUSE) {
+                screen = SCREEN_PAUSE;
             }
         }
+    }
+
+    private void resumeOnlineCoopAsHost(int slot, CoopGameMemento mem) throws LoadException {
+        if (!mem.onlineResume) {
+            throw new LoadException("온라인 협동 저장 슬롯만 불러올 수 있어요.");
+        }
+        SaveService.assertOnlineRoomMatchesSave(mem, onlineCoopHostNick, onlineCoopGuestNick);
+        CoopGameMemento remapped = SaveService.remapForCurrentOnlineHost(mem, onlineCoopHostNick,
+                onlineCoopGuestNick);
+        onlineCoopId = remapped.coopId;
+        CoopEngineBridge.applyLoadedMemento(this, remapped);
+        screen = SCREEN_PAUSE;
+        coopBridge.pushLoadedState(remapped);
+        showMsg("슬롯 " + slot + " · 온라인 협동 저장을 불러왔어요.", 220);
+    }
+
+    private void openLobbyForCoopResume(int slot, CoopGameMemento mem) {
+        pendingCoopResume = mem;
+        showMsg("슬롯 " + slot + "을 불러왔어요. 로비에서 「게임 시작 (방장)」으로 이어하세요.", 260);
+        screen = coopSlotReturnScreen;
+        if (coopSlotReturnScreen == SCREEN_TITLE) {
+            SwingUtilities.invokeLater(() -> {
+                onlineLobbyFrame = new LobbyFrame(this);
+                onlineLobbyFrame.setVisible(true);
+            });
+        }
+    }
+
+    private void resumeLocalCoop(int slot, CoopGameMemento mem) {
+        isOnlineCoop = false;
+        CoopEngineBridge.applyLoadedMemento(this, mem);
+        if (coopSlotReturnScreen == SCREEN_PAUSE) {
+            screen = SCREEN_PAUSE;
+            msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 불러왔어요.";
+        } else {
+            msg = "슬롯 " + slot + " · 단일 PC 2인 협동을 이어합니다.";
+        }
+        msgTimer = 150;
     }
 
     void saveCoopToSlot(int slot) throws Exception {
@@ -2190,10 +2192,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     void openSettings() {
         settingFrom = screen;
         editKeys = KeyBindings.current();
-        setTab = settingFrom == 6 && isTwoPlayer ? 1 : 0;
+        setTab = settingFrom == SCREEN_PAUSE && isTwoPlayer ? 1 : 0;
         captureRow = -1;
         setMsg = "";
-        screen = 4;
+        screen = SCREEN_SETTINGS;
     }
 
     boolean saveSettings() {
@@ -2266,48 +2268,32 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         Graphics2D g = (Graphics2D) g0;
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
-        if (screen == 0) {
-            if (screen == 0) {
-                drawTitle(g);
-            }
-        } else {
-            if (screen == 1) {
-                drawSaves(g);
-            } else {
-                if (screen == 3) {
-                    drawRanking(g);
+        switch (screen) {
+            case SCREEN_TITLE -> drawTitle(g);
+            case SCREEN_SAVES -> drawSaves(g);
+            case SCREEN_RANKING -> drawRanking(g);
+            case SCREEN_SETTINGS -> {
+                if (settingFrom == SCREEN_TITLE) {
+                    drawTitle(g);
                 } else {
-                    if (screen == 4) {
-                        if (settingFrom == 0) {
-                            drawTitle(g);
-                        } else {
-                            drawGame(g);
-                        }
-                        drawSettings(g);
-                    } else {
-                        if (screen == 5) {
-                            drawGame(g);
-                        } else {
-                            if (screen == 6) {
-                                drawGame(g);
-                                drawPause(g);
-                            } else {
-                                if (screen == 7) {
-                                    drawGame(g);
-                                    drawResult(g);
-                                } else if (screen == 8) {
-                                    if (screen == 6) {
-                                        drawGame(g);
-                                        drawPause(g);
-                                    } else {
-                                        drawTitle(g);
-                                    }
-                                    drawCoopSlots(g);
-                                }
-                            }
-                        }
-                    }
+                    drawGame(g);
                 }
+                drawSettings(g);
+            }
+            case SCREEN_GAME -> drawGame(g);
+            case SCREEN_PAUSE -> {
+                drawGame(g);
+                drawPause(g);
+            }
+            case SCREEN_RESULT -> {
+                drawGame(g);
+                drawResult(g);
+            }
+            case SCREEN_COOP_SLOTS -> {
+                drawTitle(g);
+                drawCoopSlots(g);
+            }
+            default -> {
             }
         }
     }
@@ -2491,32 +2477,35 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else {
             SimpleDateFormat df = new SimpleDateFormat("yyyy.MM.dd HH:mm");
             for (int i = 0; i < saveList.size() && i < 5; i++) {
-                String[] s = saveList.get(i);
-                int y = 146 + i * 88;
-                int st = Integer.parseInt(s[2]);
-                g.setColor(new Color(0x1a1216));
-                g.fillRect(250, y, 780, 80);
-                g.setColor(new Color(0xd9c29a));
-                g.fillRect(254, y + 4, 772, 72);
-                g.setColor(new Color(0xefe0bf));
-                g.fillRect(254, y + 4, 772, 3);
-                g.drawImage(Art.background(st), 262, y + 10, 262 + 110, y + 70, 260, 90, 1020, 630, null);
-                g.setColor(new Color(0x1a1216));
-                g.drawRect(262, y + 10, 110, 60);
-                String[] stageNames = {"", "불타는 사막", "고립된 섬", "고요한 초원", "얼어붙은 설원", "하늘 위 마왕성"};
-                g.setFont(fontBold.deriveFont(22f));
-                g.drawString("스테이지 " + st + " · " + stageNames[st], 390, y + 32);
-                g.setFont(font.deriveFont(16.5f));
-                g.setColor(new Color(0x4a3a2a));
-                g.drawString((s[4].equals("2") ? "단일 PC 2인" : "1인 플레이")
-                        + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
-                g.drawString("마지막 플레이  " + df.format(new Date(Long.parseLong(s[1]))), 390, y + 74);
-                drawLayoutButton(g, "이어하기", UiLayout.resumeButton(i), 1, 16.5f);
-                drawLayoutButton(g, "삭제", UiLayout.deleteButton(i), 0, 16.5f);
+                drawSaveRow(g, i, saveList.get(i), df);
             }
         }
         drawLayoutButton(g, "+ 새 게임", UiLayout.NEW_GAME, 1, 22f);
         drawLayoutButton(g, "← 뒤로", UiLayout.BACK, 2, 16.5f);
+    }
+
+    private void drawSaveRow(Graphics2D g, int index, String[] s, SimpleDateFormat df) {
+        String[] stageNames = {"", "불타는 사막", "고립된 섬", "고요한 초원", "얼어붙은 설원", "하늘 위 마왕성"};
+        int y = 146 + index * 88;
+        int st = Integer.parseInt(s[2]);
+        g.setColor(new Color(0x1a1216));
+        g.fillRect(250, y, 780, 80);
+        g.setColor(new Color(0xd9c29a));
+        g.fillRect(254, y + 4, 772, 72);
+        g.setColor(new Color(0xefe0bf));
+        g.fillRect(254, y + 4, 772, 3);
+        g.drawImage(Art.background(st), 262, y + 10, 262 + 110, y + 70, 260, 90, 1020, 630, null);
+        g.setColor(new Color(0x1a1216));
+        g.drawRect(262, y + 10, 110, 60);
+        g.setFont(fontBold.deriveFont(22f));
+        g.drawString("스테이지 " + st + " · " + stageNames[st], 390, y + 32);
+        g.setFont(font.deriveFont(16.5f));
+        g.setColor(new Color(0x4a3a2a));
+        g.drawString((s[4].equals("2") ? "단일 PC 2인" : "1인 플레이")
+                + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
+        g.drawString("마지막 플레이  " + df.format(new Date(Long.parseLong(s[1]))), 390, y + 74);
+        drawLayoutButton(g, "이어하기", UiLayout.resumeButton(index), 1, 16.5f);
+        drawLayoutButton(g, "삭제", UiLayout.deleteButton(index), 0, 16.5f);
     }
 
     void drawRanking(Graphics2D g) {
@@ -2546,49 +2535,52 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             centerText(g, "아직 기록이 없어요. 첫 번째 용사가 되어 보세요!", 640, 450, new Color(0xf0e2c8), new Color(0x0c090d));
         }
         SimpleDateFormat df = new SimpleDateFormat("MM.dd");
-        String[] stageNames = {"", "사막", "섬", "초원", "설원", "마왕성"};
-        Color[] medal = {new Color(0xf2c14e), new Color(0xcfd6de), new Color(0xd08a4a)};
         for (int i = 0; i < rankList.size() && i < 10; i++) {
-            RecordEntry r = rankList.get(i);
-            int y = 266 + i * 40;
-            boolean me = r.nick().equals(loginUser);
-            if (me) {
-                g.setColor(new Color(0x5a3a2a));
-                g.fillRect(180, y, 920, 36);
-            } else if (i % 2 == 1) {
-                g.setColor(new Color(0x2a222d));
-                g.fillRect(180, y, 920, 36);
-            }
-            if (i < 3) {
-                g.setColor(medal[i]);
-                g.fillRect(192, y + 6, 26, 24);
-                g.setColor(new Color(0x1a1216));
-                g.setFont(fontBold.deriveFont(16.5f));
-                g.drawString("" + (i + 1), 200, y + 24);
-            } else {
-                g.setColor(new Color(0x9a8f9f));
-                g.setFont(font.deriveFont(16.5f));
-                g.drawString("" + (i + 1), 200, y + 24);
-            }
-            g.setFont(font.deriveFont(22f));
-            g.setColor(me ? new Color(0xe9c98f) : new Color(0xf0e2c8));
-            g.drawString(r.nick() + (me ? " (나)" : ""), 280, y + 26);
-            g.setColor(new Color(0xf0e2c8));
-            g.drawString(String.format("%,d", r.score()), 550, y + 26);
-            g.setFont(font.deriveFont(16.5f));
-            if (r.clear()) {
-                g.setColor(new Color(0xe9c98f));
-                g.drawString("전체 클리어", 730, y + 24);
-            } else {
-                g.setColor(new Color(0xd9c29a));
-                g.drawString(r.stage() + " · " + stageNames[r.stage()], 730, y + 24);
-            }
-            g.setColor(new Color(0xd9c29a));
-            g.drawString(r.players() + "인", 900, y + 24);
-            g.setColor(new Color(0x9a8f9f));
-            g.drawString(df.format(new Date(r.timeMillis())), 1010, y + 24);
+            drawRankRow(g, i, rankList.get(i), df);
         }
         drawLayoutButton(g, "← 뒤로", UiLayout.BACK, 2, 16.5f);
+    }
+
+    private void drawRankRow(Graphics2D g, int index, RecordEntry r, SimpleDateFormat df) {
+        String[] stageNames = {"", "사막", "섬", "초원", "설원", "마왕성"};
+        Color[] medal = {new Color(0xf2c14e), new Color(0xcfd6de), new Color(0xd08a4a)};
+        int y = 266 + index * 40;
+        boolean me = r.nick().equals(loginUser);
+        if (me) {
+            g.setColor(new Color(0x5a3a2a));
+            g.fillRect(180, y, 920, 36);
+        } else if (index % 2 == 1) {
+            g.setColor(new Color(0x2a222d));
+            g.fillRect(180, y, 920, 36);
+        }
+        if (index < 3) {
+            g.setColor(medal[index]);
+            g.fillRect(192, y + 6, 26, 24);
+            g.setColor(new Color(0x1a1216));
+            g.setFont(fontBold.deriveFont(16.5f));
+            g.drawString("" + (index + 1), 200, y + 24);
+        } else {
+            g.setColor(new Color(0x9a8f9f));
+            g.setFont(font.deriveFont(16.5f));
+            g.drawString("" + (index + 1), 200, y + 24);
+        }
+        g.setFont(font.deriveFont(22f));
+        g.setColor(me ? new Color(0xe9c98f) : new Color(0xf0e2c8));
+        g.drawString(r.nick() + (me ? " (나)" : ""), 280, y + 26);
+        g.setColor(new Color(0xf0e2c8));
+        g.drawString(String.format("%,d", r.score()), 550, y + 26);
+        g.setFont(font.deriveFont(16.5f));
+        if (r.clear()) {
+            g.setColor(new Color(0xe9c98f));
+            g.drawString("전체 클리어", 730, y + 24);
+        } else {
+            g.setColor(new Color(0xd9c29a));
+            g.drawString(r.stage() + " · " + stageNames[r.stage()], 730, y + 24);
+        }
+        g.setColor(new Color(0xd9c29a));
+        g.drawString(r.players() + "인", 900, y + 24);
+        g.setColor(new Color(0x9a8f9f));
+        g.drawString(df.format(new Date(r.timeMillis())), 1010, y + 24);
     }
 
     void drawSettings(Graphics2D g) {
@@ -2750,7 +2742,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
         }
 
-        if (gray || screen == 7 || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
+        if (gray || screen == SCREEN_RESULT || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
             return;
         }
         int blockVal = engineBlockValue(session.curPiece.getShape());
@@ -2824,7 +2816,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     boolean isPlayerBlueprintActivePieceAt(int player, int row, int column) {
-        if (screen == 7 || stageClear) {
+        if (screen == SCREEN_RESULT || stageClear) {
             return false;
         }
         int engineY = Blueprint.ROWS - 1 - row;
@@ -2974,38 +2966,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         // 1p 보드
         int bx = isTwoPlayer ? 190 : 490;
         int by = 104;
-        g.setColor(new Color(0x1a1216));
-        g.fillRect(bx - 6, by - 6, 312, 612);
-        g.setColor(new Color(0x6b5a3a));
-        g.fillRect(bx - 3, by - 3, 306, 606);
-        g.setColor(new Color(10, 8, 14, 205));
-        g.fillRect(bx, by, 300, 600);
-        g.setColor(new Color(255, 255, 255, 18));
-        for (int c = 1; c < 10; c++) {
-            g.fillRect(bx + c * 30, by, 1, 600);
-        }
-        for (int r = 1; r < 20; r++) {
-            g.fillRect(bx, by + r * 30, 300, 1);
-        }
+        drawBoardFrame(g, bx, by);
         if (useCoopEngineRender()) {
             drawEngineSessionBoard(g, coopEngineBridge.session(0), bx, by,
                     coopEngineBridge.isLineClearBlinkOn(0), 0);
         } else if (!useAEngine()) {
             boolean gray0 = isCoopPlayerEliminated(0);
-            for (int r = 4; r < 24; r++) {
-                for (int c = 0; c < 10; c++) {
-                    if (board1[r][c] != 0) {
-                        int x = bx + c * 30;
-                        int y = by + (r - 4) * 30;
-                        if (gray0) {
-                            drawCellGray(g, x, y, 30);
-                        } else {
-                            drawCell(g, x, y, 30, board1[r][c]);
-                        }
-                    }
-                }
-            }
-            if (!gray0 && screen != 7 && !stageClear) {
+            drawLegacyCells(g, board1, bx, by, gray0);
+            if (!gray0 && screen != SCREEN_RESULT && !stageClear) {
                 drawLegacyActivePiece(g, bx, by, board1, p1Type, p1Rot, p1X, p1Y);
             }
         } else {
@@ -3058,56 +3026,19 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
             drawBox(g, 336, 530, 136, 170, null);
         }
-        int ix = isTwoPlayer ? 40 : 336;
-        int iy = isTwoPlayer ? 524 : 530;
-        g.setFont(fontSmall.deriveFont(13.5f));
-        g.setColor(new Color(0x9a8f9f));
-        g.drawString("점수", ix + 14, iy + 30);
-        g.drawString("지운 줄", ix + 14, iy + 84);
-        g.drawString("플레이어", ix + 14, iy + 136);
-        g.setFont(font.deriveFont(22f));
-        g.setColor(new Color(0xf0e2c8));
-        g.drawString(String.format("%,d", p1Score), ix + 14, iy + 58);
-        g.drawString("" + p1Lines, ix + 14, iy + 112);
-        g.setFont(font.deriveFont(16.5f));
-        g.setColor(new Color(0xe9c98f));
-        g.drawString(onlineCoopPlayerLabel(0), ix + 14, iy + 158);
+        drawScorePanel(g, isTwoPlayer ? 40 : 336, isTwoPlayer ? 524 : 530, p1Score, p1Lines, onlineCoopPlayerLabel(0));
 
         // 2p도 똑같이
         if (isTwoPlayer) {
             bx = 790;
-            g.setColor(new Color(0x1a1216));
-            g.fillRect(bx - 6, by - 6, 312, 612);
-            g.setColor(new Color(0x6b5a3a));
-            g.fillRect(bx - 3, by - 3, 306, 606);
-            g.setColor(new Color(10, 8, 14, 205));
-            g.fillRect(bx, by, 300, 600);
-            g.setColor(new Color(255, 255, 255, 18));
-            for (int c = 1; c < 10; c++) {
-                g.fillRect(bx + c * 30, by, 1, 600);
-            }
-            for (int r = 1; r < 20; r++) {
-                g.fillRect(bx, by + r * 30, 300, 1);
-            }
+            drawBoardFrame(g, bx, by);
             if (useCoopEngineRender()) {
                 drawEngineSessionBoard(g, coopEngineBridge.session(1), bx, by,
                         coopEngineBridge.isLineClearBlinkOn(1), 1);
             } else {
                 boolean gray1 = isCoopPlayerEliminated(1);
-                for (int r = 4; r < 24; r++) {
-                    for (int c = 0; c < 10; c++) {
-                        if (board2[r][c] != 0) {
-                            int x = bx + c * 30;
-                            int y = by + (r - 4) * 30;
-                            if (gray1) {
-                                drawCellGray(g, x, y, 30);
-                            } else {
-                                drawCell(g, x, y, 30, board2[r][c]);
-                            }
-                        }
-                    }
-                }
-                if (!gray1 && screen != 7 && !stageClear) {
+                drawLegacyCells(g, board2, bx, by, gray1);
+                if (!gray1 && screen != SCREEN_RESULT && !stageClear) {
                     drawLegacyActivePiece(g, bx, by, board2, p2Type, p2Rot, p2X, p2Y);
                 }
             }
@@ -3133,18 +3064,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 }
             }
             drawBox(g, 1108, 524, 132, 176, null);
-            g.setFont(fontSmall.deriveFont(13.5f));
-            g.setColor(new Color(0x9a8f9f));
-            g.drawString("점수", 1122, 554);
-            g.drawString("지운 줄", 1122, 608);
-            g.drawString("플레이어", 1122, 660);
-            g.setFont(font.deriveFont(22f));
-            g.setColor(new Color(0xf0e2c8));
-            g.drawString(String.format("%,d", p2Score), 1122, 582);
-            g.drawString("" + p2Lines, 1122, 636);
-            g.setFont(font.deriveFont(16.5f));
-            g.setColor(new Color(0xe9c98f));
-            g.drawString(onlineCoopPlayerLabel(1), 1122, 682);
+            drawScorePanel(g, 1108, 524, p2Score, p2Lines, onlineCoopPlayerLabel(1));
 
             g.setFont(fontBold.deriveFont(22f));
             if (isOnlineCoop) {
@@ -3163,6 +3083,66 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         // 보스 체력
         String[] stageNames = {"", "불타는 사막", "고립된 섬", "고요한 초원", "얼어붙은 설원", "하늘 위 마왕성"};
         String[] bossNames = {"", "분노한 선인장 괴물", "심연의 해신", "천년 거목", "설원의 포효자", "타락한 악의 신"};
+        drawBossHealthBar(g, stageNames, bossNames);
+        drawBossWarningBanner(g);
+        drawMessageBanner(g);
+        drawRandomKeyGuide(g, mx + m.getWidth() / 2, my);
+        if (stageAdvancePrompt && isOnlineCoop) {
+            drawStageAdvancePrompt(g, stageNames, bossNames);
+        } else if (stageClear) {
+            drawStageClearBanner(g, bossNames[stage]);
+        }
+        drawPauseHelp(g);
+    }
+
+    private void drawBoardFrame(Graphics2D g, int bx, int by) {
+        g.setColor(new Color(0x1a1216));
+        g.fillRect(bx - 6, by - 6, 312, 612);
+        g.setColor(new Color(0x6b5a3a));
+        g.fillRect(bx - 3, by - 3, 306, 606);
+        g.setColor(new Color(10, 8, 14, 205));
+        g.fillRect(bx, by, 300, 600);
+        g.setColor(new Color(255, 255, 255, 18));
+        for (int c = 1; c < 10; c++) {
+            g.fillRect(bx + c * 30, by, 1, 600);
+        }
+        for (int r = 1; r < 20; r++) {
+            g.fillRect(bx, by + r * 30, 300, 1);
+        }
+    }
+
+    private void drawLegacyCells(Graphics2D g, int[][] board, int bx, int by, boolean gray) {
+        for (int r = 4; r < 24; r++) {
+            for (int c = 0; c < 10; c++) {
+                if (board[r][c] != 0) {
+                    int x = bx + c * 30;
+                    int y = by + (r - 4) * 30;
+                    if (gray) {
+                        drawCellGray(g, x, y, 30);
+                    } else {
+                        drawCell(g, x, y, 30, board[r][c]);
+                    }
+                }
+            }
+        }
+    }
+
+    private void drawScorePanel(Graphics2D g, int x, int y, int score, int lines, String playerLabel) {
+        g.setFont(fontSmall.deriveFont(13.5f));
+        g.setColor(new Color(0x9a8f9f));
+        g.drawString("점수", x + 14, y + 30);
+        g.drawString("지운 줄", x + 14, y + 84);
+        g.drawString("플레이어", x + 14, y + 136);
+        g.setFont(font.deriveFont(22f));
+        g.setColor(new Color(0xf0e2c8));
+        g.drawString(String.format("%,d", score), x + 14, y + 58);
+        g.drawString("" + lines, x + 14, y + 112);
+        g.setFont(font.deriveFont(16.5f));
+        g.setColor(new Color(0xe9c98f));
+        g.drawString(playerLabel, x + 14, y + 158);
+    }
+
+    private void drawBossHealthBar(Graphics2D g, String[] stageNames, String[] bossNames) {
         int barX = 380 + HitFlash.shakeOffset(hitEffect);
         g.setColor(new Color(0x1a1216));
         g.fillRect(barX, 14, 520, 76);
@@ -3194,35 +3174,43 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
                 ? "BLUEPRINT " + Math.round(progress * 100) + "%" + (violations > 0 ? "  MISPLACED " + violations : "")
                 : bossHp + " / " + bossMax;
         g.drawString(hp, barX + 260 - g.getFontMetrics().stringWidth(hp) / 2, 67);
+    }
 
-        if (bossWarning && screen == 5 && (tick / 10) % 2 == 0) {
-            String warn = bossWarningText.isEmpty() ? "!! 보스 공격 준비 중 !!" : bossWarningText;
-            g.setFont(fontBold.deriveFont(22f));
-            int w = g.getFontMetrics().stringWidth(warn);
-            g.setColor(new Color(120, 20, 20, 200));
-            g.fillRect(640 - w / 2 - 14, 96, w + 28, 36);
-            g.setColor(new Color(0xfff4e6));
-            g.drawString(warn, 640 - w / 2, 122);
+    private void drawBossWarningBanner(Graphics2D g) {
+        if (!(bossWarning && screen == SCREEN_GAME && (tick / 10) % 2 == 0)) {
+            return;
         }
-        if (msgTimer > 0 && screen == 5) {
-            g.setFont(font.deriveFont(16.5f));
-            int w = g.getFontMetrics().stringWidth(msg);
-            g.setColor(new Color(0, 0, 0, 170));
-            g.fillRect(640 - w / 2 - 12, 140, w + 24, 30);
-            g.setColor(new Color(0xe9c98f));
-            g.drawString(msg, 640 - w / 2, 161);
+        String warn = bossWarningText.isEmpty() ? "!! 보스 공격 준비 중 !!" : bossWarningText;
+        g.setFont(fontBold.deriveFont(22f));
+        int w = g.getFontMetrics().stringWidth(warn);
+        g.setColor(new Color(120, 20, 20, 200));
+        g.fillRect(640 - w / 2 - 14, 96, w + 28, 36);
+        g.setColor(new Color(0xfff4e6));
+        g.drawString(warn, 640 - w / 2, 122);
+    }
+
+    private void drawMessageBanner(Graphics2D g) {
+        if (!(msgTimer > 0 && screen == SCREEN_GAME)) {
+            return;
         }
-        drawRandomKeyGuide(g, mx + m.getWidth() / 2, my);
-        if (stageAdvancePrompt && isOnlineCoop) {
-            drawStageAdvancePrompt(g, stageNames, bossNames);
-        } else if (stageClear) {
-            g.setColor(new Color(0, 0, 0, 120));
-            g.fillRect(0, 280, 1280, 140);
-            g.setFont(fontBold.deriveFont(66f));
-            centerText(g, "GameClear!", 640, 350, new Color(0xe9c98f), new Color(0x6b2a1a));
-            g.setFont(font.deriveFont(22f));
-            centerText(g, bossNames[stage] + "을(를) 쓰러뜨렸다!", 640, 390, new Color(0xf0e2c8), new Color(0x0c090d));
-        }
+        g.setFont(font.deriveFont(16.5f));
+        int w = g.getFontMetrics().stringWidth(msg);
+        g.setColor(new Color(0, 0, 0, 170));
+        g.fillRect(640 - w / 2 - 12, 140, w + 24, 30);
+        g.setColor(new Color(0xe9c98f));
+        g.drawString(msg, 640 - w / 2, 161);
+    }
+
+    private void drawStageClearBanner(Graphics2D g, String bossName) {
+        g.setColor(new Color(0, 0, 0, 120));
+        g.fillRect(0, 280, 1280, 140);
+        g.setFont(fontBold.deriveFont(66f));
+        centerText(g, "GameClear!", 640, 350, new Color(0xe9c98f), new Color(0x6b2a1a));
+        g.setFont(font.deriveFont(22f));
+        centerText(g, bossName + "을(를) 쓰러뜨렸다!", 640, 390, new Color(0xf0e2c8), new Color(0x0c090d));
+    }
+
+    private void drawPauseHelp(Graphics2D g) {
         String help = keyName(keyPause) + " / Esc 일시정지";
         g.setFont(fontSmall.deriveFont(13.5f));
         int hw = g.getFontMetrics().stringWidth(help);
@@ -3233,7 +3221,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void drawRandomKeyGuide(Graphics2D g, int bossCenterX, int bossTopY) {
-        if (stage != 5 || screen != 5 || stageClear
+        if (stage != 5 || screen != SCREEN_GAME || stageClear
                 || temporaryPrimaryKeyMapping == null || gameTime >= randomKeyEnd) {
             return;
         }
@@ -3549,7 +3537,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else {
             coopEngineBridge.startOnlineGuest(stage, seed);
         }
-        screen = 5;
+        screen = SCREEN_GAME;
         msg = playerIndex == 0 ? "온라인 협동 · 방장 (P1)" : "온라인 협동 · 참가 (P2)";
         msgTimer = 150;
         requestFocusInWindow();
@@ -3579,14 +3567,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public void onCoopPeerDisconnected(String text) {
         msg = text == null ? "상대 연결이 끊어졌어요." : text;
         msgTimer = 300;
-        if (screen == 5 && !stageClear) {
-            screen = 6;
+        if (screen == SCREEN_GAME && !stageClear) {
+            screen = SCREEN_PAUSE;
             soundManager.pauseBgm();
         }
     }
 
     void enterLocalPause(String pauseMsg) {
-        screen = 6;
+        screen = SCREEN_PAUSE;
         msg = pauseMsg == null ? "" : pauseMsg;
         msgTimer = msg.isEmpty() ? 0 : 300;
         pressed.clear();
@@ -3597,7 +3585,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void resumeLocalPause() {
-        screen = 5;
+        screen = SCREEN_GAME;
         pressed.clear();
         if (useAEngine()) {
             aEngineBridge.resumeEngine();
@@ -3624,7 +3612,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         if (action == PlayerAction.STAGE_READY) {
-            if (screen != 5 || !stageAdvancePrompt || isStageReady(playerIndex)) {
+            if (screen != SCREEN_GAME || !stageAdvancePrompt || isStageReady(playerIndex)) {
                 return;
             }
             if (useCoopEngineHost()) {
@@ -3637,7 +3625,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         if (action == PlayerAction.PAUSE) {
-            if (screen == 5 && !stageClear) {
+            if (screen == SCREEN_GAME && !stageClear) {
                 String pauseMsg = fromNetwork ? "상대방이 일시정지했어요." : "";
                 enterLocalPause(pauseMsg);
             }
@@ -3647,13 +3635,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             return;
         }
         if (action == PlayerAction.RESUME) {
-            if (screen == 6 && isOnlineCoop && awaitingGuestCoopSave && !fromNetwork
+            if (screen == SCREEN_PAUSE && isOnlineCoop && awaitingGuestCoopSave && !fromNetwork
                     && coopBridge != null && !coopBridge.isHost()) {
                 msg = "참가자 저장을 먼저 완료해 주세요.";
                 msgTimer = 200;
                 return;
             }
-            if (screen == 6) {
+            if (screen == SCREEN_PAUSE) {
                 resumeLocalPause();
             }
             if (!fromNetwork && isOnlineCoop && coopBridge != null) {
@@ -3661,7 +3649,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             }
             return;
         }
-        if (screen != 5 || stageClear) {
+        if (screen != SCREEN_GAME || stageClear) {
             return;
         }
         if (useCoopEngineHost()) {
