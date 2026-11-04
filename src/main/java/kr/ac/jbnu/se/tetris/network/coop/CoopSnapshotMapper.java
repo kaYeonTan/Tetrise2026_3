@@ -3,6 +3,7 @@ package kr.ac.jbnu.se.tetris.network.coop;
 import java.util.ArrayList;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
+import kr.ac.jbnu.se.tetris.Player;
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.CoopRunState;
 import kr.ac.jbnu.se.tetris.core.GameSession;
@@ -34,33 +35,19 @@ public final class CoopSnapshotMapper {
 	}
 
 	static void fillPlayer(CoopPlayerSnapshot dst, GamePanel p, boolean p1) {
-		if (p1) {
-			dst.type = p.p1Type;
-			dst.rot = p.p1Rot;
-			dst.x = p.p1X;
-			dst.y = p.p1Y;
-			dst.hold = p.p1Hold;
-			dst.holdUsed = p.p1HoldUsed;
-			dst.score = p.p1Score;
-			dst.lines = p.p1Lines;
-			dst.garbage = p.p1Garbage;
-			dst.next = new ArrayList<>(p.p1Next);
-			dst.bag = new ArrayList<>(p.p1Bag);
-			dst.board = boardToString(p.board1);
-		} else {
-			dst.type = p.p2Type;
-			dst.rot = p.p2Rot;
-			dst.x = p.p2X;
-			dst.y = p.p2Y;
-			dst.hold = p.p2Hold;
-			dst.holdUsed = p.p2HoldUsed;
-			dst.score = p.p2Score;
-			dst.lines = p.p2Lines;
-			dst.garbage = p.p2Garbage;
-			dst.next = new ArrayList<>(p.p2Next);
-			dst.bag = new ArrayList<>(p.p2Bag);
-			dst.board = boardToString(p.board2);
-		}
+		Player pl = p.players[p1 ? 0 : 1];
+		dst.type = pl.type;
+		dst.rot = pl.rot;
+		dst.x = pl.x;
+		dst.y = pl.y;
+		dst.hold = pl.hold;
+		dst.holdUsed = pl.holdUsed;
+		dst.score = pl.score;
+		dst.lines = pl.lines;
+		dst.garbage = pl.garbage;
+		dst.next = new ArrayList<>(pl.next);
+		dst.bag = new ArrayList<>(pl.bag);
+		dst.board = boardToString(pl.board);
 	}
 
 	public static void applyToPanel(CoopSnapshot s, GamePanel p, boolean fullStageReset) {
@@ -80,37 +67,21 @@ public final class CoopSnapshotMapper {
 	}
 
 	static void applyPlayer(CoopPlayerSnapshot src, GamePanel p, boolean p1) {
-		if (p1) {
-			p.p1Type = src.type;
-			p.p1Rot = src.rot;
-			p.p1X = src.x;
-			p.p1Y = src.y;
-			p.p1Hold = src.hold;
-			p.p1HoldUsed = src.holdUsed;
-			p.p1Score = src.score;
-			p.p1Lines = src.lines;
-			p.p1Garbage = src.garbage;
-			p.p1Next.clear();
-			p.p1Next.addAll(src.next);
-			p.p1Bag.clear();
-			p.p1Bag.addAll(src.bag);
-			stringToBoard(src.board, p.board1);
-		} else {
-			p.p2Type = src.type;
-			p.p2Rot = src.rot;
-			p.p2X = src.x;
-			p.p2Y = src.y;
-			p.p2Hold = src.hold;
-			p.p2HoldUsed = src.holdUsed;
-			p.p2Score = src.score;
-			p.p2Lines = src.lines;
-			p.p2Garbage = src.garbage;
-			p.p2Next.clear();
-			p.p2Next.addAll(src.next);
-			p.p2Bag.clear();
-			p.p2Bag.addAll(src.bag);
-			stringToBoard(src.board, p.board2);
-		}
+		Player pl = p.players[p1 ? 0 : 1];
+		pl.type = src.type;
+		pl.rot = src.rot;
+		pl.x = src.x;
+		pl.y = src.y;
+		pl.hold = src.hold;
+		pl.holdUsed = src.holdUsed;
+		pl.score = src.score;
+		pl.lines = src.lines;
+		pl.garbage = src.garbage;
+		pl.next.clear();
+		pl.next.addAll(src.next);
+		pl.bag.clear();
+		pl.bag.addAll(src.bag);
+		stringToBoard(src.board, pl.board);
 	}
 
 	static String boardToString(int[][] board) {

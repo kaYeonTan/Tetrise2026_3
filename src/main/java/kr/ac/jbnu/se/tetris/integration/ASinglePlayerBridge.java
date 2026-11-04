@@ -110,8 +110,8 @@ public final class ASinglePlayerBridge {
 			return;
 		}
 		var s = board.getEngine().getSession(0);
-		host.p1Score = s.score;
-		host.p1Lines = s.linesRemoved;
+		host.players[0].score = s.score;
+		host.players[0].lines = s.linesRemoved;
 	}
 
 	public void pauseEngine() {

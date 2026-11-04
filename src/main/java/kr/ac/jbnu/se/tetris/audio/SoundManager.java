@@ -18,7 +18,7 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 
 /** MP3 음원을 PCM으로 디코딩해 BGM과 효과음을 재생한다. */
-public final class SoundManager implements AutoCloseable {
+public final class SoundManager implements AudioPlayer, AutoCloseable {
 
     private final Map<BgmType, AudioData> bgmData = new EnumMap<>(BgmType.class);
     private final Map<SfxType, AudioData> sfxData = new EnumMap<>(SfxType.class);

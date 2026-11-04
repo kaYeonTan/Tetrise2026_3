@@ -4,152 +4,89 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class FileManager {
 
+    private static final Logger LOG = Logger.getLogger(FileManager.class.getName());
+
     static String DIR = "data/";
 
+    /** 읽기에 실패하면 로그를 남기고 지금까지 읽은 줄(없으면 빈 목록)을 돌려준다. */
     static ArrayList<String> readLines(String path) {
         ArrayList<String> list = new ArrayList<>();
         File f = new File(path);
         if (!f.exists()) {
             return list;
         }
-        try {
-            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), "UTF-8"));
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
             String line;
             while ((line = br.readLine()) != null) {
-                if (line.trim().length() > 0) {
+                if (!line.trim().isEmpty()) {
                     list.add(line);
                 }
             }
-            br.close();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "파일을 읽지 못했어요: " + path, e);
         }
         return list;
     }
 
+    /** 저장에 성공하면 true. 실패하면 로그를 남기고 false (호출자가 안내 여부를 정한다). */
     static boolean writeLines(String path, ArrayList<String> lines, boolean append) {
-        try {
-            new File(DIR).mkdirs();
-            new File(DIR + "save/").mkdirs();
-            PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(path, append), "UTF-8"));
+        new File(DIR).mkdirs();
+        new File(DIR + "save/").mkdirs();
+        try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(path, append), StandardCharsets.UTF_8))) {
             for (String s : lines) {
                 pw.println(s);
             }
-            pw.close();
             return true;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "파일을 저장하지 못했어요: " + path, e);
             return false;
         }
     }
 
     // 로그인
     public static boolean checkUser(String nick, String pw) {
-        ArrayList<String> list = readLines(DIR + "users.txt");
-        for (String line : list) {
-            String[] data = line.split(",");
-            if (data[0].equalsIgnoreCase(nick) && data[2].equals(pw)) {
-                return true;
-            }
-        }
-        return false;
+        return accounts().login(nick, pw);
     }
 
     // 대소문자 맞춰서 원래 닉네임 돌려줌
     public static String getNick(String nick) {
-        ArrayList<String> list = readLines(DIR + "users.txt");
-        for (String line : list) {
-            String[] data = line.split(",");
-            if (data[0].equalsIgnoreCase(nick)) {
-                return data[0];
-            }
-        }
-        return nick;
+        return accounts().canonicalNick(nick);
     }
 
     // 회원가입. 문제 있으면 메시지 리턴, 성공하면 null
     public static String addUser(String nick, String email, String pw) {
-        ArrayList<String> list = readLines(DIR + "users.txt");
-        for (String line : list) {
-            String[] data = line.split(",");
-            if (data[0].equalsIgnoreCase(nick)) {
-                return "이미 사용 중인 닉네임이에요.";
-            }
-            if (data[1].equalsIgnoreCase(email)) {
-                return "이미 가입된 이메일이에요.";
-            }
-        }
-        ArrayList<String> add = new ArrayList<>();
-        add.add(nick + "," + email + "," + pw);
-        if (!writeLines(DIR + "users.txt", add, true)) {
-            return "저장에 실패했어요.";
-        }
-        return null;
+        return accounts().signUp(nick, email, pw);
+    }
+
+    static AccountService accounts() {
+        return new AccountService(new FileUserRepository());
     }
 
     public static void addRecord(String nick, int score, int stage, int players, boolean clear) {
-        ArrayList<String> add = new ArrayList<>();
-        add.add(nick + "," + score + "," + stage + "," + players + "," + (clear ? 1 : 0) + "," + System.currentTimeMillis());
-        writeLines(DIR + "records.txt", add, true);
-    }
-
-    public static ArrayList<String[]> getRecords() {
-        ArrayList<String[]> result = new ArrayList<>();
-        for (String line : readLines(DIR + "records.txt")) {
-            String[] data = line.split(",");
-            if (data.length == 6) {
-                result.add(data);
-            }
-        }
-        return result;
+        new FileRecordRepository().add(new RecordEntry(nick, score, stage, players, clear, System.currentTimeMillis()));
     }
 
     // 키설정
     public static void saveKeys() {
-        ArrayList<String> lines = new ArrayList<>();
-        lines.add(join(GamePanel.keySingle));
-        lines.add(join(GamePanel.keyP1));
-        lines.add(join(GamePanel.keyP2));
-        lines.add("" + GamePanel.keyPause);
-        writeLines(DIR + "keys.txt", lines, false);
+        writeLines(DIR + "keys.txt", new ArrayList<>(KeyBindingsCodec.encode(KeyBindings.current())), false);
     }
 
     public static void loadKeys() {
-        ArrayList<String> lines = readLines(DIR + "keys.txt");
-        if (lines.size() < 4) {
-            return;
+        KeyBindings keys = KeyBindingsCodec.decode(readLines(DIR + "keys.txt"));
+        if (keys != null) {
+            keys.applyToGame();
         }
-        try {
-            int[] a = split(lines.get(0));
-            int[] b = split(lines.get(1));
-            int[] c = split(lines.get(2));
-            if (a.length == 7 && b.length == 7 && c.length == 7) {
-                GamePanel.keySingle = a;
-                GamePanel.keyP1 = b;
-                GamePanel.keyP2 = c;
-                GamePanel.keyPause = Integer.parseInt(lines.get(3).trim());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    static String join(int[] arr) {
-        String s = "";
-        for (int i = 0; i < arr.length; i++) {
-            if (i > 0) {
-                s += ",";
-            }
-            s += arr[i];
-        }
-        return s;
     }
 
     static int[] split(String s) {
@@ -200,19 +137,35 @@ public class FileManager {
         lines.add("bossTimer=" + p.bossTimer);
         lines.add("blueprint=" + p.bossPattern.blueprintIndex());
         lines.add("gameTime=" + p.gameTime);
-        lines.add("p1=" + p.p1Type + "," + p.p1Rot + "," + p.p1X + "," + p.p1Y + "," + p.p1Hold + "," + (p.p1HoldUsed ? 1 : 0)
-                + "," + p.p1Score + "," + p.p1Lines + "," + p.p1Garbage);
-        lines.add("p1Next=" + listToString(p.p1Next));
-        lines.add("p1Bag=" + listToString(p.p1Bag));
-        lines.add("p1Board=" + boardToString(p.board1));
-        if (p.isTwoPlayer) {
-            lines.add("p2=" + p.p2Type + "," + p.p2Rot + "," + p.p2X + "," + p.p2Y + "," + p.p2Hold + "," + (p.p2HoldUsed ? 1 : 0)
-                    + "," + p.p2Score + "," + p.p2Lines + "," + p.p2Garbage);
-            lines.add("p2Next=" + listToString(p.p2Next));
-            lines.add("p2Bag=" + listToString(p.p2Bag));
-            lines.add("p2Board=" + boardToString(p.board2));
+        for (int i = 0; i < (p.isTwoPlayer ? 2 : 1); i++) {
+            Player pl = p.players[i];
+            String k = "p" + (i + 1);
+            lines.add(k + "=" + pl.type + "," + pl.rot + "," + pl.x + "," + pl.y + "," + pl.hold + "," + (pl.holdUsed ? 1 : 0)
+                    + "," + pl.score + "," + pl.lines + "," + pl.garbage);
+            lines.add(k + "Next=" + listToString(pl.next));
+            lines.add(k + "Bag=" + listToString(pl.bag));
+            lines.add(k + "Board=" + boardToString(pl.board));
         }
         return writeLines(p.saveFile, lines, false);
+    }
+
+    private static void restorePlayer(Player pl, int[] a, String next, String bag, String board) {
+        pl.type = a[0];
+        pl.rot = a[1];
+        pl.x = a[2];
+        pl.y = a[3];
+        pl.hold = a[4];
+        pl.holdUsed = a[5] == 1;
+        pl.score = a[6];
+        pl.lines = a[7];
+        pl.garbage = a[8];
+        pl.next.clear();
+        for (int n : split(next)) pl.next.add(n);
+        pl.bag.clear();
+        for (int n : split(bag)) pl.bag.add(n);
+        for (int i = 0; i < 240; i++) {
+            pl.board[i / 10][i % 10] = board.charAt(i) - '0';
+        }
     }
 
     public static boolean loadGame(String path, GamePanel p) {
@@ -249,42 +202,9 @@ public class FileManager {
             p.bossHp = bossHp;
             p.restoreBossPatternTimer(bossTimer);
             p.gameTime = gameTime;
-            int[] a = split(p1);
-            p.p1Type = a[0];
-            p.p1Rot = a[1];
-            p.p1X = a[2];
-            p.p1Y = a[3];
-            p.p1Hold = a[4];
-            p.p1HoldUsed = a[5] == 1;
-            p.p1Score = a[6];
-            p.p1Lines = a[7];
-            p.p1Garbage = a[8];
-            p.p1Next.clear();
-            for (int n : split(p1Next)) p.p1Next.add(n);
-            p.p1Bag.clear();
-            for (int n : split(p1Bag)) p.p1Bag.add(n);
-            for (int i = 0; i < 240; i++) {
-                p.board1[i / 10][i % 10] = p1Board.charAt(i) - '0';
-            }
+            restorePlayer(p.players[0], split(p1), p1Next, p1Bag, p1Board);
             if (players == 2) {
-                // 2p도 똑같이
-                int[] b = split(p2);
-                p.p2Type = b[0];
-                p.p2Rot = b[1];
-                p.p2X = b[2];
-                p.p2Y = b[3];
-                p.p2Hold = b[4];
-                p.p2HoldUsed = b[5] == 1;
-                p.p2Score = b[6];
-                p.p2Lines = b[7];
-                p.p2Garbage = b[8];
-                p.p2Next.clear();
-                for (int n : split(p2Next)) p.p2Next.add(n);
-                p.p2Bag.clear();
-                for (int n : split(p2Bag)) p.p2Bag.add(n);
-                for (int i = 0; i < 240; i++) {
-                    p.board2[i / 10][i % 10] = p2Board.charAt(i) - '0';
-                }
+                restorePlayer(p.players[1], split(p2), p2Next, p2Bag, p2Board);
             }
             p.saveFile = path;
             return true;
