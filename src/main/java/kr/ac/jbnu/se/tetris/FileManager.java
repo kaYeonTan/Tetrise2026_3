@@ -4,152 +4,89 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class FileManager {
 
+    private static final Logger LOG = Logger.getLogger(FileManager.class.getName());
+
     static String DIR = "data/";
 
+    /** 읽기에 실패하면 로그를 남기고 지금까지 읽은 줄(없으면 빈 목록)을 돌려준다. */
     static ArrayList<String> readLines(String path) {
         ArrayList<String> list = new ArrayList<>();
         File f = new File(path);
         if (!f.exists()) {
             return list;
         }
-        try {
-            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), "UTF-8"));
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
             String line;
             while ((line = br.readLine()) != null) {
-                if (line.trim().length() > 0) {
+                if (!line.trim().isEmpty()) {
                     list.add(line);
                 }
             }
-            br.close();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "파일을 읽지 못했어요: " + path, e);
         }
         return list;
     }
 
+    /** 저장에 성공하면 true. 실패하면 로그를 남기고 false. */
     static boolean writeLines(String path, ArrayList<String> lines, boolean append) {
-        try {
-            new File(DIR).mkdirs();
-            new File(DIR + "save/").mkdirs();
-            PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(path, append), "UTF-8"));
+        new File(DIR).mkdirs();
+        new File(DIR + "save/").mkdirs();
+        try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(path, append), StandardCharsets.UTF_8))) {
             for (String s : lines) {
                 pw.println(s);
             }
-            pw.close();
             return true;
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "파일을 저장하지 못했어요: " + path, e);
             return false;
         }
     }
 
     // 로그인
     public static boolean checkUser(String nick, String pw) {
-        ArrayList<String> list = readLines(DIR + "users.txt");
-        for (String line : list) {
-            String[] data = line.split(",");
-            if (data[0].equalsIgnoreCase(nick) && data[2].equals(pw)) {
-                return true;
-            }
-        }
-        return false;
+        return accounts().login(nick, pw);
     }
 
     // 대소문자 맞춰서 원래 닉네임 돌려줌
     public static String getNick(String nick) {
-        ArrayList<String> list = readLines(DIR + "users.txt");
-        for (String line : list) {
-            String[] data = line.split(",");
-            if (data[0].equalsIgnoreCase(nick)) {
-                return data[0];
-            }
-        }
-        return nick;
+        return accounts().canonicalNick(nick);
     }
 
     // 회원가입. 문제 있으면 메시지 리턴, 성공하면 null
     public static String addUser(String nick, String email, String pw) {
-        ArrayList<String> list = readLines(DIR + "users.txt");
-        for (String line : list) {
-            String[] data = line.split(",");
-            if (data[0].equalsIgnoreCase(nick)) {
-                return "이미 사용 중인 닉네임이에요.";
-            }
-            if (data[1].equalsIgnoreCase(email)) {
-                return "이미 가입된 이메일이에요.";
-            }
-        }
-        ArrayList<String> add = new ArrayList<>();
-        add.add(nick + "," + email + "," + pw);
-        if (!writeLines(DIR + "users.txt", add, true)) {
-            return "저장에 실패했어요.";
-        }
-        return null;
+        return accounts().signUp(nick, email, pw);
+    }
+
+    static AccountService accounts() {
+        return new AccountService(new FileUserRepository());
     }
 
     public static void addRecord(String nick, int score, int stage, int players, boolean clear) {
-        ArrayList<String> add = new ArrayList<>();
-        add.add(nick + "," + score + "," + stage + "," + players + "," + (clear ? 1 : 0) + "," + System.currentTimeMillis());
-        writeLines(DIR + "records.txt", add, true);
-    }
-
-    public static ArrayList<String[]> getRecords() {
-        ArrayList<String[]> result = new ArrayList<>();
-        for (String line : readLines(DIR + "records.txt")) {
-            String[] data = line.split(",");
-            if (data.length == 6) {
-                result.add(data);
-            }
-        }
-        return result;
+        new FileRecordRepository().add(new RecordEntry(nick, score, stage, players, clear, System.currentTimeMillis()));
     }
 
     // 키설정
     public static void saveKeys() {
-        ArrayList<String> lines = new ArrayList<>();
-        lines.add(join(GamePanel.keySingle));
-        lines.add(join(GamePanel.keyP1));
-        lines.add(join(GamePanel.keyP2));
-        lines.add("" + GamePanel.keyPause);
-        writeLines(DIR + "keys.txt", lines, false);
+        writeLines(DIR + "keys.txt", new ArrayList<>(KeyBindingsCodec.encode(KeyBindings.current())), false);
     }
 
     public static void loadKeys() {
-        ArrayList<String> lines = readLines(DIR + "keys.txt");
-        if (lines.size() < 4) {
-            return;
+        KeyBindings keys = KeyBindingsCodec.decode(readLines(DIR + "keys.txt"));
+        if (keys != null) {
+            keys.applyToGame();
         }
-        try {
-            int[] a = split(lines.get(0));
-            int[] b = split(lines.get(1));
-            int[] c = split(lines.get(2));
-            if (a.length == 7 && b.length == 7 && c.length == 7) {
-                GamePanel.keySingle = a;
-                GamePanel.keyP1 = b;
-                GamePanel.keyP2 = c;
-                GamePanel.keyPause = Integer.parseInt(lines.get(3).trim());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    static String join(int[] arr) {
-        String s = "";
-        for (int i = 0; i < arr.length; i++) {
-            if (i > 0) {
-                s += ",";
-            }
-            s += arr[i];
-        }
-        return s;
     }
 
     static int[] split(String s) {
