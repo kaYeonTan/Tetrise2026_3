@@ -23,11 +23,11 @@ import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
+import java.io.Serial;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 import javax.imageio.ImageIO;
@@ -61,6 +61,7 @@ import kr.ac.jbnu.se.tetris.network.lobby.LobbyService;
 
 public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener, BossPatternTarget {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     // 값은 팀원 코드(panel.screen == 5 등)와 호환되도록 숫자를 유지한다. 2번은 사용하지 않는다.
@@ -260,6 +261,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     };
 
     @SuppressWarnings("this-escape")
+    private InputStream openResource(String path) throws java.io.IOException {
+        InputStream in = getClass().getResourceAsStream(path);
+        if (in == null) {
+            throw new java.io.IOException("resource not found: " + path);
+        }
+        return in;
+    }
+
     public GamePanel() {
         this(new SoundManager());
     }
@@ -271,13 +280,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         setFocusable(true);
         setLayout(null);
         try {
-            InputStream in = getClass().getResourceAsStream("/fonts/Galmuri11.ttf");
+            InputStream in = openResource("/fonts/Galmuri11.ttf");
             font = Font.createFont(Font.TRUETYPE_FONT, in);
-            in = getClass().getResourceAsStream("/fonts/Galmuri11-Bold.ttf");
+            in = openResource("/fonts/Galmuri11-Bold.ttf");
             fontBold = Font.createFont(Font.TRUETYPE_FONT, in);
-            in = getClass().getResourceAsStream("/fonts/Galmuri9.ttf");
+            in = openResource("/fonts/Galmuri9.ttf");
             fontSmall = Font.createFont(Font.TRUETYPE_FONT, in);
-            mapImg = ImageIO.read(getClass().getResourceAsStream("/images/worldmap.png"));
+            mapImg = ImageIO.read(openResource("/images/worldmap.png"));
         } catch (java.awt.FontFormatException | java.io.IOException e) {
             System.out.println("font or image load error");
             font = new Font("Dialog", Font.PLAIN, 12);
@@ -781,35 +790,45 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
 
     @Override
     public int selectGarbageHole() {
-        if (useAEngine()) {
-            GameSession session = aEngineBridge.session();
-            if (session != null) {
-                BossBrainRunner.Decision decision = aEngineBridge.brainDecision();
-                if (decision != null && decision.responsePiece() == session.curPiece.getShape()) {
-                    return decision.garbageHole();
-                }
-                Grid board = aEngineBridge.brainSnapshot();
-                return maxMinBrain.chooseGarbageHole(board == null ? Grid.from(session) : board,
-                        session.curPiece.getShape());
-            }
+        GameSession session = brainSession();
+        if (session == null) {
+            return random.nextInt(10);
         }
-        return random.nextInt(10);
+        BossBrainRunner.Decision decision = decisionFor(session);
+        if (decision != null) {
+            return decision.garbageHole();
+        }
+        return maxMinBrain.chooseGarbageHole(brainBoard(session), session.curPiece.getShape());
     }
 
     @Override
     public Tetrominoes selectForcedPiece() {
-        if (useAEngine()) {
-            GameSession session = aEngineBridge.session();
-            if (session != null) {
-                BossBrainRunner.Decision decision = aEngineBridge.brainDecision();
-                if (decision != null && decision.responsePiece() == session.curPiece.getShape()) {
-                    return decision.forcedPiece();
-                }
-                Grid board = aEngineBridge.brainSnapshot();
-                return maxMinBrain.chooseForcedPiece(board == null ? Grid.from(session) : board);
-            }
+        GameSession session = brainSession();
+        if (session == null) {
+            return Tetrominoes.values()[1 + random.nextInt(7)];
         }
-        return Tetrominoes.values()[1 + random.nextInt(7)];
+        BossBrainRunner.Decision decision = decisionFor(session);
+        if (decision != null) {
+            return decision.forcedPiece();
+        }
+        return maxMinBrain.chooseForcedPiece(brainBoard(session));
+    }
+
+    /** 보스 두뇌를 쓸 수 있는 세션, 없으면 null(이 경우 무작위로 고른다). */
+    private GameSession brainSession() {
+        return useAEngine() ? aEngineBridge.session() : null;
+    }
+
+    /** 백그라운드에서 계산해 둔 결정이 지금 떨어지는 조각에 대한 것일 때만 돌려준다. */
+    private BossBrainRunner.Decision decisionFor(GameSession session) {
+        BossBrainRunner.Decision decision = aEngineBridge.brainDecision();
+        boolean matchesCurrentPiece = decision != null && decision.responsePiece() == session.curPiece.getShape();
+        return matchesCurrentPiece ? decision : null;
+    }
+
+    private Grid brainBoard(GameSession session) {
+        Grid snapshot = aEngineBridge.brainSnapshot();
+        return snapshot == null ? Grid.from(session) : snapshot;
     }
 
     @Override
@@ -1772,12 +1791,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         pressed.clear();
     }
 
-    boolean in(int x, int y, int w, int h) {
+    boolean isMouseInside(int x, int y, int w, int h) {
         return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
     }
 
     boolean clicked(int x, int y, int w, int h) {
-        if (!in(x, y, w, h)) {
+        if (!isMouseInside(x, y, w, h)) {
             return false;
         }
         playButtonClickSound();
@@ -1831,34 +1850,36 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             loadRanking();
             screen = SCREEN_RANKING;
         } else if (clicked(TitleLayout.SETTINGS)) {
-            settingFrom = SCREEN_TITLE;
-            editKeys = KeyBindings.current();
-            setTab = 0;
-            captureRow = -1;
-            setMsg = "";
-            screen = SCREEN_SETTINGS;
+            openSettings();
         } else if (clicked(TitleLayout.QUIT)) {
-            int r = JOptionPane.showOptionDialog(this, "모험을 마치고 게임을 종료할까요?", "게임 종료",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"종료", "취소"}, "취소");
-            if (r == 0) {
+            if (confirmOrCancel("모험을 마치고 게임을 종료할까요?", "게임 종료", "종료")) {
                 System.exit(0);
             }
-        } else if (loginUser == null && clicked(TitleLayout.LOGIN)) {
-            new LoginFrame(this, false).setVisible(true);
-        } else if (loginUser == null && clicked(TitleLayout.SIGN_UP)) {
-            new LoginFrame(this, true).setVisible(true);
-        } else if (loginUser != null && clicked(TitleLayout.LOGIN)) {
-            int r = JOptionPane.showOptionDialog(this, "로그아웃할까요?", "로그아웃",
-                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"로그아웃", "취소"}, "취소");
-            if (r == 0) {
+        } else if (clicked(TitleLayout.LOGIN)) {
+            if (loginUser == null) {
+                showLoginDialog(false);
+            } else if (confirmOrCancel("로그아웃할까요?", "로그아웃", "로그아웃")) {
                 loginUser = null;
             }
+        } else if (loginUser == null && clicked(TitleLayout.SIGN_UP)) {
+            showLoginDialog(true);
         }
+    }
+
+    private void showLoginDialog(boolean signUpMode) {
+        new LoginFrame(this, signUpMode).setVisible(true);
+    }
+
+    /** 확인 버튼을 누르면 true, 취소하거나 창을 닫으면 false. */
+    private boolean confirmOrCancel(String message, String title, String confirmLabel) {
+        int choice = JOptionPane.showOptionDialog(this, message, title, JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE, null, new String[]{confirmLabel, "취소"}, "취소");
+        return choice == 0;
     }
 
     private void handleSavesClick() {
         if (loginUser == null && clicked(UiLayout.GO_LOGIN)) {
-            new LoginFrame(this, false).setVisible(true);
+            showLoginDialog(false);
             if (loginUser != null) {
                 saveList = FileManager.getSaveList(loginUser);
             }
@@ -1867,27 +1888,39 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         } else if (clicked(UiLayout.BACK)) {
             screen = SCREEN_TITLE;
         } else if (loginUser != null) {
-            for (int i = 0; i < saveList.size() && i < UiLayout.MAX_SAVE_ROWS; i++) {
-                if (clicked(UiLayout.resumeButton(i))) {
-                    if (FileManager.loadGame(saveList.get(i)[0], this)) {
-                        screen = SCREEN_GAME;
-                        pressed.clear();
-                    } else {
-                        JOptionPane.showMessageDialog(this, "저장 파일을 읽을 수 없어요.");
-                    }
-                    break;
-                }
-                if (clicked(UiLayout.deleteButton(i))) {
-                    int r = JOptionPane.showOptionDialog(this, "스테이지 " + saveList.get(i)[2] + " · 점수 " + saveList.get(i)[3]
-                                    + "\n이 저장을 지울까요? 되돌릴 수 없어요.", "저장 삭제",
-                            JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"삭제", "취소"}, "취소");
-                    if (r == 0) {
-                        FileManager.deleteSave(saveList.get(i)[0]);
-                        saveList = FileManager.getSaveList(loginUser);
-                    }
-                    break;
-                }
+            handleSaveRowClick();
+        }
+    }
+
+    private void handleSaveRowClick() {
+        int visibleRows = Math.min(saveList.size(), UiLayout.MAX_SAVE_ROWS);
+        for (int row = 0; row < visibleRows; row++) {
+            if (clicked(UiLayout.resumeButton(row))) {
+                resumeSave(saveList.get(row)[0]);
+                return;
             }
+            if (clicked(UiLayout.deleteButton(row))) {
+                deleteSaveAfterConfirm(saveList.get(row));
+                return;
+            }
+        }
+    }
+
+    private void resumeSave(String savePath) {
+        if (FileManager.loadGame(savePath, this)) {
+            screen = SCREEN_GAME;
+            pressed.clear();
+        } else {
+            JOptionPane.showMessageDialog(this, "저장 파일을 읽을 수 없어요.");
+        }
+    }
+
+    /** save 배열: {파일경로, 날짜, 스테이지, 점수, 인원}. */
+    private void deleteSaveAfterConfirm(String[] save) {
+        String message = "스테이지 " + save[2] + " · 점수 " + save[3] + "\n이 저장을 지울까요? 되돌릴 수 없어요.";
+        if (confirmOrCancel(message, "저장 삭제", "삭제")) {
+            FileManager.deleteSave(save[0]);
+            saveList = FileManager.getSaveList(loginUser);
         }
     }
 
@@ -1904,15 +1937,15 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     private void handleSettingsClick() {
-        for (int t = 0; t < SettingsLayout.TAB_COUNT; t++) {
-            if (clicked(SettingsLayout.tab(t))) {
-                setTab = t;
+        for (int tab = 0; tab < SettingsLayout.TAB_COUNT; tab++) {
+            if (clicked(SettingsLayout.tab(tab))) {
+                setTab = tab;
                 captureRow = -1;
             }
         }
-        for (int r = 0; r < editKeys.rowCount(setTab); r++) {
-            if (clicked(SettingsLayout.keyButton(r))) {
-                captureRow = r;
+        for (int row = 0; row < editKeys.rowCount(setTab); row++) {
+            if (clicked(SettingsLayout.keyButton(row))) {
+                captureRow = row;
                 setMsg = "새 키를 누르세요. 취소하려면 Esc를 누르세요.";
                 setMsgError = false;
             }
@@ -1923,10 +1956,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             setMsg = "기본 키 배치로 되돌렸어요. 저장을 눌러야 적용돼요.";
             setMsgError = false;
         } else if (clicked(SettingsLayout.SAVE)) {
-            editKeys.applyToGame();
-            FileManager.saveKeys();
-            setMsg = "저장했어요! 바로 게임에 적용돼요.";
-            setMsgError = false;
+            saveSettings();
         } else if (clicked(SettingsLayout.CLOSE)) {
             closeSettings();
         }
@@ -2347,7 +2377,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     void drawButton(Graphics2D g, String text, int x, int y, int w, int h, int type, float size) {
-        boolean hover = in(x, y, w, h);
+        boolean hover = isMouseInside(x, y, w, h);
         g.setColor(new Color(0x0c090d));
         g.fillRect(x, y + 5, w, h);
         g.setColor(new Color(0x1a1216));
@@ -2484,26 +2514,29 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawLayoutButton(g, "← 뒤로", UiLayout.BACK, 2, 16.5f);
     }
 
-    private void drawSaveRow(Graphics2D g, int index, String[] s, SimpleDateFormat df) {
-        String[] stageNames = {"", "불타는 사막", "고립된 섬", "고요한 초원", "얼어붙은 설원", "하늘 위 마왕성"};
+    private static final String[] SAVE_STAGE_NAMES = {"", "불타는 사막", "고립된 섬", "고요한 초원", "얼어붙은 설원", "하늘 위 마왕성"};
+    private static final String[] RANK_STAGE_NAMES = {"", "사막", "섬", "초원", "설원", "마왕성"};
+    private static final Color[] RANK_MEDAL_COLORS = {new Color(0xf2c14e), new Color(0xcfd6de), new Color(0xd08a4a)};
+
+    private void drawSaveRow(Graphics2D g, int index, String[] save, SimpleDateFormat dateFormat) {
         int y = 146 + index * 88;
-        int st = Integer.parseInt(s[2]);
+        int saveStage = Integer.parseInt(save[2]);
         g.setColor(new Color(0x1a1216));
         g.fillRect(250, y, 780, 80);
         g.setColor(new Color(0xd9c29a));
         g.fillRect(254, y + 4, 772, 72);
         g.setColor(new Color(0xefe0bf));
         g.fillRect(254, y + 4, 772, 3);
-        g.drawImage(Art.background(st), 262, y + 10, 262 + 110, y + 70, 260, 90, 1020, 630, null);
+        g.drawImage(Art.background(saveStage), 262, y + 10, 262 + 110, y + 70, 260, 90, 1020, 630, null);
         g.setColor(new Color(0x1a1216));
         g.drawRect(262, y + 10, 110, 60);
         g.setFont(fontBold.deriveFont(22f));
-        g.drawString("스테이지 " + st + " · " + stageNames[st], 390, y + 32);
+        g.drawString("스테이지 " + saveStage + " · " + SAVE_STAGE_NAMES[saveStage], 390, y + 32);
         g.setFont(font.deriveFont(16.5f));
         g.setColor(new Color(0x4a3a2a));
-        g.drawString((s[4].equals("2") ? "단일 PC 2인" : "1인 플레이")
-                + "  ·  점수 " + String.format("%,d", Integer.parseInt(s[3])), 390, y + 54);
-        g.drawString("마지막 플레이  " + df.format(new Date(Long.parseLong(s[1]))), 390, y + 74);
+        g.drawString((save[4].equals("2") ? "단일 PC 2인" : "1인 플레이")
+                + "  ·  점수 " + String.format("%,d", Integer.parseInt(save[3])), 390, y + 54);
+        g.drawString("마지막 플레이  " + dateFormat.format(new Date(Long.parseLong(save[1]))), 390, y + 74);
         drawLayoutButton(g, "이어하기", UiLayout.resumeButton(index), 1, 16.5f);
         drawLayoutButton(g, "삭제", UiLayout.deleteButton(index), 0, 16.5f);
     }
@@ -2541,12 +2574,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         drawLayoutButton(g, "← 뒤로", UiLayout.BACK, 2, 16.5f);
     }
 
-    private void drawRankRow(Graphics2D g, int index, RecordEntry r, SimpleDateFormat df) {
-        String[] stageNames = {"", "사막", "섬", "초원", "설원", "마왕성"};
-        Color[] medal = {new Color(0xf2c14e), new Color(0xcfd6de), new Color(0xd08a4a)};
+    private void drawRankRow(Graphics2D g, int index, RecordEntry record, SimpleDateFormat dateFormat) {
         int y = 266 + index * 40;
-        boolean me = r.nick().equals(loginUser);
-        if (me) {
+        boolean isMine = record.nick().equals(loginUser);
+        if (isMine) {
             g.setColor(new Color(0x5a3a2a));
             g.fillRect(180, y, 920, 36);
         } else if (index % 2 == 1) {
@@ -2554,7 +2585,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             g.fillRect(180, y, 920, 36);
         }
         if (index < 3) {
-            g.setColor(medal[index]);
+            g.setColor(RANK_MEDAL_COLORS[index]);
             g.fillRect(192, y + 6, 26, 24);
             g.setColor(new Color(0x1a1216));
             g.setFont(fontBold.deriveFont(16.5f));
@@ -2565,22 +2596,22 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             g.drawString("" + (index + 1), 200, y + 24);
         }
         g.setFont(font.deriveFont(22f));
-        g.setColor(me ? new Color(0xe9c98f) : new Color(0xf0e2c8));
-        g.drawString(r.nick() + (me ? " (나)" : ""), 280, y + 26);
+        g.setColor(isMine ? new Color(0xe9c98f) : new Color(0xf0e2c8));
+        g.drawString(record.nick() + (isMine ? " (나)" : ""), 280, y + 26);
         g.setColor(new Color(0xf0e2c8));
-        g.drawString(String.format("%,d", r.score()), 550, y + 26);
+        g.drawString(String.format("%,d", record.score()), 550, y + 26);
         g.setFont(font.deriveFont(16.5f));
-        if (r.clear()) {
+        if (record.clear()) {
             g.setColor(new Color(0xe9c98f));
             g.drawString("전체 클리어", 730, y + 24);
         } else {
             g.setColor(new Color(0xd9c29a));
-            g.drawString(r.stage() + " · " + stageNames[r.stage()], 730, y + 24);
+            g.drawString(record.stage() + " · " + RANK_STAGE_NAMES[record.stage()], 730, y + 24);
         }
         g.setColor(new Color(0xd9c29a));
-        g.drawString(r.players() + "인", 900, y + 24);
+        g.drawString(record.players() + "인", 900, y + 24);
         g.setColor(new Color(0x9a8f9f));
-        g.drawString(df.format(new Date(r.timeMillis())), 1010, y + 24);
+        g.drawString(dateFormat.format(new Date(record.timeMillis())), 1010, y + 24);
     }
 
     void drawSettings(Graphics2D g) {
@@ -3160,7 +3191,8 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         double progress = customVictory ? bossPattern.progress(this) : (double) bossHp / bossMax;
         int violations = customVictory ? bossPattern.violationCount(this) : 0;
         int filled = (int) (482.0 * Math.max(0.0, Math.min(1.0, progress)));
-        g.setColor(customVictory ? (violations > 0 ? new Color(0xc9432f) : new Color(0x4fa65a)) : new Color(0xc9432f));
+        boolean blueprintOk = customVictory && violations == 0;
+        g.setColor(blueprintOk ? new Color(0x4fa65a) : new Color(0xc9432f));
         g.fillRect(barX + 19, 53, filled, 18);
         g.setColor(new Color(255, 255, 255, 60));
         g.fillRect(barX + 19, 53, filled, 4);
@@ -3170,10 +3202,10 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         g.setFont(font.deriveFont(13.5f));
         g.setColor(new Color(0xf0e2c8));
-        String hp = customVictory
+        String hpText = customVictory
                 ? "BLUEPRINT " + Math.round(progress * 100) + "%" + (violations > 0 ? "  MISPLACED " + violations : "")
                 : bossHp + " / " + bossMax;
-        g.drawString(hp, barX + 260 - g.getFontMetrics().stringWidth(hp) / 2, 67);
+        g.drawString(hpText, barX + 260 - g.getFontMetrics().stringWidth(hpText) / 2, 67);
     }
 
     private void drawBossWarningBanner(Graphics2D g) {
@@ -3358,16 +3390,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         centerText(g, "일시정지", 640, 180, new Color(0x1a1216), new Color(0xefe0bf));
         drawButton(g, "계속하기", PAUSE_BTN_X, PAUSE_Y_CONTINUE, PAUSE_BTN_W, PAUSE_BTN_H, 1, 22f);
         drawButton(g, "저장하기", PAUSE_BTN_X, PAUSE_Y_SAVE, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
-        boolean showLoad = isTwoPlayer || isOnlineCoop;
-        if (showLoad) {
+        if (isTwoPlayer || isOnlineCoop) {
             drawButton(g, "불러오기", PAUSE_BTN_X, PAUSE_Y_LOAD, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
         }
         drawButton(g, "환경설정", PAUSE_BTN_X, PAUSE_Y_SETTINGS, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
         drawButton(g, "메인으로", PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
         g.setFont(fontSmall.deriveFont(13.5f));
-        g.setColor(new Color(0x1a1216));
-        String t = msgTimer > 0 ? msg : "";
-        g.drawString(t, 640 - g.getFontMetrics().stringWidth(t) / 2, PAUSE_MSG_Y);
+        String message = msgTimer > 0 ? msg : "";
+        centerPlainText(g, message, 640, PAUSE_MSG_Y, new Color(0x1a1216));
     }
 
     void drawResult(Graphics2D g) {
@@ -3377,19 +3407,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         g.setFont(fontBold.deriveFont(44f));
         centerText(g, allClear ? "ALL CLEAR!" : "GAME OVER", 640, 240, allClear ? new Color(0x6b2a1a) : new Color(0x1a1216), new Color(0xefe0bf));
         g.setFont(font.deriveFont(22f));
-        g.setColor(new Color(0x1a1216));
-        String s1 = allClear ? "다섯 보스를 모두 쓰러뜨렸어요!" : "스테이지 " + stage + "에서 쓰러졌어요.";
-        g.drawString(s1, 640 - g.getFontMetrics().stringWidth(s1) / 2, 300);
-        String s2 = isTwoPlayer ? "P1 " + String.format("%,d", p1Score) + "  ·  P2 " + String.format("%,d", p2Score)
+        Color textColor = new Color(0x1a1216);
+        String summary = allClear ? "다섯 보스를 모두 쓰러뜨렸어요!" : "스테이지 " + stage + "에서 쓰러졌어요.";
+        centerPlainText(g, summary, 640, 300, textColor);
+        String scoreText = isTwoPlayer ? "P1 " + String.format("%,d", p1Score) + "  ·  P2 " + String.format("%,d", p2Score)
                 : "점수 " + String.format("%,d", p1Score);
-        g.drawString(s2, 640 - g.getFontMetrics().stringWidth(s2) / 2, 344);
+        centerPlainText(g, scoreText, 640, 344, textColor);
         if (isTwoPlayer) {
-            String s3 = "합계 " + String.format("%,d", p1Score + p2Score);
-            g.drawString(s3, 640 - g.getFontMetrics().stringWidth(s3) / 2, 380);
+            centerPlainText(g, "합계 " + String.format("%,d", p1Score + p2Score), 640, 380, textColor);
         }
         g.setFont(font.deriveFont(16.5f));
-        g.setColor(new Color(0x3a5a2a));
-        g.drawString(resultMsg, 640 - g.getFontMetrics().stringWidth(resultMsg) / 2, 430);
+        centerPlainText(g, resultMsg, 640, 430, new Color(0x3a5a2a));
         drawButton(g, "메인으로", 490, 470, 300, 54, 1, 22f);
     }
 

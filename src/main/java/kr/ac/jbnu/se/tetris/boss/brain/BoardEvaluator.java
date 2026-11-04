@@ -32,8 +32,8 @@ public final class BoardEvaluator {
 
     private static int sum(int[] values) {
         int total = 0;
-        for (int v : values) {
-            total += v;
+        for (int value : values) {
+            total += value;
         }
         return total;
     }

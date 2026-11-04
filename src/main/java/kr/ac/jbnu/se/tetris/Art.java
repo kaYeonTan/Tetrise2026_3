@@ -7,6 +7,7 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Random;
 import javax.imageio.ImageIO;
 
@@ -16,86 +17,81 @@ public class Art {
         IDLE, HIT, DEATH
     }
 
-    static BufferedImage[] bgImg = new BufferedImage[6];
-    static BufferedImage[] monsterImg = new BufferedImage[6];
-    static BufferedImage[][] monsterFileImg = new BufferedImage[6][MonsterPose.values().length];
-    static BufferedImage[] flameImg;
+    private static final int STAGE_SLOTS = 6;
+    private static final int FLAME_FRAME_COUNT = 2;
+    private static final int FLAME_WIDTH = 7;
+    private static final int FLAME_HEIGHT = 11;
+    private static final String[] IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"};
+
+    private static final BufferedImage[] backgroundCache = new BufferedImage[STAGE_SLOTS];
+    private static final BufferedImage[] proceduralMonsterCache = new BufferedImage[STAGE_SLOTS];
+    private static final BufferedImage[][] monsterSpriteCache =
+            new BufferedImage[STAGE_SLOTS][MonsterPose.values().length];
+    private static BufferedImage[] flameFrames;
 
     public static BufferedImage background(int stage) {
-        if (bgImg[stage] == null) {
-            bgImg[stage] = loadBackgroundFile(stage);
+        if (backgroundCache[stage] == null) {
+            backgroundCache[stage] = loadBackgroundFile(stage);
         }
-        if (bgImg[stage] == null) {
-            bgImg[stage] = proceduralBackground(stage);
+        if (backgroundCache[stage] == null) {
+            backgroundCache[stage] = proceduralBackground(stage);
         }
-        return bgImg[stage];
+        return backgroundCache[stage];
     }
 
     static BufferedImage loadBackgroundFile(int stage) {
         if (stage < 1 || stage > 5) {
             return null;
         }
-        String base = "/images/background/stage" + stage;
-        for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
-            BufferedImage img = readResourceImage(base + ext);
-            if (img != null) {
-                return img;
+        return readFirstExistingImage("/images/background/stage" + stage);
+    }
+
+    /** 확장자(png, jpg, jpeg)를 차례로 붙여 처음 읽히는 이미지를 돌려준다. 없으면 null. */
+    private static BufferedImage readFirstExistingImage(String pathWithoutExtension) {
+        for (String extension : IMAGE_EXTENSIONS) {
+            BufferedImage image = readResourceImage(pathWithoutExtension + extension);
+            if (image != null) {
+                return image;
             }
         }
         return null;
     }
 
     static BufferedImage proceduralBackground(int stage) {
-        Pix c = new Pix(427, 240);
-        Random rnd = new Random(stage * 101);
+        Pix canvas = new Pix(427, 240);
+        Random random = new Random(stage * 101L);
         switch (stage) {
-            case 1:
-                desertBg(c, rnd);
-                break;
-            case 2:
-                islandBg(c, rnd);
-                break;
-            case 3:
-                grassBg(c, rnd);
-                break;
-            case 4:
-                snowBg(c, rnd);
-                break;
-            default:
-                skyBg(c, rnd);
-                break;
+            case 1 -> desertBg(canvas, random);
+            case 2 -> islandBg(canvas, random);
+            case 3 -> grassBg(canvas, random);
+            case 4 -> snowBg(canvas, random);
+            default -> skyBg(canvas, random);
         }
-        return c.toImage(3);
-    }
-
-    public static BufferedImage monster(int stage) {
-        return monster(stage, MonsterPose.IDLE);
+        return canvas.toImage(3);
     }
 
     public static BufferedImage monster(int stage, MonsterPose pose) {
-        if (stage < 1 || stage > 5) {
-            stage = Math.max(1, Math.min(5, stage));
-        }
+        stage = Math.max(1, Math.min(5, stage));
         int poseIndex = pose.ordinal();
-        if (monsterFileImg[stage][poseIndex] == null) {
-            monsterFileImg[stage][poseIndex] = loadMonsterFile(stage, pose);
+        int idleIndex = MonsterPose.IDLE.ordinal();
+        BufferedImage[] stageSprites = monsterSpriteCache[stage];
+        if (stageSprites[poseIndex] == null) {
+            stageSprites[poseIndex] = loadMonsterFile(stage, pose);
         }
-        if (monsterFileImg[stage][poseIndex] != null) {
-            return monsterFileImg[stage][poseIndex];
+        if (stageSprites[poseIndex] != null) {
+            return stageSprites[poseIndex];
         }
-        if (pose != MonsterPose.IDLE && monsterFileImg[stage][MonsterPose.IDLE.ordinal()] != null) {
-            return monsterFileImg[stage][MonsterPose.IDLE.ordinal()];
+        if (pose != MonsterPose.IDLE && stageSprites[idleIndex] != null) {
+            return stageSprites[idleIndex];
         }
         return proceduralMonster(stage);
     }
 
     static BufferedImage loadMonsterFile(int stage, MonsterPose pose) {
-        String name = pose.name().toLowerCase();
-        for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
-            BufferedImage img = readResourceImage("/images/boss/stage" + stage + "/" + name + ext);
-            if (img != null) {
-                return flipHorizontal(solidifySpriteAlpha(img));
-            }
+        String poseName = pose.name().toLowerCase();
+        BufferedImage image = readFirstExistingImage("/images/boss/stage" + stage + "/" + poseName);
+        if (image != null) {
+            return flipHorizontal(solidifySpriteAlpha(image));
         }
         if (pose == MonsterPose.DEATH) {
             System.err.println("Art: could not load boss death sprite for stage " + stage);
@@ -152,16 +148,6 @@ public class Art {
         return out;
     }
 
-    /** Clears cached boss sprites after PNG assets change (call on new game session if needed). */
-    public static void resetMonsterCache() {
-        for (int stage = 0; stage < monsterFileImg.length; stage++) {
-            for (int pose = 0; pose < monsterFileImg[stage].length; pose++) {
-                monsterFileImg[stage][pose] = null;
-            }
-        }
-        monsterImg = new BufferedImage[6];
-    }
-
     static BufferedImage readResourceImage(String resourcePath) {
         try (InputStream in = Art.class.getResourceAsStream(resourcePath)) {
             if (in == null) {
@@ -178,33 +164,33 @@ public class Art {
     }
 
     static BufferedImage proceduralMonster(int stage) {
-        if (monsterImg[stage] == null) {
-            Pix c;
-            Random rnd = new Random(stage * 101 + 1);
+        if (proceduralMonsterCache[stage] == null) {
+            Pix canvas;
+            Random random = new Random(stage * 101L + 1);
             if (stage == 1) {
-                c = new Pix(76, 100);
-                desertMonster(c, rnd);
-                c.outline(0x1f2a14);
+                canvas = new Pix(76, 100);
+                desertMonster(canvas, random);
+                canvas.outline(0x1f2a14);
             } else if (stage == 2) {
-                c = new Pix(100, 112);
-                islandMonster(c, rnd);
-                c.outline(0x0b2230);
+                canvas = new Pix(100, 112);
+                islandMonster(canvas, random);
+                canvas.outline(0x0b2230);
             } else if (stage == 3) {
-                c = new Pix(112, 118);
-                grassMonster(c, rnd);
-                c.outline(0x1a2a12);
+                canvas = new Pix(112, 118);
+                grassMonster(canvas, random);
+                canvas.outline(0x1a2a12);
             } else if (stage == 4) {
-                c = new Pix(104, 108);
-                snowMonster(c, rnd);
-                c.outline(0x2e3a4c);
+                canvas = new Pix(104, 108);
+                snowMonster(canvas, random);
+                canvas.outline(0x2e3a4c);
             } else {
-                c = new Pix(118, 112);
-                skyMonster(c, rnd);
-                c.outline(0x0a0510);
+                canvas = new Pix(118, 112);
+                skyMonster(canvas, random);
+                canvas.outline(0x0a0510);
             }
-            monsterImg[stage] = flipHorizontal(toArgb(c.toImage(3)));
+            proceduralMonsterCache[stage] = flipHorizontal(toArgb(canvas.toImage(3)));
         }
-        return monsterImg[stage];
+        return proceduralMonsterCache[stage];
     }
 
     public static void effect(Graphics2D g, int stage, int w, int h, long time) {
@@ -218,41 +204,50 @@ public class Art {
     }
 
     public static BufferedImage flame(int frame) {
-        if (flameImg == null) {
-            String[][] rows = {
-                {"...o...", "...o...", "..oo...", "..ooo..", ".oomo..", ".ommmo.",
-                 ".ommmo.", "oommmo.", "ommcmmo", "ommcmmo", ".omcmo."},
-                {"....o..", "...oo..", "...oo..", "..ooo..", "..omoo.", ".ommmo.",
-                 ".ommmoo", ".ommmoo", "ommcmmo", "ommcmmo", ".omcmo."}
-            };
-            flameImg = new BufferedImage[2];
-            for (int i = 0; i < 2; i++) {
-                Pix c = new Pix(7, 11);
-                for (int y = 0; y < 11; y++) {
-                    for (int x = 0; x < 7; x++) {
-                        char ch = rows[i][y].charAt(x);
-                        if (ch == 'o') c.set(x, y, 0xe8622a);
-                        if (ch == 'm') c.set(x, y, 0xf7a531);
-                        if (ch == 'c') c.set(x, y, 0xffe9a3);
-                    }
-                }
-                flameImg[i] = c.toImage(3);
-            }
+        if (flameFrames == null) {
+            flameFrames = buildFlameFrames();
         }
-        return flameImg[frame % 2];
+        return flameFrames[frame % FLAME_FRAME_COUNT];
+    }
+
+    private static BufferedImage[] buildFlameFrames() {
+        String[][] shapes = {
+            {"...o...", "...o...", "..oo...", "..ooo..", ".oomo..", ".ommmo.",
+             ".ommmo.", "oommmo.", "ommcmmo", "ommcmmo", ".omcmo."},
+            {"....o..", "...oo..", "...oo..", "..ooo..", "..omoo.", ".ommmo.",
+             ".ommmoo", ".ommmoo", "ommcmmo", "ommcmmo", ".omcmo."}
+        };
+        BufferedImage[] frames = new BufferedImage[FLAME_FRAME_COUNT];
+        for (int frame = 0; frame < FLAME_FRAME_COUNT; frame++) {
+            Pix canvas = new Pix(FLAME_WIDTH, FLAME_HEIGHT);
+            for (int y = 0; y < FLAME_HEIGHT; y++) {
+                for (int x = 0; x < FLAME_WIDTH; x++) {
+                    paintFlamePixel(canvas, x, y, shapes[frame][y].charAt(x));
+                }
+            }
+            frames[frame] = canvas.toImage(3);
+        }
+        return frames;
+    }
+
+    /** o = 겉불꽃, m = 중간, c = 속불꽃, 그 외는 투명. */
+    private static void paintFlamePixel(Pix canvas, int x, int y, char symbol) {
+        if (symbol == 'o') canvas.set(x, y, 0xe8622a);
+        if (symbol == 'm') canvas.set(x, y, 0xf7a531);
+        if (symbol == 'c') canvas.set(x, y, 0xffe9a3);
     }
 
 
-    static int[][] TORCHES = {{177, 86}, {409, 86}};
+    static final int[][] TORCHES = {{177, 86}, {409, 86}};
 
-    static BufferedImage castleImg;
+    private static BufferedImage castleCache;
 
 
     static BufferedImage castle() {
-        if (castleImg == null) {
-            castleImg = paintCastle().toImage(3);
+        if (castleCache == null) {
+            castleCache = paintCastle().toImage(3);
         }
-        return castleImg;
+        return castleCache;
     }
 
     static Pix paintCastle() {
@@ -1023,7 +1018,7 @@ public class Art {
             this.w = w;
             this.h = h;
             this.px = new int[w * h];
-            java.util.Arrays.fill(px, CLEAR);
+            Arrays.fill(px, CLEAR);
         }
 
         public int width() {

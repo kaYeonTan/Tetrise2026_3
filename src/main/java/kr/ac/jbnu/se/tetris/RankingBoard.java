@@ -16,10 +16,10 @@ public final class RankingBoard {
     public static List<RecordEntry> rank(List<RecordEntry> records, boolean byStage) {
         Comparator<RecordEntry> order = byStage ? byStageThenScore() : byScore();
         Map<String, RecordEntry> best = new LinkedHashMap<>();
-        for (RecordEntry r : records) {
-            RecordEntry old = best.get(r.nick());
-            if (old == null || order.compare(r, old) < 0) {
-                best.put(r.nick(), r);
+        for (RecordEntry record : records) {
+            RecordEntry previousBest = best.get(record.nick());
+            if (previousBest == null || order.compare(record, previousBest) < 0) {
+                best.put(record.nick(), record);
             }
         }
         List<RecordEntry> ranked = new ArrayList<>(best.values());
@@ -33,8 +33,8 @@ public final class RankingBoard {
 
     private static Comparator<RecordEntry> byStageThenScore() {
         return (a, b) -> {
-            int p = Integer.compare(b.progress(), a.progress());
-            return p != 0 ? p : Integer.compare(b.score(), a.score());
+            int byProgress = Integer.compare(b.progress(), a.progress());
+            return byProgress != 0 ? byProgress : Integer.compare(b.score(), a.score());
         };
     }
 }

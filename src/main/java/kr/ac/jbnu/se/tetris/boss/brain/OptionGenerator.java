@@ -1,6 +1,7 @@
 package kr.ac.jbnu.se.tetris.boss.brain;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 
@@ -12,7 +13,7 @@ public final class OptionGenerator {
             Tetrominoes.SShape, Tetrominoes.ZShape, Tetrominoes.LShape, Tetrominoes.MirroredLShape);
 
     public List<Integer> garbageHoles() {
-        return java.util.stream.IntStream.range(0, Grid.WIDTH).boxed().toList();
+        return IntStream.range(0, Grid.WIDTH).boxed().toList();
     }
 
     public List<Tetrominoes> forcedPieces() {

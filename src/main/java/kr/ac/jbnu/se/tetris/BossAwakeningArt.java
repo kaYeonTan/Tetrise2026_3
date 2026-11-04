@@ -8,6 +8,8 @@ final class BossAwakeningArt {
     private static final int FINAL_STAGE = 5;
     private static final int FINAL_STAGE_FRAMES = 75;
     private static final int DEFAULT_FRAMES = 70;
+    private static final int SCREEN_WIDTH = 1280;
+    private static final int SCREEN_HEIGHT = 720;
 
     private BossAwakeningArt() {
     }
@@ -41,28 +43,28 @@ final class BossAwakeningArt {
 
     private static void drawIsland(Graphics2D g, int passed, int bossX) {
         for (int wave = 0; wave < 3; wave++) {
-            int y = 580 - wave * 90 - (passed * 4) % 80;
+            int waveY = 580 - wave * 90 - (passed * 4) % 80;
             g.setColor(new Color(88, 190, 231, 120));
-            for (int x = 0; x < 1280; x += 24) {
-                int y1 = y + (int) (Math.sin((x + passed * 18) * 0.05) * 11);
-                int y2 = y + (int) (Math.sin((x + 24 + passed * 18) * 0.05) * 11);
-                g.drawLine(x, y1, x + 24, y2);
+            for (int x = 0; x < SCREEN_WIDTH; x += 24) {
+                int startY = waveY + (int) (Math.sin((x + passed * 18) * 0.05) * 11);
+                int endY = waveY + (int) (Math.sin((x + 24 + passed * 18) * 0.05) * 11);
+                g.drawLine(x, startY, x + 24, endY);
             }
         }
         g.setColor(new Color(245, 250, 255, 220));
-        int x = bossX - 20 + (passed % 3) * 12;
-        int y = 110;
-        for (int i = 0; i < 6; i++) {
-            int nextX = x + (i % 2 == 0 ? -18 : 20);
-            g.drawLine(x, y, nextX, y + 42);
-            x = nextX;
-            y += 42;
+        int boltX = bossX - 20 + (passed % 3) * 12;
+        int boltY = 110;
+        for (int segment = 0; segment < 6; segment++) {
+            int nextX = boltX + (segment % 2 == 0 ? -18 : 20);
+            g.drawLine(boltX, boltY, nextX, boltY + 42);
+            boltX = nextX;
+            boltY += 42;
         }
     }
 
     private static void drawMeadow(Graphics2D g, int passed) {
         for (int i = 0; i < 38; i++) {
-            int x = Math.floorMod(i * 97 + passed * (i % 3 + 2) * 5, 1280);
+            int x = Math.floorMod(i * 97 + passed * (i % 3 + 2) * 5, SCREEN_WIDTH);
             int y = Math.floorMod(i * 47 + passed * (i % 4 + 3) * 4, 610);
             g.setColor(i % 3 == 0 ? new Color(211, 170, 70, 200)
                     : new Color(92, 151, 70, 210));
@@ -73,7 +75,7 @@ final class BossAwakeningArt {
 
     private static void drawSnow(Graphics2D g, int passed) {
         for (int i = 0; i < 44; i++) {
-            int x = Math.floorMod(i * 83 + passed * (i % 4 + 2) * 4, 1280);
+            int x = Math.floorMod(i * 83 + passed * (i % 4 + 2) * 4, SCREEN_WIDTH);
             int y = Math.floorMod(i * 59 + passed * (i % 3 + 3) * 5, 600);
             boolean crystal = i % 4 == 0;
             g.setColor(crystal ? new Color(145, 218, 255, 210) : new Color(248, 253, 255, 220));
@@ -88,14 +90,15 @@ final class BossAwakeningArt {
 
     private static void drawCastle(Graphics2D g, int passed) {
         int phase = passed / 25;
-        if (phase == 1) {
+        boolean nightPhase = phase == 1;
+        if (nightPhase) {
             g.setColor(new Color(15, 16, 52, 185));
-            g.fillRect(0, 0, 1280, 720);
+            g.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             g.setColor(new Color(214, 225, 255, 235));
             g.fillOval(1016, 38, 88, 88);
         } else {
             g.setColor(new Color(255, 212, 105, 135));
-            g.fillRect(0, 0, 1280, 720);
+            g.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             g.setColor(new Color(255, 238, 160, 235));
             g.fillOval(1010, 32, 100, 100);
         }
