@@ -127,6 +127,14 @@ public class GameEngine {
 		return pieceLockSequence;
 	}
 
+	/** 네트워크 스냅샷·복원 시 줄 삭제 연출 상태를 끈다. */
+	public void resetLineClearPresentation() {
+		lineClearAnim = false;
+		pendingLineClearCount = 0;
+		pendingBossGarbageHole = -1;
+		sessions.get(0).clearLineClearBlink();
+	}
+
 	public void pause() {
 		if (!isStarted)
 			return;
@@ -159,9 +167,9 @@ public class GameEngine {
 	}
 
 	void onPieceLanded(GameSession s) {
+		pieceLockSequence++;
 		s.unlockHold();
 		s.lockPieceToBoard();
-		pieceLockSequence++;
 		bus.publish(new GameEvent(GameEventType.PIECE_LOCKED, s.playerIndex, 0));
 
 		int toClear = s.prepareLineClearAnimation();
@@ -203,12 +211,19 @@ public class GameEngine {
 	}
 
 	void handleGameOver() {
+		if (gameOverSent) {
+			return;
+		}
+		freezeAfterElimination();
+		int idx = sessions.isEmpty() ? 0 : sessions.get(0).playerIndex;
+		bus.publish(new GameEvent(GameEventType.GAME_OVER, idx, 0));
+	}
+
+	/** 저장 불러오기 등: 이벤트 없이 해당 엔진만 정지 */
+	public void freezeAfterElimination() {
 		isStarted = false;
 		lineClearAnim = false;
-		if (!gameOverSent) {
-			gameOverSent = true;
-			bus.publish(new GameEvent(GameEventType.GAME_OVER, 0, 0));
-		}
+		gameOverSent = true;
 	}
 
 	/** C파트 보스 연동용 (추후 BossBrain에서 호출) */

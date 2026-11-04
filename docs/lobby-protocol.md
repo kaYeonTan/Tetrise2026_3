@@ -20,6 +20,7 @@
 비밀방 코드는 서버가 만든다. 방장은 내 대기실에서 코드를 확인할 수 있다.
 
 게임 중에는 `PLAYER_ACTION`으로 키 입력을 보내고, 방장은 `COOP_SNAPSHOT`을 보낸다.
-저장은 방장만 할 수 있다.
+저장은 방장이 슬롯을 고른 뒤 `COOP_SAVE`로 보내면, 서버가 참가자에게 `COOP_SAVE_PUSH`를 보낸다.
+온라인 협동은 로그인 계정으로만 접속·저장한다.
 
 관련 코드는 `network/lobby`, `network/coop`, `LobbyFrame.java` 쪽에 있다.

@@ -68,6 +68,7 @@ class BossPatternControllerTest {
     @Test
     void stageTwoWarnsThreeSecondsBeforeRaisingBlocks() {
         FakeTarget target = new FakeTarget();
+        target.garbageHole = 6;
         BossPatternController controller = new BossPatternController(new Random(1));
         controller.startStage(2, target);
 
@@ -78,6 +79,7 @@ class BossPatternControllerTest {
         controller.tick(3_000, target);
 
         assertEquals(1, target.raised);
+        assertEquals(6, target.raisedHole);
         assertFalse(target.warning);
         assertEquals(0, controller.elapsedMillis());
     }
@@ -146,19 +148,22 @@ class BossPatternControllerTest {
         controller.startStage(5, target);
         controller.tick(20_000, target);
         assertEquals(10_000, target.keyDuration);
-        assertFalse(java.util.Arrays.equals(target.primaryOriginalKeys(), target.primaryKeys));
-        assertFalse(java.util.Arrays.equals(target.secondaryOriginalKeys(), target.secondaryKeys));
+        int[] identity = {0, 1, 2, 3, 4, 5, 6};
+        assertFalse(java.util.Arrays.equals(identity, target.primaryMapping));
+        assertFalse(java.util.Arrays.equals(identity, target.secondaryMapping));
     }
 
     private static final class FakeTarget implements BossPatternTarget {
         boolean warning;
         int raised;
+        int garbageHole;
+        int raisedHole = -1;
         boolean twoPlayer;
         int accelerationDuration;
         int gravityMultiplier;
         int nextPieceMultiplier;
-        int[] primaryKeys;
-        int[] secondaryKeys;
+        int[] primaryMapping;
+        int[] secondaryMapping;
         int keyDuration;
         boolean[][] occupied = new boolean[Blueprint.ROWS][Blueprint.COLUMNS];
         boolean blueprintCompleted;
@@ -180,6 +185,17 @@ class BossPatternControllerTest {
         @Override
         public void raiseBlocks() {
             raised++;
+        }
+
+        @Override
+        public void raiseBlocks(int hole) {
+            raised++;
+            raisedHole = hole;
+        }
+
+        @Override
+        public int selectGarbageHole() {
+            return garbageHole;
         }
 
         @Override
@@ -205,9 +221,9 @@ class BossPatternControllerTest {
         }
 
         @Override
-        public void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis) {
-            this.primaryKeys = primaryKeys;
-            this.secondaryKeys = secondaryKeys;
+        public void applyTemporaryKeyMappings(int[] primaryMapping, int[] secondaryMapping, int durationMillis) {
+            this.primaryMapping = primaryMapping;
+            this.secondaryMapping = secondaryMapping;
             keyDuration = durationMillis;
         }
 

@@ -1,15 +1,19 @@
 package kr.ac.jbnu.se.tetris;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.util.HashSet;
 import java.util.Random;
 import javax.swing.JLabel;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.integration.CoopEngineBridge;
+import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -84,6 +88,18 @@ class GamePanelTest {
         p.holdP1();
         p.holdP1();
         assertEquals(first, p.p1Hold);
+    }
+
+    @Test
+    void twoPlayerDoublesBossMax() {
+        p.newGame(false);
+        p.stage = 1;
+        p.startStage();
+        assertEquals(100, p.bossMax);
+        p.newGame(true);
+        p.stage = 1;
+        p.startStage();
+        assertEquals(200, p.bossMax);
     }
 
     @Test
@@ -162,6 +178,59 @@ class GamePanelTest {
         assertEquals(9, occupiedCells(player1, 0));
         assertEquals(player0Y + 1, player0.curY);
         assertEquals(player1Y + 1, player1.curY);
+    }
+
+    @Test
+    void onlineRandomKeyMappingUsesEachClientsSinglePlayerKeys() {
+        int[] savedSingleKeys = GamePanel.keySingle;
+        try {
+            int[] hostSingleKeys = {101, 102, 103, 104, 105, 106, 107};
+            int[] hostMapping = {1, 2, 3, 4, 5, 6, 0};
+            int[] guestMapping = {6, 5, 4, 3, 2, 1, 0};
+            GamePanel.keySingle = hostSingleKeys;
+            p.newGame(true);
+            p.isOnlineCoop = true;
+            p.localPlayerIndex = 0;
+            p.stage = 5;
+            p.startStage();
+            p.applyTemporaryKeyMappings(hostMapping, guestMapping, 10_000);
+
+            assertArrayEquals(new int[]{102, 103, 104, 105, 106, 107, 101}, p.currentPrimaryKeys());
+
+            CoopGameMemento sync = new CoopGameMemento();
+            sync.stage = 5;
+            sync.blueprintIndex = -1;
+            sync.gameTime = p.gameTime;
+            sync.bossTimer = p.bossTimer;
+            p.fillOnlineBossSyncFields(sync);
+            assertArrayEquals(hostMapping, sync.randomKeyMappingForPlayer0);
+            assertArrayEquals(guestMapping, sync.randomKeyMappingForPlayer1);
+
+            int[] guestSingleKeys = {201, 202, 203, 204, 205, 206, 207};
+            GamePanel.keySingle = guestSingleKeys;
+            p.localPlayerIndex = 1;
+            p.applyOnlineBossSync(sync);
+
+            assertArrayEquals(new int[]{207, 206, 205, 204, 203, 202, 201}, p.currentPrimaryKeys());
+        } finally {
+            GamePanel.keySingle = savedSingleKeys;
+        }
+    }
+
+    @Test
+    void stageFiveRandomKeyGuideRendersAboveBoss() {
+        p.stage = 5;
+        p.startStage();
+        p.applyTemporaryKeyMappings(new int[]{1, 2, 3, 4, 5, 6, 0}, null, 10_000);
+        BufferedImage image = new BufferedImage(1280, 720, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            p.drawRandomKeyGuide(graphics, 1100, 592);
+        } finally {
+            graphics.dispose();
+        }
+
+        assertTrue((image.getRGB(970, 398) >>> 24) > 0);
     }
 
     private static int occupiedCells(GameSession session, int y) {

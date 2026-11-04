@@ -4,6 +4,7 @@ import kr.ac.jbnu.se.tetris.event.GameEventBus;
 import kr.ac.jbnu.se.tetris.GamePanel;
 import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 import kr.ac.jbnu.se.tetris.persistence.MementoMapper;
+import kr.ac.jbnu.se.tetris.persistence.SessionMemento;
 
 /** 2세션 협동 — GameEngine 인스턴스 2개로 독립 낙하·줄삭제. */
 public final class CoopGameEngine {
@@ -18,6 +19,7 @@ public final class CoopGameEngine {
 		bus = new GameEventBus();
 		player0 = new GameEngine(bus);
 		player1 = new GameEngine(bus);
+		player1.getSession(0).playerIndex = 1;
 	}
 
 	public GameEventBus getBus() {
@@ -105,6 +107,31 @@ public final class CoopGameEngine {
 		MementoMapper.restoreSession(session(0), m.player0);
 		MementoMapper.restoreSession(session(1), m.player1);
 		started = true;
+	}
+
+	public void applyMementoState(CoopGameMemento m) {
+		if (m == null) {
+			return;
+		}
+		if (!started) {
+			restoreCoop(m);
+			return;
+		}
+		applyPlayerMemento(0, m.player0);
+		applyPlayerMemento(1, m.player1);
+	}
+
+	public void applyPlayerMemento(int playerIndex, SessionMemento memento) {
+		if (memento == null) {
+			return;
+		}
+		engine(playerIndex).resetLineClearPresentation();
+		MementoMapper.restoreSession(session(playerIndex), memento);
+	}
+
+	public void restartStage(int stage) {
+		long seed = baseSeed ^ ((long) stage * 997L);
+		startCoop(stage, seed);
 	}
 
 }

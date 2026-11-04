@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,9 @@ class LobbyServerIntegrationTest {
 				LobbyMessage joined = guest.joinRoom(created.roomId, created.joinCode);
 				assertEquals(LobbyMessageType.JOINED.name(), joined.type);
 				assertEquals(2, joined.players.size());
+				assertEquals("HostNick", joined.players.get(0));
+				assertEquals("GuestNick", joined.players.get(1));
+				assertEquals("GUEST", joined.role);
 			}
 		}
 	}
@@ -60,24 +66,35 @@ class LobbyServerIntegrationTest {
 				assertEquals(LobbyMessageType.START_GAME_OK.name(), started.type);
 				assertNotNull(started.coopId);
 				assertEquals(0, started.playerIndex);
+				assertEquals("HOST", started.role);
+				assertEquals(2, started.players.size());
+				assertEquals("Host", started.players.get(0));
+				assertEquals("Guest", started.players.get(1));
 			}
 		}
 	}
 
 	@Test
 	void roomCapOnServer() throws Exception {
-		for (int i = 0; i < LobbyConfig.MAX_ROOMS; i++) {
-			try (LobbyClient c = new LobbyClient()) {
+		List<LobbyClient> hosts = new ArrayList<>();
+		try {
+			for (int i = 0; i < LobbyConfig.MAX_ROOMS; i++) {
+				LobbyClient c = new LobbyClient();
+				hosts.add(c);
 				c.connect("127.0.0.1", port, "u" + i);
 				LobbyMessage m = c.createRoom("r" + i, RoomVisibility.PUBLIC);
 				assertEquals(LobbyMessageType.ROOM_CREATED.name(), m.type);
 			}
-		}
-		try (LobbyClient extra = new LobbyClient()) {
-			extra.connect("127.0.0.1", port, "overflow");
-			LobbyMessage m = extra.createRoom("no", RoomVisibility.PUBLIC);
-			assertEquals(LobbyMessageType.ERROR.name(), m.type);
-			assertEquals("ROOM_CAP", m.code);
+			try (LobbyClient extra = new LobbyClient()) {
+				extra.connect("127.0.0.1", port, "overflow");
+				LobbyMessage m = extra.createRoom("no", RoomVisibility.PUBLIC);
+				assertEquals(LobbyMessageType.ERROR.name(), m.type);
+				assertEquals("ROOM_CAP", m.code);
+			}
+		} finally {
+			for (LobbyClient host : hosts) {
+				host.close();
+			}
 		}
 	}
 }

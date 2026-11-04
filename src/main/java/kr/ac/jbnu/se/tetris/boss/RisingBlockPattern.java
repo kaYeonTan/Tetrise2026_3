@@ -19,7 +19,7 @@ public final class RisingBlockPattern implements BossPattern {
 
     @Override
     public void attack(BossPatternTarget target) {
-        target.raiseBlocks();
+        target.raiseBlocks(target.selectGarbageHole());
         target.showBossMessage("해신이 파도를 일으켰다! 블록이 한 줄 올라온다");
     }
 }

@@ -1,5 +1,7 @@
 package kr.ac.jbnu.se.tetris.boss;
 
+import kr.ac.jbnu.se.tetris.Tetrominoes;
+
 public interface BossPatternTarget {
 
     void showBossWarning(String message);
@@ -13,6 +15,21 @@ public interface BossPatternTarget {
 
     void raiseBlocks();
 
+    default void raiseBlocks(int garbageHole) {
+        raiseBlocks();
+    }
+
+    default int selectGarbageHole() {
+        return 0;
+    }
+
+    default Tetrominoes selectForcedPiece() {
+        return Tetrominoes.LineShape;
+    }
+
+    default void replaceCurrentPiece(Tetrominoes type) {
+    }
+
     void startAcceleration(int durationMillis, int gravityMultiplier, int nextPieceMultiplier);
 
     int[] primaryOriginalKeys();
@@ -21,7 +38,7 @@ public interface BossPatternTarget {
 
     boolean isTwoPlayerMode();
 
-    void applyTemporaryKeys(int[] primaryKeys, int[] secondaryKeys, int durationMillis);
+    void applyTemporaryKeyMappings(int[] primaryMapping, int[] secondaryMapping, int durationMillis);
 
     void resetTemporaryBossEffects();
 

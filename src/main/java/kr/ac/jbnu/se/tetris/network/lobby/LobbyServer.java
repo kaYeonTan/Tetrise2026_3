@@ -163,8 +163,14 @@ public class LobbyServer implements AutoCloseable {
 				return handlePlayerAction(clientId, req);
 			case COOP_SNAPSHOT:
 				return handleCoopSnapshot(clientId, req);
+			case GUEST_BOARD:
+				return handleGuestBoard(clientId, req);
 			case COOP_SAVE:
 				return handleCoopSave(clientId, req);
+			case COOP_SAVE_OPEN:
+				return handleCoopSaveOpen(clientId);
+			case COOP_SAVE_CANCEL:
+				return handleCoopSaveCancel(clientId);
 			default:
 				return error("INVALID", "로비에서 지원하지 않는 요청이에요.");
 		}
@@ -218,6 +224,7 @@ public class LobbyServer implements AutoCloseable {
 		}
 		game.started = true;
 
+		List<String> roster = playerNicksOrdered(room);
 		for (String member : room.memberClientIds) {
 			if (member.equals(clientId)) {
 				continue;
@@ -226,8 +233,8 @@ public class LobbyServer implements AutoCloseable {
 			push.roomId = room.roomId;
 			push.coopId = game.coopId;
 			push.seed = game.seed;
-			push.playerIndex = member.equals(room.hostClientId) ? 0 : 1;
-			push.role = member.equals(room.hostClientId) ? "HOST" : "GUEST";
+			fillOnlinePlayerAssignment(push, room, member);
+			push.players = roster;
 			push.resumeGame = resume;
 			if (resume) {
 				push.snapshotJson = game.pendingSnapshotJson;
@@ -239,8 +246,8 @@ public class LobbyServer implements AutoCloseable {
 		ok.roomId = room.roomId;
 		ok.coopId = game.coopId;
 		ok.seed = game.seed;
-		ok.playerIndex = 0;
-		ok.role = "HOST";
+		fillOnlinePlayerAssignment(ok, room, clientId);
+		ok.players = roster;
 		ok.resumeGame = resume;
 		if (resume) {
 			ok.snapshotJson = game.pendingSnapshotJson;
@@ -260,6 +267,7 @@ public class LobbyServer implements AutoCloseable {
 		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.PLAYER_ACTION), push -> {
 			push.playerIndex = req.playerIndex;
 			push.action = req.action;
+			push.message = req.message;
 		});
 		return null;
 	}
@@ -276,11 +284,62 @@ public class LobbyServer implements AutoCloseable {
 		return null;
 	}
 
+	// 참가자 보드를 방장에게 그대로 넘긴다
+	private LobbyMessage handleGuestBoard(String clientId, LobbyMessage req) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		if (clientId.equals(room.hostClientId)) {
+			return error("NOT_GUEST", "참가자만 보드를 보낼 수 있어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.GUEST_BOARD_PUSH), push -> {
+			push.playerIndex = req.playerIndex;
+			push.snapshotJson = req.snapshotJson;
+			push.message = req.message;
+		});
+		return null;
+	}
+
+	private LobbyMessage handleCoopSaveOpen(String clientId) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 저장을 시작할 수 있어요.");
+		}
+		if (!ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SAVE_OPEN_PUSH), push -> {
+		});
+		return null;
+	}
+
+	private LobbyMessage handleCoopSaveCancel(String clientId) {
+		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		if (room == null || !clientId.equals(room.hostClientId)) {
+			return error("NOT_HOST", "방장만 저장을 취소할 수 있어요.");
+		}
+		if (!ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SAVE_CANCEL_PUSH), push -> {
+		});
+		return null;
+	}
+
 	private LobbyMessage handleCoopSave(String clientId, LobbyMessage req) {
 		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
 		if (room == null || !clientId.equals(room.hostClientId)) {
 			return error("NOT_HOST", "방장만 저장을 요청할 수 있어요.");
 		}
+		if (!ingameByRoom.containsKey(room.roomId)) {
+			return error("NOT_IN_GAME", "진행 중인 게임이 없어요.");
+		}
+		notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.COOP_SAVE_PUSH), push -> {
+			push.coopId = req.coopId;
+			push.saveSlot = req.saveSlot;
+			push.snapshotJson = req.snapshotJson;
+		});
 		LobbyMessage ok = LobbyMessage.of(LobbyMessageType.COOP_SAVE_OK);
 		ok.coopId = req.coopId;
 		ok.saveSlot = req.saveSlot;
@@ -394,12 +453,27 @@ public class LobbyServer implements AutoCloseable {
 		return joined;
 	}
 
-	private List<String> playerNicks(LobbyRoom room) {
+	/** P1(왼쪽)=방장, P2(오른쪽)=입장자 순서로 닉네임 목록. */
+	private List<String> playerNicksOrdered(LobbyRoom room) {
 		List<String> nicks = new ArrayList<>();
+		nicks.add(clientNicks.getOrDefault(room.hostClientId, "?"));
 		for (String id : room.memberClientIds) {
-			nicks.add(clientNicks.getOrDefault(id, "?"));
+			if (!id.equals(room.hostClientId)) {
+				nicks.add(clientNicks.getOrDefault(id, "?"));
+			}
 		}
 		return nicks;
+	}
+
+	private List<String> playerNicks(LobbyRoom room) {
+		return playerNicksOrdered(room);
+	}
+
+	/** 방장=playerIndex 0 (P1), 입장자=1 (P2). */
+	private void fillOnlinePlayerAssignment(LobbyMessage msg, LobbyRoom room, String recipientClientId) {
+		boolean isHost = recipientClientId.equals(room.hostClientId);
+		msg.playerIndex = isHost ? 0 : 1;
+		msg.role = isHost ? "HOST" : "GUEST";
 	}
 
 	private static LobbyMessage error(String code, String message) {

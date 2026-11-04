@@ -2,6 +2,7 @@ package kr.ac.jbnu.se.tetris.audio;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -19,6 +20,10 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 
 /** MP3 음원을 PCM으로 디코딩해 BGM과 효과음을 재생한다. */
 public final class SoundManager implements AutoCloseable {
+
+    static {
+        ensureMp3Support();
+    }
 
     private final Map<BgmType, AudioData> bgmData = new EnumMap<>(BgmType.class);
     private final Map<SfxType, AudioData> sfxData = new EnumMap<>(SfxType.class);
@@ -210,10 +215,24 @@ public final class SoundManager implements AutoCloseable {
         }
     }
 
+    private static void ensureMp3Support() {
+        try {
+            Class.forName("javazoom.spi.mpeg.sampled.file.MpegAudioFileReader");
+        } catch (ClassNotFoundException ignored) {
+            // mp3spi not on classpath — MP3 resources will fail to decode
+        }
+    }
+
     private <T extends Enum<T>> void load(String path, T type, Map<T, AudioData> target) {
         URL resource = SoundManager.class.getResource(path);
         if (resource == null) {
             System.err.println("Sound file not found: " + path);
+            return;
+        }
+        try {
+            rejectMisnamedMp4(resource, path);
+        } catch (IOException e) {
+            logFailure(path, e);
             return;
         }
         try (AudioInputStream source = AudioSystem.getAudioInputStream(resource)) {
@@ -232,6 +251,16 @@ public final class SoundManager implements AutoCloseable {
             }
         } catch (UnsupportedAudioFileException | IOException | IllegalArgumentException e) {
             logFailure(path, e);
+        }
+    }
+
+    private static void rejectMisnamedMp4(URL resource, String path) throws IOException {
+        try (InputStream in = resource.openStream()) {
+            byte[] header = in.readNBytes(12);
+            if (header.length >= 8
+                    && header[4] == 'f' && header[5] == 't' && header[6] == 'y' && header[7] == 'p') {
+                throw new IOException(path + " is MP4/AAC (ftyp), not MP3 — re-encode as MP3 or use .m4a + decoder");
+            }
         }
     }
 
