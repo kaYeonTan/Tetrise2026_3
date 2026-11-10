@@ -75,6 +75,22 @@ class LobbyServerIntegrationTest {
 	}
 
 	@Test
+	void leaveDissolvesRoomFromList() throws Exception {
+		try (LobbyClient host = new LobbyClient()) {
+			host.connect("127.0.0.1", port, "Host");
+			LobbyMessage created = host.createRoom("Temp", RoomVisibility.PUBLIC);
+			try (LobbyClient guest = new LobbyClient()) {
+				guest.connect("127.0.0.1", port, "Guest");
+				guest.joinRoom(created.roomId, null);
+				host.leaveRoom();
+				assertEquals(0, host.listRooms().size());
+				LobbyMessage mine = guest.fetchMyRoom();
+				org.junit.jupiter.api.Assertions.assertNull(mine);
+			}
+		}
+	}
+
+	@Test
 	void roomCapOnServer() throws Exception {
 		List<LobbyClient> hosts = new ArrayList<>();
 		try {

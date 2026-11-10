@@ -11,6 +11,8 @@ public interface LobbyService {
 
 	LobbyMessage fetchMyRoom() throws IOException;
 
+	void leaveRoom() throws IOException;
+
 	void sendPlayerAction(LobbyMessage req) throws IOException;
 
 	void sendCoopSnapshot(LobbyMessage req) throws IOException;
