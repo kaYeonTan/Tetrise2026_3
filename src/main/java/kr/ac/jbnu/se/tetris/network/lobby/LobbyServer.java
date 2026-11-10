@@ -83,14 +83,19 @@ public class LobbyServer implements AutoCloseable {
 	}
 
 	private void onClientDisconnect(String clientId) {
-		registry.roomOfClient(clientId).ifPresent(room -> {
-			notifyPeer(room, clientId, LobbyMessage.of(LobbyMessageType.PEER_DISCONNECTED), m -> {
-				m.message = "상대 연결이 끊어졌어요.";
-			});
-			ingameByRoom.remove(room.roomId);
-		});
-		registry.leave(clientId);
+		registry.roomOfClient(clientId).ifPresent(room -> dissolveRoom(room, clientId, "상대 연결이 끊어졌어요."));
 		clientNicks.remove(clientId);
+	}
+
+	private void dissolveRoom(LobbyRoom room, String initiatorClientId, String peerMessage) {
+		if (room == null) {
+			return;
+		}
+		ingameByRoom.remove(room.roomId);
+		notifyPeer(room, initiatorClientId, LobbyMessage.of(LobbyMessageType.PEER_DISCONNECTED), m -> {
+			m.message = peerMessage;
+		});
+		registry.removeRoom(room.roomId);
 	}
 
 	static final class ClientLink {
@@ -427,7 +432,8 @@ public class LobbyServer implements AutoCloseable {
 	}
 
 	private LobbyMessage handleLeaveRoom(String clientId) {
-		registry.leave(clientId);
+		registry.roomOfClient(clientId)
+				.ifPresent(room -> dissolveRoom(room, clientId, "방이 종료되었어요."));
 		return LobbyMessage.of(LobbyMessageType.LEFT);
 	}
 

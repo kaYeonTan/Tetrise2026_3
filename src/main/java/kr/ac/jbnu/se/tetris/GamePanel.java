@@ -57,6 +57,7 @@ import kr.ac.jbnu.se.tetris.persistence.SaveSlotMeta;
 import kr.ac.jbnu.se.tetris.network.coop.CoopNetworkBridge;
 import kr.ac.jbnu.se.tetris.network.coop.CoopSnapshotMapper;
 import com.google.gson.Gson;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyService;
 
 public class GamePanel extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, FocusListener, BossPatternTarget {
@@ -101,6 +102,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     public transient CoopNetworkBridge coopBridge;
     public transient LobbyService onlineLobbyClient;
     transient LobbyFrame onlineLobbyFrame;
+    private transient boolean returningToOnlineLobby;
     public transient CoopEngineBridge coopEngineBridge;
     public String lastOnlineRoomId;
     public CoopGameMemento pendingCoopResume;
@@ -1631,6 +1633,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         if (isOnlineCoop && coopBridge != null) {
             coopBridge.sendGameOver();
         }
+        if (isOnlineCoop) {
+            tryDissolveOnlineRoom();
+        }
         bossPattern.stop(this);
         soundManager.stopBgm();
         int total = p1Score + (isTwoPlayer ? p2Score : 0);
@@ -1833,7 +1838,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             handlePauseClick();
         } else if (screen == SCREEN_RESULT) {
             if (clicked(490, 470, 300, 54)) {
-                screen = SCREEN_TITLE;
+                if (isOnlineCoop) {
+                    returnToOnlineLobby(null);
+                } else {
+                    screen = SCREEN_TITLE;
+                }
             }
         } else if (screen == SCREEN_COOP_SLOTS) {
             handleCoopSlotClick();
@@ -2016,6 +2025,17 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     private void handlePauseToMain() {
+        if (isOnlineCoop) {
+            int r = JOptionPane.showOptionDialog(this,
+                    "온라인 협동을 종료하고 로비로 돌아갈까요?\n(이 방은 목록에서 사라져요.)",
+                    "로비로",
+                    JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null,
+                    new String[]{"로비로", "취소"}, "취소");
+            if (r == 0) {
+                returnToOnlineLobby(null);
+            }
+            return;
+        }
         if (loginUser == null) {
             int r = JOptionPane.showOptionDialog(this, "게스트 진행은 저장되지 않아요.\n메인 화면으로 갈까요?", "메인으로",
                     JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, new String[]{"나가기", "취소"}, "취소");
@@ -2042,6 +2062,81 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     private void leaveToTitle() {
         screen = SCREEN_TITLE;
         soundManager.stopBgm();
+    }
+
+    void tryDissolveOnlineRoom() {
+        LobbyService service = onlineLobbyClient;
+        if (service == null) {
+            return;
+        }
+        try {
+            service.leaveRoom();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private LobbyClient resolveLobbyClient() {
+        if (onlineLobbyClient instanceof LobbyClient client) {
+            return client;
+        }
+        return null;
+    }
+
+    public void returnToOnlineLobby(String reason) {
+        if (!isOnlineCoop) {
+            leaveToTitle();
+            return;
+        }
+        if (returningToOnlineLobby) {
+            return;
+        }
+        returningToOnlineLobby = true;
+        try {
+            LobbyClient client = resolveLobbyClient();
+            if (coopBridge != null) {
+                coopBridge.detach();
+                coopBridge = null;
+            }
+            tryDissolveOnlineRoom();
+            clearOnlineCoopGameState();
+            screen = SCREEN_TITLE;
+            pressed.clear();
+            soundManager.stopBgm();
+            if (client != null) {
+                onlineLobbyClient = client;
+                closeOnlineLobbyUi();
+                SwingUtilities.invokeLater(() -> {
+                    onlineLobbyFrame = new LobbyFrame(this, client);
+                    onlineLobbyFrame.setVisible(true);
+                    if (reason != null && !reason.isBlank()) {
+                        JOptionPane.showMessageDialog(this, reason, "온라인 로비", JOptionPane.INFORMATION_MESSAGE);
+                    }
+                });
+            } else {
+                leaveToTitle();
+            }
+        } finally {
+            returningToOnlineLobby = false;
+        }
+    }
+
+    private void clearOnlineCoopGameState() {
+        isOnlineCoop = false;
+        isTwoPlayer = false;
+        onlineCoopId = null;
+        onlineCoopHostNick = null;
+        onlineCoopGuestNick = null;
+        pendingCoopResume = null;
+        pendingGuestCoopSave = null;
+        awaitingGuestCoopSave = false;
+        stageClear = false;
+        coopEliminated0 = false;
+        coopEliminated1 = false;
+        if (coopEngineBridge != null) {
+            coopEngineBridge.stop();
+            coopEngineBridge = null;
+        }
+        bossPattern.stop(this);
     }
 
     void handleCoopSlotClick() {
@@ -3394,7 +3489,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
             drawButton(g, "불러오기", PAUSE_BTN_X, PAUSE_Y_LOAD, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
         }
         drawButton(g, "환경설정", PAUSE_BTN_X, PAUSE_Y_SETTINGS, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
-        drawButton(g, "메인으로", PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
+        drawButton(g, isOnlineCoop ? "로비로" : "메인으로", PAUSE_BTN_X, PAUSE_Y_MAIN, PAUSE_BTN_W, PAUSE_BTN_H, 0, 22f);
         g.setFont(fontSmall.deriveFont(13.5f));
         String message = msgTimer > 0 ? msg : "";
         centerPlainText(g, message, 640, PAUSE_MSG_Y, new Color(0x1a1216));
@@ -3418,7 +3513,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         g.setFont(font.deriveFont(16.5f));
         centerPlainText(g, resultMsg, 640, 430, new Color(0x3a5a2a));
-        drawButton(g, "메인으로", 490, 470, 300, 54, 1, 22f);
+        drawButton(g, isOnlineCoop ? "로비로" : "메인으로", 490, 470, 300, 54, 1, 22f);
     }
 
     public void applyOnlineCoopRoster(java.util.List<String> playersInOrder, int myPlayerIndex) {
@@ -3593,6 +3688,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
     }
 
     public void onCoopPeerDisconnected(String text) {
+        if (isOnlineCoop) {
+            String reason = text == null ? "상대와의 방이 종료되었어요." : text;
+            returnToOnlineLobby(reason);
+            return;
+        }
         msg = text == null ? "상대 연결이 끊어졌어요." : text;
         msgTimer = 300;
         if (screen == SCREEN_GAME && !stageClear) {
