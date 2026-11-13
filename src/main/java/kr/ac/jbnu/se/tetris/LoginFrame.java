@@ -4,7 +4,6 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.io.Serial;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JDialog;
@@ -16,31 +15,24 @@ import javax.swing.SwingUtilities;
 
 public class LoginFrame extends JDialog {
 
-    @Serial
     private static final long serialVersionUID = 1L;
 
-    private static final int FORM_X = 60;
-    private static final int FORM_WIDTH = 400;
-
-    private static final String SIGN_UP_TITLE = "회원가입";
-    private static final String LOGIN_TITLE = "로그인";
-
-    private final GamePanel gamePanel;
-    private boolean signUpMode;
-    private final JPanel rootPanel;
-    private JTextField nicknameField;
-    private JTextField emailField;
-    private JPasswordField passwordField;
-    private JPasswordField passwordConfirmField;
-    private JLabel errorLabel;
+    GamePanel panel;
+    boolean isSignUp;
+    JPanel p;
+    JTextField n;
+    JTextField e;
+    JPasswordField pw;
+    JPasswordField pw2;
+    JLabel msg;
 
     @SuppressWarnings("this-escape")
-    public LoginFrame(GamePanel gamePanel, boolean signUpMode) {
-        super(SwingUtilities.getWindowAncestor(gamePanel), modeTitle(signUpMode), ModalityType.APPLICATION_MODAL);
-        this.gamePanel = gamePanel;
-        this.signUpMode = signUpMode;
+    public LoginFrame(GamePanel panel, boolean isSignUp) {
+        super(SwingUtilities.getWindowAncestor(panel), isSignUp ? "회원가입" : "로그인", ModalityType.APPLICATION_MODAL);
+        this.panel = panel;
+        this.isSignUp = isSignUp;
         setResizable(false);
-        rootPanel = new JPanel() {
+        p = new JPanel() {
             @Override
             protected void paintComponent(Graphics g0) {
                 Graphics2D g = (Graphics2D) g0;
@@ -48,166 +40,167 @@ public class LoginFrame extends JDialog {
                 g.drawImage(Art.castle(), 0, 0, getWidth(), getHeight(), 300, 60, 300 + getWidth(), 60 + getHeight(), null);
                 g.setColor(new Color(10, 7, 12, 110));
                 g.fillRect(0, 0, getWidth(), getHeight());
-                g.setColor(UiTheme.INK);
+                g.setColor(new Color(0x1a1216));
                 g.fillRect(30, 80, getWidth() - 60, getHeight() - 110);
-                g.setColor(UiTheme.BRASS);
+                g.setColor(new Color(0xb89c6c));
                 g.fillRect(34, 84, getWidth() - 68, getHeight() - 118);
-                g.setColor(UiTheme.TEXT_GOLD);
+                g.setColor(new Color(0xd9c29a));
                 g.fillRect(38, 88, getWidth() - 76, getHeight() - 126);
-                g.setFont(LoginFrame.this.gamePanel.fontBold.deriveFont(33f));
-                String title = modeTitle(LoginFrame.this.signUpMode);
-                int titleWidth = g.getFontMetrics().stringWidth(title);
-                g.setColor(UiTheme.TITLE_SHADOW);
-                g.drawString(title, (getWidth() - titleWidth) / 2 + 3, 56 + 3);
-                g.setColor(UiTheme.TEXT_LIGHT);
-                g.drawString(title, (getWidth() - titleWidth) / 2, 56);
+                g.setFont(LoginFrame.this.panel.fontBold.deriveFont(33f));
+                String title = LoginFrame.this.isSignUp ? "회원가입" : "로그인";
+                int w = g.getFontMetrics().stringWidth(title);
+                g.setColor(new Color(0x6b2a1a));
+                g.drawString(title, (getWidth() - w) / 2 + 3, 56 + 3);
+                g.setColor(new Color(0xf0e2c8));
+                g.drawString(title, (getWidth() - w) / 2, 56);
             }
         };
-        rootPanel.setLayout(null);
-        setContentPane(rootPanel);
-        buildForm();
-        setLocationRelativeTo(gamePanel);
+        p.setLayout(null);
+        setContentPane(p);
+        build();
+        setLocationRelativeTo(panel);
     }
 
-    private static String modeTitle(boolean signUpMode) {
-        return signUpMode ? SIGN_UP_TITLE : LOGIN_TITLE;
-    }
-
-    private void buildForm() {
-        rootPanel.removeAll();
-        nicknameField = new JTextField();
-        emailField = new JTextField();
-        passwordField = new JPasswordField();
-        passwordConfirmField = new JPasswordField();
-
+    private void build() {
+        p.removeAll();
         int y = 110;
-        y = addFormRow(signUpMode ? "닉네임 (한글·영문·숫자 2~10자)" : "닉네임", nicknameField, y);
-        if (signUpMode) {
-            y = addFormRow("이메일", emailField, y);
+        n = new JTextField();
+        e = new JTextField();
+        pw = new JPasswordField();
+        pw2 = new JPasswordField();
+        y = addRow(isSignUp ? "닉네임 (한글·영문·숫자 2~10자)" : "닉네임", n, y);
+        if (isSignUp) {
+            y = addRow("이메일", e, y);
         }
-        y = addFormRow(signUpMode ? "비밀번호 (8자 이상)" : "비밀번호", passwordField, y);
-        if (signUpMode) {
-            y = addFormRow("비밀번호 확인", passwordConfirmField, y);
+        y = addRow(isSignUp ? "비밀번호 (8자 이상)" : "비밀번호", pw, y);
+        if (isSignUp) {
+            y = addRow("비밀번호 확인", pw2, y);
         }
-
-        errorLabel = new JLabel(" ");
-        errorLabel.setFont(gamePanel.font.deriveFont(16.5f));
-        errorLabel.setForeground(UiTheme.DANGER);
-        errorLabel.setBounds(FORM_X, y, FORM_WIDTH, 26);
-        rootPanel.add(errorLabel);
+        msg = new JLabel(" ");
+        msg.setFont(panel.font.deriveFont(16.5f));
+        msg.setForeground(new Color(0xa8352a));
+        msg.setBounds(60, y, 400, 26);
+        p.add(msg);
         y += 34;
 
-        JButton submitButton = createButton(signUpMode ? "가입하고 모험 시작" : LOGIN_TITLE, true);
-        submitButton.setBounds(FORM_X, y, FORM_WIDTH, 50);
-        submitButton.addActionListener(event -> submit());
-        rootPanel.add(submitButton);
+        JButton ok = makeButton(isSignUp ? "가입하고 모험 시작" : "로그인", true);
+        ok.setBounds(60, y, 400, 50);
+        ok.addActionListener(x -> submit());
+        p.add(ok);
         y += 66;
 
-        JLabel switchPromptLabel = new JLabel(signUpMode ? "이미 계정이 있나요?" : "아직 용사가 아니신가요?");
-        switchPromptLabel.setFont(gamePanel.font.deriveFont(16.5f));
-        switchPromptLabel.setForeground(UiTheme.INK);
-        switchPromptLabel.setBounds(FORM_X, y, 230, 40);
-        rootPanel.add(switchPromptLabel);
-        JButton switchModeButton = createButton(modeTitle(!signUpMode), false);
-        switchModeButton.setBounds(300, y, 160, 40);
-        switchModeButton.addActionListener(event -> {
-            signUpMode = !signUpMode;
-            setTitle(modeTitle(signUpMode));
-            buildForm();
+        JLabel ask = new JLabel(isSignUp ? "이미 계정이 있나요?" : "아직 용사가 아니신가요?");
+        ask.setFont(panel.font.deriveFont(16.5f));
+        ask.setForeground(new Color(0x1a1216));
+        ask.setBounds(60, y, 230, 40);
+        p.add(ask);
+        JButton change = makeButton(isSignUp ? "로그인" : "회원가입", false);
+        change.setBounds(300, y, 160, 40);
+        change.addActionListener(x -> {
+            isSignUp = !isSignUp;
+            setTitle(isSignUp ? "회원가입" : "로그인");
+            build();
         });
-        rootPanel.add(switchModeButton);
+        p.add(change);
         y += 90;
 
-        rootPanel.setPreferredSize(new java.awt.Dimension(520, y));
+        p.setPreferredSize(new java.awt.Dimension(520, y));
         pack();
-        setLocationRelativeTo(gamePanel);
-        rootPanel.revalidate();
-        rootPanel.repaint();
+        setLocationRelativeTo(panel);
+        p.revalidate();
+        p.repaint();
 
-        bindEnterKeys();
-    }
-
-    /** Enter 키로 다음 입력칸으로 넘어가고, 마지막 칸에서는 제출한다. */
-    private void bindEnterKeys() {
-        nicknameField.addActionListener(event -> (signUpMode ? emailField : passwordField).requestFocusInWindow());
-        emailField.addActionListener(event -> passwordField.requestFocusInWindow());
-        passwordField.addActionListener(event -> {
-            if (signUpMode) {
-                passwordConfirmField.requestFocusInWindow();
+        n.addActionListener(x -> (isSignUp ? e : pw).requestFocusInWindow());
+        e.addActionListener(x -> pw.requestFocusInWindow());
+        pw.addActionListener(x -> {
+            if (isSignUp) {
+                pw2.requestFocusInWindow();
             } else {
                 submit();
             }
         });
-        passwordConfirmField.addActionListener(event -> submit());
+        pw2.addActionListener(x -> submit());
     }
 
-    int addFormRow(String labelText, JTextField field, int y) {
-        JLabel label = new JLabel(labelText);
-        label.setFont(gamePanel.font.deriveFont(16.5f));
-        label.setForeground(UiTheme.INK);
-        label.setBounds(FORM_X, y, FORM_WIDTH, 24);
-        rootPanel.add(label);
-        field.setFont(gamePanel.font.deriveFont(22f));
-        field.setBackground(UiTheme.PARCHMENT);
-        field.setForeground(UiTheme.INK);
-        field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(UiTheme.INK, 3),
+    int addRow(String label, JTextField field, int y) {
+        JLabel l = new JLabel(label);
+        l.setFont(panel.font.deriveFont(16.5f));
+        l.setForeground(new Color(0x1a1216));
+        l.setBounds(60, y, 400, 24);
+        p.add(l);
+        field.setFont(panel.font.deriveFont(22f));
+        field.setBackground(new Color(0xefe0bf));
+        field.setForeground(new Color(0x1a1216));
+        field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x1a1216), 3),
                 BorderFactory.createEmptyBorder(4, 10, 4, 10)));
-        field.setBounds(FORM_X, y + 28, FORM_WIDTH, 44);
-        rootPanel.add(field);
+        field.setBounds(60, y + 28, 400, 44);
+        p.add(field);
         return y + 84;
     }
 
-    JButton createButton(String text, boolean primary) {
-        JButton button = new JButton(text);
-        button.addActionListener(event -> gamePanel.playButtonClickSound());
-        button.setFont(gamePanel.font.deriveFont(primary ? 22f : 16.5f));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(false);
-        button.setOpaque(true);
-        button.setBackground(primary ? UiTheme.DANGER : UiTheme.PARCHMENT);
-        button.setForeground(primary ? new Color(0xfff4e6) : UiTheme.INK);
-        button.setBorder(BorderFactory.createLineBorder(UiTheme.INK, 4));
-        return button;
+    JButton makeButton(String text, boolean red) {
+        JButton b = new JButton(text);
+        b.addActionListener(e -> panel.playButtonClickSound());
+        b.setFont(panel.font.deriveFont(red ? 22f : 16.5f));
+        b.setFocusPainted(false);
+        b.setContentAreaFilled(false);
+        b.setOpaque(true);
+        b.setBackground(red ? new Color(0xa8352a) : new Color(0xefe0bf));
+        b.setForeground(red ? new Color(0xfff4e6) : new Color(0x1a1216));
+        b.setBorder(BorderFactory.createLineBorder(new Color(0x1a1216), 4));
+        return b;
     }
 
     void submit() {
-        String nickname = nicknameField.getText().trim();
-        String password = new String(passwordField.getPassword());
-        if (signUpMode) {
-            submitSignUp(nickname, password);
+        String nick = n.getText().trim();
+        String pass = new String(pw.getPassword());
+        if (isSignUp) {
+            String mail = e.getText().trim();
+            String pass2 = new String(pw2.getPassword());
+            if (nick.matches("^[가-힣A-Za-z0-9]{2,10}$")) {
+                if (mail.matches("^[^@\\s,]+@[^@\\s,]+\\.[^@\\s,]+$")) {
+                    if (pass.length() >= 8 && pass.length() <= 64) {
+                        if (!pass.contains(",")) {
+                            if (pass.equals(pass2)) {
+                                String result = FileManager.addUser(nick, mail, pass);
+                                if (result != null) {
+                                    msg.setText(result);
+                                    return;
+                                }
+                                panel.loginUser = nick;
+                                dispose();
+                            } else {
+                                msg.setText("비밀번호 확인이 일치하지 않아요.");
+                            }
+                        } else {
+                            msg.setText("비밀번호에 쉼표(,)는 쓸 수 없어요.");
+                        }
+                    } else {
+                        msg.setText("비밀번호는 8~64자로 입력해 주세요.");
+                    }
+                } else {
+                    msg.setText("이메일 형식이 올바르지 않아요.");
+                }
+            } else {
+                msg.setText("닉네임은 한글·영문·숫자 2~10자로 입력해 주세요.");
+            }
         } else {
-            submitLogin(nickname, password);
+            if (nick.length() == 0) {
+                msg.setText("닉네임과 비밀번호를 모두 입력해 주세요.");
+            } else {
+                if (pass.length() == 0) {
+                    msg.setText("닉네임과 비밀번호를 모두 입력해 주세요.");
+                } else {
+                    if (FileManager.checkUser(nick, pass)) {
+                        panel.loginUser = FileManager.getNick(nick);
+                        dispose();
+                    } else {
+                        msg.setText("닉네임 또는 비밀번호가 올바르지 않아요.");
+                        pw.setText("");
+                    }
+                }
+            }
         }
-    }
-
-    private void submitSignUp(String nickname, String password) {
-        String email = emailField.getText().trim();
-        String passwordConfirm = new String(passwordConfirmField.getPassword());
-        String error = SignUpValidator.validate(nickname, email, password, passwordConfirm);
-        if (error == null) {
-            error = FileManager.signUp(nickname, email, password);
-        }
-        if (error != null) {
-            errorLabel.setText(error);
-            return;
-        }
-        gamePanel.loginUser = nickname;
-        dispose();
-    }
-
-    private void submitLogin(String nickname, String password) {
-        String error = SignUpValidator.validateLoginInput(nickname, password);
-        if (error != null) {
-            errorLabel.setText(error);
-            return;
-        }
-        if (!FileManager.login(nickname, password)) {
-            errorLabel.setText("닉네임 또는 비밀번호가 올바르지 않아요.");
-            passwordField.setText("");
-            return;
-        }
-        gamePanel.loginUser = FileManager.findStoredNickname(nickname);
-        dispose();
     }
 
 }

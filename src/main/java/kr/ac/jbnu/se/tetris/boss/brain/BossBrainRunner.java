@@ -8,13 +8,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.GameEngine;
-import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.event.GameEventType;
 
-/**
- * Keeps a fresh immutable board snapshot off the game loop after every lock.
- * Only the newest snapshot is searched while the worker is busy.
- */
+
 public final class BossBrainRunner implements AutoCloseable {
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
@@ -31,7 +27,11 @@ public final class BossBrainRunner implements AutoCloseable {
 
     public BossBrainRunner(GameEngine engine) {
         latestGrid.set(Grid.from(engine.getSession(0)));
-        engine.getBus().subscribe(GameEventType.PIECE_LOCKED, event -> submitCurrentBoard(engine));
+        engine.getBus().subscribe(GameEventType.PIECE_LOCKED, event -> {
+            Grid snapshot = Grid.from(engine.getSession(0));
+            Tetrominoes responsePiece = engine.getSession(0).peekNextBlock();
+            submit(snapshot, responsePiece);
+        });
     }
 
     public Grid latestGrid() {
@@ -39,12 +39,8 @@ public final class BossBrainRunner implements AutoCloseable {
     }
 
     public void refresh(GameEngine engine) {
-        submitCurrentBoard(engine);
-    }
-
-    private void submitCurrentBoard(GameEngine engine) {
-        GameSession session = engine.getSession(0);
-        submit(Grid.from(session), session.peekNextBlock());
+        Grid snapshot = Grid.from(engine.getSession(0));
+        submit(snapshot, engine.getSession(0).peekNextBlock());
     }
 
     public Decision latestDecision() {
