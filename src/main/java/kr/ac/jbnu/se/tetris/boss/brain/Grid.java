@@ -5,7 +5,7 @@ import java.util.Arrays;
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 
-/** Immutable board snapshot used by the boss search. Row zero is the floor. */
+
 public final class Grid {
 
     public static final int WIDTH = GameSession.WIDTH;
@@ -53,8 +53,10 @@ public final class Grid {
         if (hole < 0 || hole >= WIDTH) {
             throw new IllegalArgumentException("Garbage hole must be on the board");
         }
-        if (hasBlockInTopRow()) {
-            return null;
+        for (int x = 0; x < WIDTH; x++) {
+            if (cells[HEIGHT - 1][x]) {
+                return null;
+            }
         }
         boolean[][] raised = new boolean[HEIGHT][WIDTH];
         for (int y = HEIGHT - 1; y > 0; y--) {
@@ -66,37 +68,26 @@ public final class Grid {
         return new Grid(raised);
     }
 
-    private boolean hasBlockInTopRow() {
-        for (boolean occupied : cells[HEIGHT - 1]) {
-            if (occupied) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     Grid placeAndClear(int[][] blocks, int originX, int originY) {
         boolean[][] placed = copyCells();
         for (int[] block : blocks) {
             placed[originY + block[1]][originX + block[0]] = true;
         }
         boolean[][] compacted = new boolean[HEIGHT][WIDTH];
-        int nextRow = 0;
-        for (boolean[] row : placed) {
-            if (!isFullRow(row)) {
-                compacted[nextRow++] = Arrays.copyOf(row, WIDTH);
+        int targetY = 0;
+        for (int y = 0; y < HEIGHT; y++) {
+            boolean full = true;
+            for (int x = 0; x < WIDTH; x++) {
+                if (!placed[y][x]) {
+                    full = false;
+                    break;
+                }
+            }
+            if (!full) {
+                compacted[targetY++] = Arrays.copyOf(placed[y], WIDTH);
             }
         }
         return new Grid(compacted);
-    }
-
-    private static boolean isFullRow(boolean[] row) {
-        for (boolean occupied : row) {
-            if (!occupied) {
-                return false;
-            }
-        }
-        return true;
     }
 
     boolean canPlace(int[][] blocks, int originX, int originY) {

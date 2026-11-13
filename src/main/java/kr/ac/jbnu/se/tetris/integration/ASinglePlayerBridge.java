@@ -101,6 +101,22 @@ public final class ASinglePlayerBridge implements GameEngineBridge {
 		syncHud();
 	}
 
+	public kr.ac.jbnu.se.tetris.persistence.SessionMemento snapshotSession() {
+		GameSession s = session();
+		return s == null ? null : kr.ac.jbnu.se.tetris.persistence.MementoMapper.fromSession(s);
+	}
+
+	public void restoreSession(kr.ac.jbnu.se.tetris.persistence.SessionMemento m) {
+		GameSession s = session();
+		if (s == null || m == null) {
+			return;
+		}
+		kr.ac.jbnu.se.tetris.persistence.MementoMapper.restoreSession(s, m);
+		syncHud();
+		bossBrainRunner.refresh(board.getEngine());
+		board.repaint();
+	}
+
 	public Grid brainSnapshot() {
 		return bossBrainRunner == null ? null : bossBrainRunner.latestGrid();
 	}

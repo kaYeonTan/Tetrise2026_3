@@ -183,17 +183,6 @@ public class LobbyFrame extends JDialog {
 
 
 
-		root.add(buildTopPanel(), BorderLayout.NORTH);
-		root.add(buildCenterPanel(), BorderLayout.CENTER);
-		root.add(buildBottomPanel(), BorderLayout.SOUTH);
-		setContentPane(root);
-
-		portField.addActionListener(e -> connect());
-		hostField.addActionListener(e -> connect());
-	}
-
-	/** 서버 주소·포트 입력과 연결 상태 표시줄. */
-	private JPanel buildTopPanel() {
 		JPanel top = new JPanel();
 
 		top.setOpaque(false);
@@ -240,9 +229,9 @@ public class LobbyFrame extends JDialog {
 
 		connectRow.add(portField);
 
-		JButton refreshButton = button("목록 새로고침", false);
-		refreshButton.addActionListener(e -> refreshRooms());
-		connectRow.add(refreshButton);
+		JButton refreshBtn = button("목록 새로고침", false);
+		refreshBtn.addActionListener(e -> refreshRooms());
+		connectRow.add(refreshBtn);
 
 
 
@@ -263,11 +252,6 @@ public class LobbyFrame extends JDialog {
 		statusRow.add(statusLabel);
 
 		top.add(statusRow);
-		return top;
-	}
-
-	/** 방 목록(왼쪽)과 대기실·방 만들기 영역(오른쪽). */
-	private JPanel buildCenterPanel() {
 
 
 
@@ -367,8 +351,8 @@ public class LobbyFrame extends JDialog {
 		actions.add(roomVisibilitySelector);
 		actions.add(Box.createVerticalStrut(6));
 
-		JButton loadButton = actionButton("저장 불러오기", false, this::openCoopSaveSlots);
-		actions.add(loadButton);
+		JButton loadBtn = actionButton("저장 불러오기", false, this::openCoopSaveSlots);
+		actions.add(loadBtn);
 		actions.add(Box.createVerticalStrut(6));
 		actions.add(actionButton("방 만들기", true, this::createRoom));
 		actions.add(Box.createVerticalStrut(6));
@@ -379,10 +363,6 @@ public class LobbyFrame extends JDialog {
 
 
 		center.add(right, BorderLayout.EAST);
-		return center;
-	}
-
-	private JPanel buildBottomPanel() {
 
 
 
@@ -400,15 +380,27 @@ public class LobbyFrame extends JDialog {
 
 		bottom.add(waitingLabel, BorderLayout.CENTER);
 
-		JButton closeButton = button("닫기", false);
+		JButton closeBtn = button("닫기", false);
 
-		closeButton.addActionListener(e -> dispose());
+		closeBtn.addActionListener(e -> dispose());
 
-		bottom.add(closeButton, BorderLayout.EAST);
+		bottom.add(closeBtn, BorderLayout.EAST);
 
 
 
-		return bottom;
+		root.add(top, BorderLayout.NORTH);
+
+		root.add(center, BorderLayout.CENTER);
+
+		root.add(bottom, BorderLayout.SOUTH);
+
+		setContentPane(root);
+
+
+
+		portField.addActionListener(e -> connect());
+
+		hostField.addActionListener(e -> connect());
 
 	}
 

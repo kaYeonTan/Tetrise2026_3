@@ -4,10 +4,7 @@ import java.util.List;
 
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 
-/**
- * Chooses the attack whose best possible player landing still has the highest
- * board penalty.
- */
+
 public final class MaxMinBrain {
 
     private static final int TOP_OUT_SCORE = Integer.MAX_VALUE / 4;
