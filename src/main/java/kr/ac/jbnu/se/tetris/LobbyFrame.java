@@ -141,6 +141,28 @@ public class LobbyFrame extends JDialog {
 
 	}
 
+	/** 게임 종료 후 기존 서버 연결을 유지한 채 로비를 다시 연다. */
+	public LobbyFrame(GamePanel panel, LobbyClient existingClient) {
+		this(panel);
+		if (existingClient != null) {
+			adoptExistingClient(existingClient);
+		}
+	}
+
+	private void adoptExistingClient(LobbyClient c) {
+		client = c;
+		panel.onlineLobbyClient = c;
+		CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
+		bridge.attach(c);
+		panel.coopBridge = bridge;
+		connectBtn.setEnabled(false);
+		statusLabel.setText("연결됨 · " + c.getNick() + " · 방 만들기/입장 가능");
+		statusLabel.setForeground(new Color(0x2a5a2a));
+		startAutoRefresh();
+		refreshRooms();
+		syncMyRoom();
+	}
+
 
 
 	private Font uiFont() {

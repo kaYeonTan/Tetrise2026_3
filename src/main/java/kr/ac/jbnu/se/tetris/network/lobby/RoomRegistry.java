@@ -88,6 +88,13 @@ public class RoomRegistry {
 		}
 	}
 
+	/** 멤버와 관계없이 방을 목록에서 제거 (온라인 세션 종료 시). */
+	public void removeRoom(String roomId) {
+		if (roomId != null) {
+			roomsById.remove(roomId);
+		}
+	}
+
 	public Optional<LobbyRoom> roomOfClient(String clientId) {
 		for (LobbyRoom room : roomsById.values()) {
 			if (room.memberClientIds.contains(clientId)) {
