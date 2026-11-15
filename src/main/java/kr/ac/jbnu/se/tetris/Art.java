@@ -1,70 +1,196 @@
 package kr.ac.jbnu.se.tetris;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Random;
+import javax.imageio.ImageIO;
 
 public class Art {
 
-    static BufferedImage[] bgImg = new BufferedImage[6];
-    static BufferedImage[] monsterImg = new BufferedImage[6];
-    static BufferedImage[] flameImg;
-
-    public static BufferedImage background(int stage) {
-        if (bgImg[stage] == null) {
-            Pix c = new Pix(427, 240);
-            Random rnd = new Random(stage * 101);
-            switch (stage) {
-                case 1:
-                    desertBg(c, rnd);
-                    break;
-                case 2:
-                    islandBg(c, rnd);
-                    break;
-                case 3:
-                    grassBg(c, rnd);
-                    break;
-                case 4:
-                    snowBg(c, rnd);
-                    break;
-                default:
-                    skyBg(c, rnd);
-                    break;
-            }
-            bgImg[stage] = c.toImage(3);
-        }
-        return bgImg[stage];
+    public enum MonsterPose {
+        IDLE, HIT, DEATH
     }
 
-    public static BufferedImage monster(int stage) {
-        if (monsterImg[stage] == null) {
-            Pix c;
-            Random rnd = new Random(stage * 101 + 1);
-            if (stage == 1) {
-                c = new Pix(76, 100);
-                desertMonster(c, rnd);
-                c.outline(0x1f2a14);
-            } else if (stage == 2) {
-                c = new Pix(100, 112);
-                islandMonster(c, rnd);
-                c.outline(0x0b2230);
-            } else if (stage == 3) {
-                c = new Pix(112, 118);
-                grassMonster(c, rnd);
-                c.outline(0x1a2a12);
-            } else if (stage == 4) {
-                c = new Pix(104, 108);
-                snowMonster(c, rnd);
-                c.outline(0x2e3a4c);
-            } else {
-                c = new Pix(118, 112);
-                skyMonster(c, rnd);
-                c.outline(0x0a0510);
-            }
-            monsterImg[stage] = c.toImage(3);
+    private static final int STAGE_SLOTS = 6;
+    private static final int FLAME_FRAME_COUNT = 2;
+    private static final int FLAME_WIDTH = 7;
+    private static final int FLAME_HEIGHT = 11;
+    private static final String[] IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"};
+
+    private static final BufferedImage[] backgroundCache = new BufferedImage[STAGE_SLOTS];
+    private static final BufferedImage[] proceduralMonsterCache = new BufferedImage[STAGE_SLOTS];
+    private static final BufferedImage[][] monsterSpriteCache =
+            new BufferedImage[STAGE_SLOTS][MonsterPose.values().length];
+    private static BufferedImage[] flameFrames;
+
+    public static BufferedImage background(int stage) {
+        if (backgroundCache[stage] == null) {
+            backgroundCache[stage] = loadBackgroundFile(stage);
         }
-        return monsterImg[stage];
+        if (backgroundCache[stage] == null) {
+            backgroundCache[stage] = proceduralBackground(stage);
+        }
+        return backgroundCache[stage];
+    }
+
+    static BufferedImage loadBackgroundFile(int stage) {
+        if (stage < 1 || stage > 5) {
+            return null;
+        }
+        return readFirstExistingImage("/images/background/stage" + stage);
+    }
+
+    /** 확장자(png, jpg, jpeg)를 차례로 붙여 처음 읽히는 이미지를 돌려준다. 없으면 null. */
+    private static BufferedImage readFirstExistingImage(String pathWithoutExtension) {
+        for (String extension : IMAGE_EXTENSIONS) {
+            BufferedImage image = readResourceImage(pathWithoutExtension + extension);
+            if (image != null) {
+                return image;
+            }
+        }
+        return null;
+    }
+
+    static BufferedImage proceduralBackground(int stage) {
+        Pix canvas = new Pix(427, 240);
+        Random random = new Random(stage * 101L);
+        switch (stage) {
+            case 1 -> desertBg(canvas, random);
+            case 2 -> islandBg(canvas, random);
+            case 3 -> grassBg(canvas, random);
+            case 4 -> snowBg(canvas, random);
+            default -> skyBg(canvas, random);
+        }
+        return canvas.toImage(3);
+    }
+
+    public static BufferedImage monster(int stage, MonsterPose pose) {
+        stage = Math.max(1, Math.min(5, stage));
+        int poseIndex = pose.ordinal();
+        int idleIndex = MonsterPose.IDLE.ordinal();
+        BufferedImage[] stageSprites = monsterSpriteCache[stage];
+        if (stageSprites[poseIndex] == null) {
+            stageSprites[poseIndex] = loadMonsterFile(stage, pose);
+        }
+        if (stageSprites[poseIndex] != null) {
+            return stageSprites[poseIndex];
+        }
+        if (pose != MonsterPose.IDLE && stageSprites[idleIndex] != null) {
+            return stageSprites[idleIndex];
+        }
+        return proceduralMonster(stage);
+    }
+
+    static BufferedImage loadMonsterFile(int stage, MonsterPose pose) {
+        String poseName = pose.name().toLowerCase();
+        BufferedImage image = readFirstExistingImage("/images/boss/stage" + stage + "/" + poseName);
+        if (image != null) {
+            return flipHorizontal(solidifySpriteAlpha(image));
+        }
+        if (pose == MonsterPose.DEATH) {
+            System.err.println("Art: could not load boss death sprite for stage " + stage);
+        }
+        return null;
+    }
+
+    static BufferedImage toArgb(BufferedImage src) {
+        if (src.getType() == BufferedImage.TYPE_INT_ARGB) {
+            return src;
+        }
+        BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.setComposite(AlphaComposite.Src);
+        g.drawImage(src, 0, 0, null);
+        g.dispose();
+        return out;
+    }
+
+    static BufferedImage flipHorizontal(BufferedImage src) {
+        int w = src.getWidth();
+        int h = src.getHeight();
+        BufferedImage flipped = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = flipped.createGraphics();
+        AffineTransform flip = AffineTransform.getScaleInstance(-1.0, 1.0);
+        flip.translate(-w, 0);
+        g.drawImage(src, flip, null);
+        g.dispose();
+        return flipped;
+    }
+
+    /** Fixes nukki/feather exports: unpremultiply and force visible pixels to opaque alpha. */
+    static BufferedImage solidifySpriteAlpha(BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+        int[] pixels = img.getRGB(0, 0, w, h, null, 0, w);
+        for (int i = 0; i < pixels.length; i++) {
+            int argb = pixels[i];
+            int alpha = argb >>> 24;
+            if (alpha <= 24) {
+                pixels[i] = 0;
+                continue;
+            }
+            int r = (argb >> 16) & 0xff;
+            int g = (argb >> 8) & 0xff;
+            int b = argb & 0xff;
+            r = Math.min(255, (r * 255 + alpha / 2) / alpha);
+            g = Math.min(255, (g * 255 + alpha / 2) / alpha);
+            b = Math.min(255, (b * 255 + alpha / 2) / alpha);
+            pixels[i] = 0xff000000 | (r << 16) | (g << 8) | b;
+        }
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        out.setRGB(0, 0, w, h, pixels, 0, w);
+        return out;
+    }
+
+    static BufferedImage readResourceImage(String resourcePath) {
+        try (InputStream in = Art.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return null;
+            }
+            BufferedImage img = ImageIO.read(in);
+            if (img == null) {
+                return null;
+            }
+            return toArgb(img);
+        } catch (IOException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    static BufferedImage proceduralMonster(int stage) {
+        if (proceduralMonsterCache[stage] == null) {
+            Pix canvas;
+            Random random = new Random(stage * 101L + 1);
+            if (stage == 1) {
+                canvas = new Pix(76, 100);
+                desertMonster(canvas, random);
+                canvas.outline(0x1f2a14);
+            } else if (stage == 2) {
+                canvas = new Pix(100, 112);
+                islandMonster(canvas, random);
+                canvas.outline(0x0b2230);
+            } else if (stage == 3) {
+                canvas = new Pix(112, 118);
+                grassMonster(canvas, random);
+                canvas.outline(0x1a2a12);
+            } else if (stage == 4) {
+                canvas = new Pix(104, 108);
+                snowMonster(canvas, random);
+                canvas.outline(0x2e3a4c);
+            } else {
+                canvas = new Pix(118, 112);
+                skyMonster(canvas, random);
+                canvas.outline(0x0a0510);
+            }
+            proceduralMonsterCache[stage] = flipHorizontal(toArgb(canvas.toImage(3)));
+        }
+        return proceduralMonsterCache[stage];
     }
 
     public static void effect(Graphics2D g, int stage, int w, int h, long time) {
@@ -78,41 +204,50 @@ public class Art {
     }
 
     public static BufferedImage flame(int frame) {
-        if (flameImg == null) {
-            String[][] rows = {
-                {"...o...", "...o...", "..oo...", "..ooo..", ".oomo..", ".ommmo.",
-                 ".ommmo.", "oommmo.", "ommcmmo", "ommcmmo", ".omcmo."},
-                {"....o..", "...oo..", "...oo..", "..ooo..", "..omoo.", ".ommmo.",
-                 ".ommmoo", ".ommmoo", "ommcmmo", "ommcmmo", ".omcmo."}
-            };
-            flameImg = new BufferedImage[2];
-            for (int i = 0; i < 2; i++) {
-                Pix c = new Pix(7, 11);
-                for (int y = 0; y < 11; y++) {
-                    for (int x = 0; x < 7; x++) {
-                        char ch = rows[i][y].charAt(x);
-                        if (ch == 'o') c.set(x, y, 0xe8622a);
-                        if (ch == 'm') c.set(x, y, 0xf7a531);
-                        if (ch == 'c') c.set(x, y, 0xffe9a3);
-                    }
-                }
-                flameImg[i] = c.toImage(3);
-            }
+        if (flameFrames == null) {
+            flameFrames = buildFlameFrames();
         }
-        return flameImg[frame % 2];
+        return flameFrames[frame % FLAME_FRAME_COUNT];
+    }
+
+    private static BufferedImage[] buildFlameFrames() {
+        String[][] shapes = {
+            {"...o...", "...o...", "..oo...", "..ooo..", ".oomo..", ".ommmo.",
+             ".ommmo.", "oommmo.", "ommcmmo", "ommcmmo", ".omcmo."},
+            {"....o..", "...oo..", "...oo..", "..ooo..", "..omoo.", ".ommmo.",
+             ".ommmoo", ".ommmoo", "ommcmmo", "ommcmmo", ".omcmo."}
+        };
+        BufferedImage[] frames = new BufferedImage[FLAME_FRAME_COUNT];
+        for (int frame = 0; frame < FLAME_FRAME_COUNT; frame++) {
+            Pix canvas = new Pix(FLAME_WIDTH, FLAME_HEIGHT);
+            for (int y = 0; y < FLAME_HEIGHT; y++) {
+                for (int x = 0; x < FLAME_WIDTH; x++) {
+                    paintFlamePixel(canvas, x, y, shapes[frame][y].charAt(x));
+                }
+            }
+            frames[frame] = canvas.toImage(3);
+        }
+        return frames;
+    }
+
+    /** o = 겉불꽃, m = 중간, c = 속불꽃, 그 외는 투명. */
+    private static void paintFlamePixel(Pix canvas, int x, int y, char symbol) {
+        if (symbol == 'o') canvas.set(x, y, 0xe8622a);
+        if (symbol == 'm') canvas.set(x, y, 0xf7a531);
+        if (symbol == 'c') canvas.set(x, y, 0xffe9a3);
     }
 
 
-    static int[][] TORCHES = {{177, 86}, {409, 86}};
+    static final int[][] TORCHES = {{177, 86}, {409, 86}};
 
-    static BufferedImage castleImg;
+    private static BufferedImage castleCache;
 
 
     static BufferedImage castle() {
-        if (castleImg == null) {
-            castleImg = paintCastle().toImage(3);
+        if (castleCache == null) {
+            castleCache = paintCastle().toImage(3);
         }
-        return castleImg;
+        return castleCache;
     }
 
     static Pix paintCastle() {
@@ -247,7 +382,7 @@ public class Art {
         bands(c, new int[]{0xc9563f, 0xd96a45, 0xe8824c, 0xf29d56, 0xf7b866, 0xfbd27e}, 0, 160);
         c.ellipse(300, 96, 27, 27, 0xffd36b);
         c.ellipse(300, 96, 22, 22, 0xfff1b0);
-        
+        // 멀리 보이는 탁자 모양 바위산
         mesa(c, 18, 112, 70, 0xb8603f);
         mesa(c, 336, 118, 64, 0xb05a3b);
         mesa(c, 150, 128, 40, 0xc26a45);
@@ -257,7 +392,7 @@ public class Art {
         ridge(c, x -> 176 + (int) (8 * Math.sin(x * 0.022 + 2) + 5 * Math.sin(x * 0.05)), 0xd68f47, 0xe6a45a);
         cactus(c, 238, 178, 0x456e30);
         ridge(c, x -> 206 + (int) (6 * Math.sin(x * 0.018 + 4) + 3 * Math.sin(x * 0.09)), 0xc27a3a, 0xd48b46);
-        
+        // 모래 물결 무늬와 자갈
         for (int i = 0; i < 160; i++) {
             int x = rnd.nextInt(c.width());
             int y = 180 + rnd.nextInt(60);
@@ -293,17 +428,17 @@ public class Art {
         int body = 0x5a9a3c;
         int rib = 0x437a2d;
         int light = 0x7cbf55;
-        
+        // 모래 둔덕
         c.ellipse(38, 94, 32, 6, 0xc27a3a);
         c.ellipse(38, 92, 26, 3, 0xd48b46);
-        
+        // 양팔(왼팔은 위로, 오른팔은 옆으로 들어 올린 위협 자세)
         c.rect(10, 50, 14, 9, body);
         c.rect(9, 28, 9, 30, body);
         c.ellipse(13.5, 29, 4.5, 4, body);
         c.rect(52, 44, 13, 9, body);
         c.rect(58, 22, 9, 30, body);
         c.ellipse(62.5, 23, 4.5, 4, body);
-        
+        // 몸통
         c.rect(23, 22, 30, 70, body);
         c.ellipse(38, 24, 15, 13, body);
         for (int y = 14; y < 92; y++) {
@@ -320,7 +455,7 @@ public class Art {
                 }
             }
         }
-        
+        // 가시
         for (int i = 0; i < 70; i++) {
             int x = 8 + rnd.nextInt(62);
             int y = 14 + rnd.nextInt(78);
@@ -328,7 +463,7 @@ public class Art {
                 c.set(x, y, 0xefe7b8);
             }
         }
-        
+        // 화난 얼굴
         c.ellipse(32, 42, 4.5, 3.5, 0xfff4e0);
         c.ellipse(45, 42, 4.5, 3.5, 0xfff4e0);
         c.rect(33, 42, 2, 2, 0x140a06);
@@ -341,7 +476,7 @@ public class Art {
             c.rect(x, 53, 2, 2, 0xfff4e0);
             c.rect(x + 1, 60, 2, 2, 0xfff4e0);
         }
-        
+        // 머리 위 꽃
         c.ellipse(44, 10, 3, 3, 0xe65a8a);
         c.ellipse(50, 10, 3, 3, 0xe65a8a);
         c.ellipse(47, 6, 3, 3, 0xf07aa2);
@@ -354,13 +489,13 @@ public class Art {
 
     static void islandBg(Pix c, Random rnd) {
         bands(c, new int[]{0x141c28, 0x1b2735, 0x22324a, 0x2b3f5c, 0x35506e, 0x41627f}, 0, 132);
-        
+        // 먹구름
         for (int i = 0; i < 9; i++) {
             int cx = rnd.nextInt(c.width());
             int cy = 8 + rnd.nextInt(40);
             c.ellipse(cx, cy, 30 + rnd.nextInt(30), 7 + rnd.nextInt(5), i % 2 == 0 ? 0x0f1620 : 0x18222f);
         }
-        
+        // 번개
         int[][] bolt = {{96, 0}, {88, 30}, {98, 34}, {80, 70}, {92, 72}, {72, 118}};
         for (int i = 0; i + 1 < bolt.length; i++) {
             c.line(bolt[i][0], bolt[i][1], bolt[i + 1][0], bolt[i + 1][1], 3, 0x9fc4e8);
@@ -368,9 +503,9 @@ public class Art {
         for (int i = 0; i + 1 < bolt.length; i++) {
             c.line(bolt[i][0], bolt[i][1], bolt[i + 1][0], bolt[i + 1][1], 1, 0xf2f8ff);
         }
-        
+        // 바다
         bands(c, new int[]{0x2a5a78, 0x1f4a66, 0x173d57, 0x113148, 0x0c263a}, 132, 240);
-        
+        // 멀리 있는 외딴섬과 죽은 야자수
         c.ellipse(70, 134, 46, 9, 0x2c2b31);
         c.ellipse(64, 131, 30, 6, 0x3b3a3f);
         c.line(72, 128, 76, 104, 2, 0x1f1d22);
@@ -378,19 +513,19 @@ public class Art {
         c.line(76, 104, 90, 98, 1, 0x1f1d22);
         c.line(76, 104, 70, 112, 1, 0x1f1d22);
         c.line(76, 104, 86, 110, 1, 0x1f1d22);
-        
+        // 부서진 신전 기둥
         c.rect(360, 112, 6, 22, 0x2f3440);
         c.rect(376, 118, 6, 16, 0x2f3440);
         c.rect(356, 110, 30, 3, 0x2f3440);
         c.ellipse(371, 134, 22, 4, 0x24272f);
-        
+        // 파도 하이라이트: 가까울수록 크고 많게
         for (int i = 0; i < 260; i++) {
             int y = 134 + rnd.nextInt(106);
             int x = rnd.nextInt(c.width());
             int len = 2 + (y - 130) / 12 + rnd.nextInt(3);
             c.rect(x, y, len, 1, y > 200 ? 0x4a86aa : 0x3f769a);
         }
-        
+        // 비
         for (int i = 0; i < 180; i++) {
             int x = rnd.nextInt(c.width());
             int y = rnd.nextInt(c.height());
@@ -408,7 +543,7 @@ public class Art {
         int light = 0x8fe0e8;
         int weed = 0x2f7f6f;
         int gold = 0xe3c14b;
-        
+        // 삼지창
         c.rect(13, 10, 3, 92, gold);
         c.rect(6, 20, 17, 3, gold);
         c.rect(6, 6, 3, 16, gold);
@@ -417,12 +552,12 @@ public class Art {
         c.set(7, 5, 0xfff1a8);
         c.set(14, 1, 0xfff1a8);
         c.set(21, 5, 0xfff1a8);
-        
+        // 흘러내리는 머리카락(해초)
         for (int i = 0; i < 6; i++) {
             c.line(40 - i * 3, 26 + i * 2, 26 - i * 2, 60 + i * 4, 2, weed);
             c.line(60 + i * 3, 26 + i * 2, 76 + i * 2, 60 + i * 4, 2, weed);
         }
-        
+        // 몸통: 허리에서 물속으로 흩어진다
         for (int y = 48; y < 100; y++) {
             double t = (y - 48) / 52.0;
             int half = (int) (25 - t * 11);
@@ -437,34 +572,34 @@ public class Art {
         c.line(40, 66, 50, 70, 1, dark);
         c.line(60, 66, 50, 70, 1, dark);
         c.line(50, 72, 50, 86, 1, dark);
-        
+        // 팔: 왼팔은 삼지창을, 오른팔은 갈퀴손을 뻗는다
         c.line(28, 54, 16, 60, 6, skin);
         c.ellipse(15, 60, 5, 5, skin);
         c.line(72, 54, 86, 74, 6, skin);
         c.line(86, 74, 92, 84, 2, light);
         c.line(86, 74, 88, 86, 2, light);
         c.line(86, 74, 83, 86, 2, light);
-        
+        // 머리
         c.ellipse(50, 36, 16, 17, skin);
         c.ellipse(45, 30, 5, 5, light);
         c.ellipse(58, 40, 6, 10, dark);
-        
+        // 왕관
         c.rect(36, 16, 28, 5, gold);
         for (int i = 0; i < 4; i++) {
             c.line(38 + i * 8, 16, 40 + i * 8, 8, 2, gold);
         }
         c.rect(48, 17, 3, 3, 0xd94a4a);
-        
+        // 빛나는 눈과 입
         c.ellipse(44, 35, 5, 3.5, 0x0f3a48);
         c.ellipse(57, 35, 5, 3.5, 0x0f3a48);
         c.rect(42, 34, 4, 2, 0xe8fff8);
         c.rect(55, 34, 4, 2, 0xe8fff8);
         c.rect(46, 45, 9, 3, 0x0f3a48);
-        
+        // 수염
         for (int i = 0; i < 5; i++) {
             c.line(42 + i * 4, 47, 40 + i * 5, 62 + (i % 2) * 5, 2, weed);
         }
-        
+        // 물보라 받침
         c.ellipse(50, 104, 46, 8, 0x2f7fa0);
         c.ellipse(50, 102, 40, 5, 0x3f96b8);
         for (int x = 8; x < 92; x += 4) {
@@ -499,7 +634,7 @@ public class Art {
         }
         ridge(c, x -> 168 + (int) (7 * Math.sin(x * 0.02 + 3) + 4 * Math.sin(x * 0.06)), 0x5f9a3f, 0x74b04e);
         ridge(c, x -> 200 + (int) (5 * Math.sin(x * 0.017 + 5) + 3 * Math.sin(x * 0.08)), 0x4a8233, 0x5f9a3f);
-        
+        // 풀 무더기와 꽃
         for (int i = 0; i < 220; i++) {
             int x = rnd.nextInt(c.width());
             int y = 170 + rnd.nextInt(70);
@@ -524,17 +659,17 @@ public class Art {
         int bark = 0x7a5535;
         int barkDark = 0x4d331e;
         int barkLight = 0x946a44;
-        
+        // 뿌리
         c.line(40, 104, 20, 116, 4, bark);
         c.line(50, 106, 42, 117, 4, bark);
         c.line(64, 106, 72, 117, 4, bark);
         c.line(72, 104, 94, 116, 4, bark);
-        
+        // 가지 팔
         c.line(42, 62, 12, 42, 6, bark);
         c.line(22, 48, 14, 30, 3, bark);
         c.line(70, 60, 100, 38, 6, bark);
         c.line(90, 44, 100, 26, 3, bark);
-        
+        // 줄기(아래로 갈수록 굵다)
         for (int y = 48; y < 110; y++) {
             int half = 17 + (y - 48) / 8;
             for (int x = 56 - half; x <= 56 + half; x++) {
@@ -555,7 +690,7 @@ public class Art {
                 }
             }
         }
-        
+        // 얼굴: 움푹 파인 눈 속 노란 빛, 벌어진 입
         c.ellipse(47, 72, 7, 6, 0x2a1a0e);
         c.ellipse(66, 72, 7, 6, 0x2a1a0e);
         c.ellipse(47, 73, 2.6, 2.2, 0xffe066);
@@ -566,7 +701,7 @@ public class Art {
         for (int x = 49; x < 64; x += 3) {
             c.rect(x, 86, 2, 2, barkLight);
         }
-        
+        // 잎 덩어리
         int leafDark = 0x2f6b2f;
         int leaf = 0x3f8a3a;
         int leafLight = 0x5aa84a;
@@ -590,7 +725,7 @@ public class Art {
                 c.set(x, y, Pix.scale(c.get(x, y), 1.25));
             }
         }
-        
+        // 이끼와 버섯
         c.rect(40, 100, 6, 2, 0x5a9a3c);
         c.ellipse(72, 101, 3, 2, 0xd9483a);
         c.set(71, 100, 0xffffff);
@@ -601,9 +736,9 @@ public class Art {
 
     static void snowBg(Pix c, Random rnd) {
         bands(c, new int[]{0x7fa6c7, 0x8fb5d3, 0x9fc2dc, 0xb1cfe4, 0xc3dbeb, 0xd5e7f1}, 0, 150);
-        
+        // 먼 산맥
         ridge(c, x -> 104 + (int) (22 * Math.abs(Math.sin(x * 0.021 + 0.4)) + 6 * Math.sin(x * 0.09)), 0xc8d9e6, 0xe4eef5);
-        
+        // 가까운 설산: 봉우리 왼쪽은 햇빛, 오른쪽은 그늘
         int[][] peaks = {{60, 70}, {170, 58}, {300, 66}, {400, 80}};
         for (int[] p : peaks) {
             for (int x = p[0] - 70; x <= p[0] + 70; x++) {
@@ -617,13 +752,13 @@ public class Art {
         }
         ridge(c, x -> 160 + (int) (5 * Math.sin(x * 0.03) + 3 * Math.sin(x * 0.08)), 0xe6eff6, 0xffffff);
         ridge(c, x -> 188 + (int) (6 * Math.sin(x * 0.02 + 2)), 0xf2f7fb, 0xffffff);
-        
+        // 눈 그늘 물결
         for (int i = 0; i < 90; i++) {
             int x = rnd.nextInt(c.width());
             int y = 192 + rnd.nextInt(48);
             c.rect(x, y, 5 + rnd.nextInt(6), 1, 0xd4e3ef);
         }
-        
+        // 눈 덮인 전나무
         int[] treesX = {24, 110, 138, 250, 372, 410};
         for (int i = 0; i < treesX.length; i++) {
             pine(c, treesX[i], 176 + (i % 3) * 6, 10 + (i % 2) * 4);
@@ -652,26 +787,26 @@ public class Art {
         int fur = 0xf4f8fb;
         int shade = 0xc7d6e3;
         int face = 0x8fa6bd;
-        
+        // 다리
         c.ellipse(36, 98, 10, 8, fur);
         c.ellipse(68, 98, 10, 8, fur);
-        
+        // 긴 팔과 발톱
         c.ellipse(16, 70, 10, 24, fur);
         c.ellipse(88, 70, 10, 24, fur);
         for (int i = 0; i < 3; i++) {
             c.line(10 + i * 5, 92, 9 + i * 5, 99, 2, 0x5a6a7a);
             c.line(82 + i * 5, 92, 83 + i * 5, 99, 2, 0x5a6a7a);
         }
-        
+        // 몸통
         c.ellipse(52, 66, 32, 32, fur);
-        
+        // 뿔
         c.line(36, 22, 28, 12, 4, 0x8a7a6a);
         c.line(28, 12, 30, 4, 3, 0x8a7a6a);
         c.line(68, 22, 76, 12, 4, 0x8a7a6a);
         c.line(76, 12, 74, 4, 3, 0x8a7a6a);
-        
+        // 머리
         c.ellipse(52, 32, 21, 18, fur);
-        
+        // 털 결: 가장자리를 들쭉날쭉하게, 오른쪽 아래는 그늘
         for (int y = 0; y < c.height(); y++) {
             for (int x = 0; x < c.width(); x++) {
                 if (c.get(x, y) != fur) {
@@ -691,7 +826,7 @@ public class Art {
                 c.set(x, y, fur);
             }
         }
-        
+        // 털 뭉치 결
         for (int i = 0; i < 40; i++) {
             int x = 24 + rnd.nextInt(56);
             int y = 40 + rnd.nextInt(50);
@@ -700,7 +835,7 @@ public class Art {
                 c.set(x + 1, y + 1, shade);
             }
         }
-        
+        // 얼굴
         c.ellipse(52, 36, 13, 11, face);
         c.ellipse(46, 32, 3.5, 3, 0xff4a4a);
         c.ellipse(58, 32, 3.5, 3, 0xff4a4a);
@@ -711,7 +846,7 @@ public class Art {
         c.ellipse(52, 42, 8, 4.5, 0x3a1d2a);
         c.rect(45, 38, 3, 4, 0xffffff);
         c.rect(57, 38, 3, 4, 0xffffff);
-        
+        // 배의 얼음 결정
         c.line(52, 58, 52, 74, 1, 0x9fd6f2);
         c.line(44, 66, 60, 66, 1, 0x9fd6f2);
         c.line(46, 60, 58, 72, 1, 0x9fd6f2);
@@ -737,14 +872,14 @@ public class Art {
         for (int i = 0; i < 90; i++) {
             c.set(rnd.nextInt(c.width()), rnd.nextInt(130), i % 4 == 0 ? 0xe8d0f0 : 0x9a7aac);
         }
-        
+        // 핏빛 달
         c.ellipse(320, 62, 36, 36, 0x9e3029);
         c.ellipse(318, 60, 34, 34, 0xc9453a);
         c.ellipse(310, 50, 16, 14, 0xe0634e);
         c.ellipse(334, 72, 6, 5, 0x9e3029);
         c.ellipse(304, 78, 4, 3, 0x9e3029);
         c.ellipse(340, 48, 3, 3, 0xa8362d);
-        
+        // 떠 있는 폐허와 마왕성 실루엣
         floatingRock(c, 52, 96, 28);
         c.rect(40, 70, 8, 26, 0x1a0f24);
         c.rect(52, 62, 10, 34, 0x1a0f24);
@@ -756,7 +891,7 @@ public class Art {
         c.rect(386, 130, 4, 20, 0x1a0f24);
         c.rect(396, 136, 4, 14, 0x1a0f24);
         floatingRock(c, 190, 118, 10);
-        
+        // 구름 바다
         for (int x = 0; x < c.width(); x += 14) {
             int top = 188 + (int) (7 * Math.sin(x * 0.05) + 4 * Math.sin(x * 0.13));
             c.ellipse(x, top + 8, 16, 10, 0x3a2250);
@@ -782,10 +917,10 @@ public class Art {
         int bone = 0x1c0a1e;
         int skin = 0x3a1f3f;
         int skinLight = 0x553060;
-        
+        // 박쥐 날개
         wing(c, 44, 40, -1, wing, bone);
         wing(c, 74, 40, 1, wing, bone);
-        
+        // 불꽃 아우라(하반신)
         for (int i = 0; i < 12; i++) {
             int x = 34 + i * 4 + rnd.nextInt(3);
             int h = 10 + rnd.nextInt(14);
@@ -793,7 +928,7 @@ public class Art {
             c.rect(x + 1, 104 - h / 2, 2, h / 2, 0xffb23a);
         }
         c.ellipse(59, 102, 28, 8, 0xd9402a);
-        
+        // 몸통
         for (int y = 46; y < 96; y++) {
             int half = 18 - Math.max(0, (y - 70) / 4);
             c.rect(59 - half, y, half * 2, 1, skin);
@@ -804,7 +939,7 @@ public class Art {
         c.line(48, 66, 70, 66, 1, 0x4d2a57);
         c.line(48, 76, 70, 76, 1, 0x4d2a57);
         c.ellipse(59, 52, 6, 4, 0x9a2a3a);
-        
+        // 팔: 오른손에 보라색 구슬
         c.line(42, 50, 26, 80, 7, skin);
         for (int i = 0; i < 3; i++) {
             c.line(24 + i * 3, 82, 22 + i * 3, 89, 2, 0xe8dcc0);
@@ -813,14 +948,14 @@ public class Art {
         c.ellipse(98, 78, 9, 9, 0x6a2ab8);
         c.ellipse(96, 76, 5, 5, 0x9a4ad8);
         c.rect(94, 73, 2, 2, 0xe8c8ff);
-        
+        // 머리와 뿔
         c.line(50, 22, 38, 10, 5, 0xe8dcc0);
         c.line(38, 10, 34, 0, 3, 0xe8dcc0);
         c.line(68, 22, 80, 10, 5, 0xe8dcc0);
         c.line(80, 10, 84, 0, 3, 0xe8dcc0);
         c.ellipse(59, 32, 14, 15, skin);
         c.ellipse(55, 26, 5, 5, skinLight);
-        
+        // 이글거리는 눈과 찢어진 웃음
         c.line(49, 29, 55, 32, 3, 0xff3a3a);
         c.line(69, 29, 63, 32, 3, 0xff3a3a);
         c.rect(52, 31, 2, 1, 0xffd24a);
@@ -883,7 +1018,7 @@ public class Art {
             this.w = w;
             this.h = h;
             this.px = new int[w * h];
-            java.util.Arrays.fill(px, CLEAR);
+            Arrays.fill(px, CLEAR);
         }
 
         public int width() {
