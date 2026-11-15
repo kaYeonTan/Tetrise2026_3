@@ -1748,6 +1748,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    static final int BOSS_MAX_DRAW_WIDTH = 520;
+    static final int BOSS_MAX_DRAW_HEIGHT = 560;
+
     private static final PlayerAction[] KEY_ACTIONS = {
         PlayerAction.MOVE_LEFT, PlayerAction.MOVE_RIGHT, PlayerAction.SOFT_DROP, PlayerAction.HARD_DROP,
         PlayerAction.ROTATE_CW, PlayerAction.ROTATE_CCW, PlayerAction.HOLD
@@ -3164,18 +3167,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
         int mx = isTwoPlayer ? 640 - drawW / 2 : 1100 - drawW / 2;
         int my = 704 - drawH + bob;
-        drawBossMonster(g, m, mx, my, drawW, drawH, !stageClear && HitFlash.flashVisible(hitEffect));
-    }
-        g.drawImage(Art.background(stage), 0, 0, null);
-        BufferedImage m = Art.monster(stage);
-        int bob = (tick / 36) % 2 == 0 ? 0 : 3;
-        int mx = isTwoPlayer ? 640 - m.getWidth() / 2 : 1100 - m.getWidth() / 2;
-        int my = 704 - m.getHeight() + bob;
-        g.drawImage(m, mx, my, null);
-        if (hitEffect > 0 && hitEffect % 4 < 2) {
-            g.setColor(new Color(255, 255, 255, 110));
-            g.fillRect(mx, my, m.getWidth(), m.getHeight());
-        }
+        drawBossMonster(g, m, mx, my, drawW, drawH, !stageClear && hitEffect > 0 && hitEffect % 4 < 2);
         Art.effect(g, stage, 1280, 720, gameTime);
         if (gameTime < blizzardEnd) {
             g.setColor(new Color(200, 230, 255, 50));
@@ -3368,7 +3360,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
 
         if (bossAwakeningEffect > 0) {
-            drawBossAwakening(g, mx + m.getWidth() / 2);
+            drawBossAwakening(g, mx + drawW / 2);
         }
 
         
