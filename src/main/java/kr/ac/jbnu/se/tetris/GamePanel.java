@@ -1,5 +1,8 @@
 package kr.ac.jbnu.se.tetris;
 
+import java.awt.AlphaComposite;
+import java.awt.Composite;
+import java.awt.image.BufferedImage;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -1745,6 +1748,9 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
+    static final int BOSS_MAX_DRAW_WIDTH = 520;
+    static final int BOSS_MAX_DRAW_HEIGHT = 560;
+
     private static final PlayerAction[] KEY_ACTIONS = {
         PlayerAction.MOVE_LEFT, PlayerAction.MOVE_RIGHT, PlayerAction.SOFT_DROP, PlayerAction.HARD_DROP,
         PlayerAction.ROTATE_CW, PlayerAction.ROTATE_CCW, PlayerAction.HOLD
@@ -3124,17 +3130,44 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
     }
 
-    void drawGame(Graphics2D g) {
-        g.drawImage(Art.background(stage), 0, 0, null);
-        BufferedImage m = Art.monster(stage);
-        int bob = (tick / 36) % 2 == 0 ? 0 : 3;
-        int mx = isTwoPlayer ? 640 - m.getWidth() / 2 : 1100 - m.getWidth() / 2;
-        int my = 704 - m.getHeight() + bob;
-        g.drawImage(m, mx, my, null);
-        if (hitEffect > 0 && hitEffect % 4 < 2) {
-            g.setColor(new Color(255, 255, 255, 110));
-            g.fillRect(mx, my, m.getWidth(), m.getHeight());
+    int[] bossDrawSize(BufferedImage sprite) {
+        int sw = sprite.getWidth();
+        int sh = sprite.getHeight();
+        double scale = Math.min(1.0, Math.min((double) BOSS_MAX_DRAW_WIDTH / sw, (double) BOSS_MAX_DRAW_HEIGHT / sh));
+        int dw = Math.max(1, (int) Math.round(sw * scale));
+        int dh = Math.max(1, (int) Math.round(sh * scale));
+        return new int[]{dw, dh};
+    }
+
+    /** Draws boss PNG with optional hit flash limited to non-transparent pixels. */
+    void drawBossMonster(Graphics2D g, BufferedImage sprite, int x, int y, int dw, int dh, boolean flashWhite) {
+        g.drawImage(sprite, x, y, dw, dh, null);
+        if (!flashWhite) {
+            return;
         }
+        Composite previous = g.getComposite();
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_IN, 0.62f));
+        g.setColor(Color.WHITE);
+        g.fillRect(x, y, dw, dh);
+        g.setComposite(previous);
+    }
+
+    void drawGame(Graphics2D g) {
+        BufferedImage bg = Art.background(stage);
+        g.drawImage(bg, 0, 0, 1280, 720, null);
+        Art.MonsterPose bossPose = stageClear ? Art.MonsterPose.DEATH
+                : (hitEffect > 0 ? Art.MonsterPose.HIT : Art.MonsterPose.IDLE);
+        BufferedImage m = Art.monster(stage, bossPose);
+        int[] drawSize = bossDrawSize(m);
+        int drawW = drawSize[0];
+        int drawH = drawSize[1];
+        int bob = bossPose == Art.MonsterPose.IDLE && (tick / 36) % 2 == 0 ? 0 : 3;
+        if (bossPose != Art.MonsterPose.IDLE) {
+            bob = 0;
+        }
+        int mx = isTwoPlayer ? 640 - drawW / 2 : 1100 - drawW / 2;
+        int my = 704 - drawH + bob;
+        drawBossMonster(g, m, mx, my, drawW, drawH, !stageClear && hitEffect > 0 && hitEffect % 4 < 2);
         Art.effect(g, stage, 1280, 720, gameTime);
         if (gameTime < blizzardEnd) {
             g.setColor(new Color(200, 230, 255, 50));
@@ -3327,7 +3360,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener, Mo
         }
 
         if (bossAwakeningEffect > 0) {
-            drawBossAwakening(g, mx + m.getWidth() / 2);
+            drawBossAwakening(g, mx + drawW / 2);
         }
 
         
