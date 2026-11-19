@@ -15,19 +15,27 @@ public final class RandomKeyMappingGenerator {
         int[] shuffled = original.clone();
         for (int attempt = 0; attempt < 12; attempt++) {
             fisherYates(shuffled);
-            if (!Arrays.equals(shuffled, original) && !Arrays.equals(shuffled, previous)) {
+            if (isAllowed(shuffled, original, previous)) {
                 return shuffled;
             }
         }
-        int first = shuffled[0];
-        System.arraycopy(shuffled, 1, shuffled, 0, shuffled.length - 1);
-        shuffled[shuffled.length - 1] = first;
-        if (Arrays.equals(shuffled, original) || Arrays.equals(shuffled, previous)) {
-            int second = shuffled[0];
-            System.arraycopy(shuffled, 1, shuffled, 0, shuffled.length - 1);
-            shuffled[shuffled.length - 1] = second;
+
+        rotateLeftOnce(shuffled);
+        if (!isAllowed(shuffled, original, previous)) {
+            rotateLeftOnce(shuffled);
         }
         return shuffled;
+    }
+
+    private boolean isAllowed(int[] candidate, int[] original, int[] previous) {
+        return !Arrays.equals(candidate, original)
+                && !Arrays.equals(candidate, previous);
+    }
+
+    private void rotateLeftOnce(int[] values) {
+        int first = values[0];
+        System.arraycopy(values, 1, values, 0, values.length - 1);
+        values[values.length - 1] = first;
     }
 
     /**
