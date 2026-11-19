@@ -5,6 +5,7 @@ import java.util.Random;
 public final class BossPatternController {
 
     private final Random random;
+    private final BossPatternFactory patternFactory;
     private BossPattern pattern = NoBossPattern.INSTANCE;
     private int elapsedMillis;
     private boolean warning;
@@ -12,6 +13,7 @@ public final class BossPatternController {
 
     public BossPatternController(Random random) {
         this.random = random;
+        this.patternFactory = new BossPatternFactory(random);
     }
 
     public void startStage(int stage, BossPatternTarget target) {
@@ -22,20 +24,14 @@ public final class BossPatternController {
     public void startStage(int stage, BossPatternTarget target, int restoredBlueprintIndex) {
         stop(target);
         blueprintIndex = -1;
-        if (stage == 2) {
-            pattern = new RisingBlockPattern();
-        } else if (stage == 3) {
+
+        if (stage == 3) {
             blueprintIndex = restoredBlueprintIndex >= 0
                     ? restoredBlueprintIndex
                     : random.nextInt(Blueprint.stageThreePatternCount());
-            pattern = new BlueprintPattern(Blueprint.stageThree(blueprintIndex));
-        } else if (stage == 4) {
-            pattern = new AccelerationPattern();
-        } else if (stage == 5) {
-            pattern = new RandomKeyPattern(random);
-        } else {
-            pattern = NoBossPattern.INSTANCE;
         }
+
+        pattern = patternFactory.create(stage, blueprintIndex);
         elapsedMillis = 0;
     }
 
