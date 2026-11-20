@@ -230,7 +230,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     Random random = new Random();
     public final BossPatternController bossPattern = new BossPatternController(random);
-    private final MaxMinBrain maxMinBrain = new MaxMinBrain();
+    private final transient MaxMinBrain maxMinBrain = new MaxMinBrain();
     private final transient SoundManager soundManager;
     public int gravityMultiplier = 1;
     boolean p1FastNext;
