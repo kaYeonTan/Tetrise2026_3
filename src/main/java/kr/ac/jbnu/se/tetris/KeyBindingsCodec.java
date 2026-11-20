@@ -1,0 +1,53 @@
+package kr.ac.jbnu.se.tetris;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/** keys.txt 형식(4줄: 1인, P1, P2, 일시정지)과 KeyBindings 사이의 변환. 형식이 바뀌어도 이곳만 고친다. */
+public final class KeyBindingsCodec {
+
+    private static final int LINE_COUNT = 4;
+    private static final int ACTION_COUNT = 7;
+
+    private KeyBindingsCodec() {
+    }
+
+    public static List<String> encode(KeySettings keys) {
+        List<String> lines = new ArrayList<>();
+        for (int tab = 0; tab < KeySettings.COMMON; tab++) {
+            StringBuilder line = new StringBuilder();
+            for (int row = 0; row < keys.rowCount(tab); row++) {
+                if (row > 0) {
+                    line.append(',');
+                }
+                line.append(keys.get(tab, row));
+            }
+            lines.add(line.toString());
+        }
+        lines.add(String.valueOf(keys.get(KeySettings.COMMON, 0)));
+        return lines;
+    }
+
+    /** 형식이 맞지 않으면 null. */
+    public static KeySettings decode(List<String> lines) {
+        if (lines.size() < LINE_COUNT) {
+            return null;
+        }
+        try {
+            KeySettings keys = KeySettings.defaults();
+            for (int tab = 0; tab < KeySettings.COMMON; tab++) {
+                String[] parts = lines.get(tab).split(",");
+                if (parts.length != ACTION_COUNT) {
+                    return null;
+                }
+                for (int row = 0; row < ACTION_COUNT; row++) {
+                    keys.set(tab, row, Integer.parseInt(parts[row].trim()));
+                }
+            }
+            keys.set(KeySettings.COMMON, 0, Integer.parseInt(lines.get(3).trim()));
+            return keys;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+}

@@ -7,11 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Random;
 import javax.swing.JLabel;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
+import kr.ac.jbnu.se.tetris.repository.Repositories;
 import kr.ac.jbnu.se.tetris.core.GameSession;
+import kr.ac.jbnu.se.tetris.input.KeyAction;
 import kr.ac.jbnu.se.tetris.integration.CoopEngineBridge;
 import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,11 +23,12 @@ import org.junit.jupiter.api.Test;
 class GamePanelTest {
 
     GamePanel p;
+    Repositories repos;
 
     @BeforeEach
     void setUp() {
-        FileManager.DIR = "target/testdata/";
-        p = new GamePanel();
+        repos = Repositories.at(Path.of("target/testdata"));
+        p = new GamePanel(repos);
         p.timer.stop();
         p.newGame(false);
     }
@@ -105,32 +109,32 @@ class GamePanelTest {
     @Test
     void saveLoad() {
         p.newGame(true);
-        p.loginUser = "tester";
+        p.setLoginUser("tester");
         p.p1Score = 500;
         p.board2[23][3] = 5;
-        assertTrue(FileManager.saveGame(p));
-        GamePanel q = new GamePanel();
+        assertTrue(repos.saves().saveGame(p));
+        GamePanel q = new GamePanel(repos);
         q.timer.stop();
-        assertTrue(FileManager.loadGame(p.saveFile, q));
+        assertTrue(repos.saves().loadGame(p.saveFile, q));
         assertEquals(500, q.p1Score);
         assertEquals(5, q.board2[23][3]);
         assertTrue(q.isTwoPlayer);
-        FileManager.deleteSave(p.saveFile);
+        repos.saves().deleteSave(p.saveFile);
     }
 
     @Test
     void stageThreeSaveKeepsSelectedBlueprint() {
-        p.loginUser = "tester";
+        p.setLoginUser("tester");
         p.stage = 3;
         p.startStage();
         int selectedBlueprint = p.bossPattern.blueprintIndex();
 
-        assertTrue(FileManager.saveGame(p));
-        GamePanel loaded = new GamePanel();
+        assertTrue(repos.saves().saveGame(p));
+        GamePanel loaded = new GamePanel(repos);
         loaded.timer.stop();
-        assertTrue(FileManager.loadGame(p.saveFile, loaded));
+        assertTrue(repos.saves().loadGame(p.saveFile, loaded));
         assertEquals(selectedBlueprint, loaded.bossPattern.blueprintIndex());
-        FileManager.deleteSave(p.saveFile);
+        repos.saves().deleteSave(p.saveFile);
     }
 
     @Test
@@ -182,12 +186,12 @@ class GamePanelTest {
 
     @Test
     void onlineRandomKeyMappingUsesEachClientsSinglePlayerKeys() {
-        int[] savedSingleKeys = GamePanel.keySingle;
+        kr.ac.jbnu.se.tetris.input.KeyBindings savedSingleKeys = GamePanel.keySingle().copy();
         try {
             int[] hostSingleKeys = {101, 102, 103, 104, 105, 106, 107};
             int[] hostMapping = {1, 2, 3, 4, 5, 6, 0};
             int[] guestMapping = {6, 5, 4, 3, 2, 1, 0};
-            GamePanel.keySingle = hostSingleKeys;
+            setSingleKeys(hostSingleKeys);
             p.newGame(true);
             p.isOnlineCoop = true;
             p.localPlayerIndex = 0;
@@ -207,13 +211,21 @@ class GamePanelTest {
             assertArrayEquals(guestMapping, sync.randomKeyMappingForPlayer1);
 
             int[] guestSingleKeys = {201, 202, 203, 204, 205, 206, 207};
-            GamePanel.keySingle = guestSingleKeys;
+            setSingleKeys(guestSingleKeys);
             p.localPlayerIndex = 1;
             p.applyOnlineBossSync(sync);
 
             assertArrayEquals(new int[]{207, 206, 205, 204, 203, 202, 201}, p.currentPrimaryKeys());
         } finally {
-            GamePanel.keySingle = savedSingleKeys;
+            for (KeyAction action : KeyAction.values()) {
+                GamePanel.keySingle().set(action, savedSingleKeys.get(action));
+            }
+        }
+    }
+
+    private static void setSingleKeys(int[] codes) {
+        for (KeyAction action : KeyAction.values()) {
+            GamePanel.keySingle().set(action, codes[action.ordinal()]);
         }
     }
 

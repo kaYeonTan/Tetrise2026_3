@@ -1,6 +1,7 @@
 package kr.ac.jbnu.se.tetris.persistence;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
+import kr.ac.jbnu.se.tetris.ScreenId;
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.CoopGameEngine;
 import kr.ac.jbnu.se.tetris.core.GameSession;
@@ -89,7 +90,7 @@ public final class MementoMapper {
 		m.bossTimer = panel.bossTimer;
 		m.gameTime = panel.gameTime;
 		m.stageClear = panel.stageClear;
-		m.gameOver = panel.screen == 7
+		m.gameOver = panel.getScreen() == ScreenId.RESULT
 				|| (panel.coopEliminated0 && panel.coopEliminated1);
 		m.player0Eliminated = panel.coopEliminated0;
 		m.player1Eliminated = panel.coopEliminated1;

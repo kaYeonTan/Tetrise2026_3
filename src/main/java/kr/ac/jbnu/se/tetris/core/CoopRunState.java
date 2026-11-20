@@ -24,7 +24,7 @@ public final class CoopRunState {
 		gameTime = p.gameTime;
 		stageClear = p.stageClear;
 		blizzardEnd = p.blizzardEnd;
-		hitEffect = p.hitEffect;
+		hitEffect = p.getHitEffect();
 		bossWarning = p.bossWarning;
 		bossWarningText = p.bossWarningText == null ? "" : p.bossWarningText;
 	}
@@ -37,7 +37,7 @@ public final class CoopRunState {
 		p.gameTime = gameTime;
 		p.stageClear = stageClear;
 		p.blizzardEnd = blizzardEnd;
-		p.hitEffect = hitEffect;
+		p.setHitEffect(hitEffect);
 		p.bossWarning = bossWarning;
 		p.bossWarningText = bossWarningText;
 	}
