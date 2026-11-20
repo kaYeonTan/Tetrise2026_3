@@ -3,6 +3,7 @@ package kr.ac.jbnu.se.tetris.ui.screen;
 import javax.swing.JComponent;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
+import kr.ac.jbnu.se.tetris.repository.Repositories;
 import kr.ac.jbnu.se.tetris.ui.router.RouteParams;
 import kr.ac.jbnu.se.tetris.ui.router.Screen;
 
@@ -13,8 +14,8 @@ public class StagePanelScreen implements Screen {
 
 	private final GamePanel panel;
 
-	public StagePanelScreen() {
-		this.panel = new GamePanel();
+	public StagePanelScreen(Repositories repos) {
+		this.panel = new GamePanel(repos);
 	}
 
 	@Override

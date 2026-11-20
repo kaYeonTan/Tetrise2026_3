@@ -141,6 +141,8 @@ public class LobbyFrame extends JDialog {
 
 	}
 
+
+
 	/** 게임 종료 후 기존 서버 연결을 유지한 채 로비를 다시 연다. */
 	public LobbyFrame(GamePanel panel, LobbyClient existingClient) {
 		this(panel);
@@ -183,6 +185,17 @@ public class LobbyFrame extends JDialog {
 
 
 
+		root.add(buildConnectionBar(), BorderLayout.NORTH);
+		root.add(buildCenterPanel(), BorderLayout.CENTER);
+		root.add(buildButtonRow(), BorderLayout.SOUTH);
+		setContentPane(root);
+
+		portField.addActionListener(e -> connect());
+		hostField.addActionListener(e -> connect());
+	}
+
+	/** 서버 주소·포트 입력과 연결 상태 표시줄. */
+	private JPanel buildConnectionBar() {
 		JPanel top = new JPanel();
 
 		top.setOpaque(false);
@@ -229,9 +242,9 @@ public class LobbyFrame extends JDialog {
 
 		connectRow.add(portField);
 
-		JButton refreshBtn = button("목록 새로고침", false);
-		refreshBtn.addActionListener(e -> refreshRooms());
-		connectRow.add(refreshBtn);
+		JButton refreshButton = button("목록 새로고침", false);
+		refreshButton.addActionListener(e -> refreshRooms());
+		connectRow.add(refreshButton);
 
 
 
@@ -252,13 +265,11 @@ public class LobbyFrame extends JDialog {
 		statusRow.add(statusLabel);
 
 		top.add(statusRow);
+		return top;
+	}
 
-
-
-		JPanel center = new JPanel(new BorderLayout(8, 0));
-
-		center.setOpaque(false);
-
+	/** 방 목록(왼쪽)과 대기실·방 만들기 영역(오른쪽). */
+	private JScrollPane buildRoomList() {
 		roomList = new JList<>(roomModel);
 
 		roomList.setFont(uiFont());
@@ -277,18 +288,11 @@ public class LobbyFrame extends JDialog {
 
 		listScroll.setPreferredSize(new Dimension(300, 360));
 
-		center.add(listScroll, BorderLayout.CENTER);
+		return listScroll;
 
+	}
 
-
-		JPanel right = new JPanel(new BorderLayout(0, 8));
-
-		right.setOpaque(false);
-
-		right.setPreferredSize(new Dimension(280, 360));
-
-
-
+	private JPanel buildMyRoomBox() {
 		myRoomPanel = new JTextArea(7, 20);
 
 		myRoomPanel.setFont(uiFont());
@@ -321,7 +325,30 @@ public class LobbyFrame extends JDialog {
 		startGameBtn.setEnabled(false);
 		myRoomBox.add(startGameBtn, BorderLayout.SOUTH);
 		myRoomBox.setPreferredSize(new Dimension(260, 200));
-		right.add(myRoomBox, BorderLayout.NORTH);
+		return myRoomBox;
+
+	}
+
+	private JPanel buildCenterPanel() {
+
+
+
+		JPanel center = new JPanel(new BorderLayout(8, 0));
+
+		center.setOpaque(false);
+
+		center.add(buildRoomList(), BorderLayout.CENTER);
+
+
+		JPanel right = new JPanel(new BorderLayout(0, 8));
+
+		right.setOpaque(false);
+
+		right.setPreferredSize(new Dimension(280, 360));
+
+
+
+		right.add(buildMyRoomBox(), BorderLayout.NORTH);
 
 		JPanel actions = new JPanel();
 		actions.setOpaque(false);
@@ -351,8 +378,8 @@ public class LobbyFrame extends JDialog {
 		actions.add(roomVisibilitySelector);
 		actions.add(Box.createVerticalStrut(6));
 
-		JButton loadBtn = actionButton("저장 불러오기", false, this::openCoopSaveSlots);
-		actions.add(loadBtn);
+		JButton loadButton = actionButton("저장 불러오기", false, this::openCoopSaveSlots);
+		actions.add(loadButton);
 		actions.add(Box.createVerticalStrut(6));
 		actions.add(actionButton("방 만들기", true, this::createRoom));
 		actions.add(Box.createVerticalStrut(6));
@@ -363,6 +390,10 @@ public class LobbyFrame extends JDialog {
 
 
 		center.add(right, BorderLayout.EAST);
+		return center;
+	}
+
+	private JPanel buildButtonRow() {
 
 
 
@@ -380,27 +411,15 @@ public class LobbyFrame extends JDialog {
 
 		bottom.add(waitingLabel, BorderLayout.CENTER);
 
-		JButton closeBtn = button("닫기", false);
+		JButton closeButton = button("닫기", false);
 
-		closeBtn.addActionListener(e -> dispose());
+		closeButton.addActionListener(e -> dispose());
 
-		bottom.add(closeBtn, BorderLayout.EAST);
-
-
-
-		root.add(top, BorderLayout.NORTH);
-
-		root.add(center, BorderLayout.CENTER);
-
-		root.add(bottom, BorderLayout.SOUTH);
-
-		setContentPane(root);
+		bottom.add(closeButton, BorderLayout.EAST);
 
 
 
-		portField.addActionListener(e -> connect());
-
-		hostField.addActionListener(e -> connect());
+		return bottom;
 
 	}
 
@@ -664,9 +683,9 @@ public class LobbyFrame extends JDialog {
 
 	private String displayNick() {
 
-		if (panel.loginUser != null && !panel.loginUser.isEmpty()) {
+		if (panel.getLoginUser() != null && !panel.getLoginUser().isEmpty()) {
 
-			return panel.loginUser;
+			return panel.getLoginUser();
 
 		}
 
@@ -707,7 +726,7 @@ public class LobbyFrame extends JDialog {
 
 
 	private boolean ensureLoggedInForOnline() {
-		if (panel.loginUser != null && !panel.loginUser.isBlank()) {
+		if (panel.getLoginUser() != null && !panel.getLoginUser().isBlank()) {
 			return true;
 		}
 		JOptionPane.showMessageDialog(this,
@@ -760,7 +779,7 @@ public class LobbyFrame extends JDialog {
 
 			client = new LobbyClient();
 
-			client.connect(host, port, panel.loginUser.trim());
+			client.connect(host, port, panel.getLoginUser().trim());
 			CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
 			bridge.attach(client);
 			panel.coopBridge = bridge;

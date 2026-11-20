@@ -17,6 +17,7 @@ import com.google.gson.GsonBuilder;
 
 
 import kr.ac.jbnu.se.tetris.GamePanel;
+import kr.ac.jbnu.se.tetris.ScreenId;
 
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.core.PlayerAction;
@@ -169,7 +170,7 @@ public final class CoopNetworkBridge {
 
 				panel.coopEngineBridge.syncGuestFromMemento(mem);
 
-				panel.screen = 5;
+				panel.setScreen(ScreenId.GAME);
 
 				panel.msg = "온라인 협동 · 참가 (P2) · 저장 이어하기";
 
@@ -338,7 +339,7 @@ public final class CoopNetworkBridge {
 		}
 
 		// 일시정지 중에도 참가자 화면·오버레이 동기화용 스냅샷 전송
-		if (panel.screen != 5 && panel.screen != 6) {
+		if (panel.getScreen() != ScreenId.GAME && panel.getScreen() != ScreenId.PAUSE) {
 
 			return;
 
@@ -376,7 +377,7 @@ public final class CoopNetworkBridge {
 
 	/** 참가자: 내 보드 배열이랑 떨어지는 블록을 방장에게 보낸다. */
 	public void maybeSendMyBoard() {
-		if (!isActive() || host || panel.screen != 5) {
+		if (!isActive() || host || panel.getScreen() != ScreenId.GAME) {
 			return;
 		}
 		sendMyBoard(false);
@@ -558,5 +559,4 @@ public final class CoopNetworkBridge {
 	}
 
 }
-
 

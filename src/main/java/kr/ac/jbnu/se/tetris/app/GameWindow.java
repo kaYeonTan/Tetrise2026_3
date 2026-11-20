@@ -3,12 +3,14 @@ package kr.ac.jbnu.se.tetris.app;
 import java.awt.Font;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.nio.file.Path;
 
 import javax.swing.JFrame;
 import javax.swing.UIManager;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
 import kr.ac.jbnu.se.tetris.audio.SoundManager;
+import kr.ac.jbnu.se.tetris.repository.Repositories;
 
 /*
  * 통합 실행 진입점 — B파트 GamePanel UI(타이틀·메뉴·스테이지·설정 등)를 그대로 사용.
@@ -17,14 +19,15 @@ import kr.ac.jbnu.se.tetris.audio.SoundManager;
 public class GameWindow {
 
     public static void main(String[] args) {
-        javax.swing.SwingUtilities.invokeLater(GameWindow::createAndShow);
+        Repositories repos = Repositories.at(Path.of("data"));
+        javax.swing.SwingUtilities.invokeLater(() -> createAndShow(repos));
     }
 
-    static void createAndShow() {
+    static void createAndShow(Repositories repos) {
         JFrame frame = new JFrame("TETRIS · 스테이지 보스 러시");
         SoundManager soundManager = new SoundManager();
         soundManager.preload();
-        GamePanel panel = new GamePanel(soundManager);
+        GamePanel panel = new GamePanel(soundManager, repos);
 
         Font f = panel.font.deriveFont(16.5f);
         UIManager.put("OptionPane.messageFont", f);
