@@ -26,7 +26,7 @@ public class LoginFrame extends JDialog {
     private static final String LOGIN_TITLE = "로그인";
 
     private final GamePanel gamePanel;
-    private final AccountService accounts;
+    private final transient AccountService accounts;
     private boolean signUpMode;
     private final JPanel rootPanel;
     private JTextField nicknameField;
@@ -93,7 +93,7 @@ public class LoginFrame extends JDialog {
         }
 
         errorLabel = new JLabel(" ");
-        errorLabel.setFont(gamePanel.font.deriveFont(16.5f));
+        errorLabel.setFont(gamePanel.baseFont.deriveFont(16.5f));
         errorLabel.setForeground(UiTheme.DANGER);
         errorLabel.setBounds(FORM_X, y, FORM_WIDTH, 26);
         rootPanel.add(errorLabel);
@@ -106,7 +106,7 @@ public class LoginFrame extends JDialog {
         y += 66;
 
         JLabel switchPromptLabel = new JLabel(signUpMode ? "이미 계정이 있나요?" : "아직 용사가 아니신가요?");
-        switchPromptLabel.setFont(gamePanel.font.deriveFont(16.5f));
+        switchPromptLabel.setFont(gamePanel.baseFont.deriveFont(16.5f));
         switchPromptLabel.setForeground(UiTheme.INK);
         switchPromptLabel.setBounds(FORM_X, y, 230, 40);
         rootPanel.add(switchPromptLabel);
@@ -145,11 +145,11 @@ public class LoginFrame extends JDialog {
 
     int addFormRow(String labelText, JTextField field, int y) {
         JLabel label = new JLabel(labelText);
-        label.setFont(gamePanel.font.deriveFont(16.5f));
+        label.setFont(gamePanel.baseFont.deriveFont(16.5f));
         label.setForeground(UiTheme.INK);
         label.setBounds(FORM_X, y, FORM_WIDTH, 24);
         rootPanel.add(label);
-        field.setFont(gamePanel.font.deriveFont(22f));
+        field.setFont(gamePanel.baseFont.deriveFont(22f));
         field.setBackground(UiTheme.PARCHMENT);
         field.setForeground(UiTheme.INK);
         field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(UiTheme.INK, 3),
@@ -162,7 +162,7 @@ public class LoginFrame extends JDialog {
     JButton createButton(String text, boolean primary) {
         JButton button = new JButton(text);
         button.addActionListener(event -> gamePanel.playButtonClickSound());
-        button.setFont(gamePanel.font.deriveFont(primary ? 22f : 16.5f));
+        button.setFont(gamePanel.baseFont.deriveFont(primary ? 22f : 16.5f));
         button.setFocusPainted(false);
         button.setContentAreaFilled(false);
         button.setOpaque(true);

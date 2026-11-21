@@ -5,6 +5,7 @@ package kr.ac.jbnu.se.tetris;
 import java.awt.BorderLayout;
 
 import java.awt.Color;
+import java.awt.Component;
 
 import java.awt.Dimension;
 
@@ -89,11 +90,11 @@ public class LobbyFrame extends JDialog {
 
 	private final GamePanel panel;
 
-	private LobbyClient client;
+	private transient LobbyClient client;
 
 	private final DefaultListModel<String> roomModel = new DefaultListModel<>();
 
-	private List<RoomSnapshot> lastRooms = List.of();
+	private transient List<RoomSnapshot> lastRooms = List.of();
 
 	private Timer refreshTimer;
 
@@ -170,7 +171,7 @@ public class LobbyFrame extends JDialog {
 
 	private Font uiFont() {
 
-		return panel.font.deriveFont(15f);
+		return panel.baseFont.deriveFont(15f);
 
 	}
 
@@ -359,7 +360,7 @@ public class LobbyFrame extends JDialog {
 
 		JLabel roomNameLabel = new JLabel("새 방 이름");
 		roomNameLabel.setFont(uiFont());
-		roomNameLabel.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		roomNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actions.add(roomNameLabel);
 		actions.add(Box.createVerticalStrut(4));
 
@@ -368,14 +369,14 @@ public class LobbyFrame extends JDialog {
 		Dimension nameSize = new Dimension(260, 32);
 		roomNameField.setPreferredSize(nameSize);
 		roomNameField.setMaximumSize(nameSize);
-		roomNameField.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		roomNameField.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actions.add(roomNameField);
 		actions.add(Box.createVerticalStrut(8));
 
 		roomVisibilitySelector = new JComboBox<>(new String[]{"공개 방", "비밀 방"});
 		roomVisibilitySelector.setFont(uiFont());
 		roomVisibilitySelector.setMaximumSize(new Dimension(260, 32));
-		roomVisibilitySelector.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		roomVisibilitySelector.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actions.add(roomVisibilitySelector);
 		actions.add(Box.createVerticalStrut(6));
 
@@ -554,7 +555,7 @@ public class LobbyFrame extends JDialog {
 
 		b.setMaximumSize(size);
 
-		b.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		b.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 		b.addActionListener(e -> action.run());
 
@@ -658,9 +659,19 @@ public class LobbyFrame extends JDialog {
 
 		connectBtn.setEnabled(false);
 
-		try {
+		class PendingClient implements AutoCloseable {
+			private final LobbyClient value = new LobbyClient();
+			private boolean transferred;
 
-			client = new LobbyClient();
+			@Override
+			public void close() {
+				if (!transferred) value.close();
+			}
+		}
+
+		try (PendingClient pending = new PendingClient()) {
+
+			client = pending.value;
 
 			client.connect(host, port, panel.getLoginUser().trim());
 			CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
@@ -675,6 +686,7 @@ public class LobbyFrame extends JDialog {
 			startAutoRefresh();
 
 			refreshRooms();
+			pending.transferred = true;
 
 		} catch (Exception ex) {
 

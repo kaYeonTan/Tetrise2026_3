@@ -17,7 +17,6 @@ public final class GrassArt implements StageArt {
         canvas.outline(0x1a2a12);
         return canvas.toImage(3);
     }
-    public void effect(Graphics2D g, int width, int height, long time) {  }
     static void grassBg(Pix c, Random rnd) {
         bands(c, new int[]{0x4aa3e0, 0x5fb2e8, 0x77c0ec, 0x90cdef, 0xa9daf2, 0xc2e6f5}, 0, 150);
         cloud(c, 62, 32, 16);

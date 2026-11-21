@@ -115,6 +115,11 @@ public final class SnowArt implements StageArt {
                 }
             }
         }
+        addFurEdges(c, rnd, fur);
+        addFurTufts(c, rnd, fur, shade);
+    }
+
+    private static void addFurEdges(Pix c, Random rnd, int fur) {
         for (int i = 0; i < 60; i++) {
             int x = rnd.nextInt(c.width());
             int y = rnd.nextInt(c.height());
@@ -122,6 +127,9 @@ public final class SnowArt implements StageArt {
                 c.set(x, y, fur);
             }
         }
+    }
+
+    private static void addFurTufts(Pix c, Random rnd, int fur, int shade) {
         // 털 뭉치 결
         for (int i = 0; i < 40; i++) {
             int x = 24 + rnd.nextInt(56);

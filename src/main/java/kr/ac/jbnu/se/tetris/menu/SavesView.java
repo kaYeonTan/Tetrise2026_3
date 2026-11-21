@@ -36,7 +36,7 @@ public class SavesView implements MenuView {
         panel.drawCastle(g, true);
         g.setFont(panel.fontBold.deriveFont(44f));
         panel.centerText(g, "저장된 모험", 92, new Color(0xf0e2c8), new Color(0x6b2a1a));
-        g.setFont(panel.font.deriveFont(16.5f));
+        g.setFont(panel.baseFont.deriveFont(16.5f));
         g.setColor(new Color(0xd9c29a));
         String sub = loginUser == null ? "게스트로 플레이 중" : loginUser + " 용사님의 저장 목록 (최대 5개)";
         g.drawString(sub, 640 - g.getFontMetrics().stringWidth(sub) / 2, 126);
@@ -48,7 +48,7 @@ public class SavesView implements MenuView {
             String t2 = loginUser == null ? "로그인하면 저장한 모험을 이어서 할 수 있어요. 새 게임은 바로 시작할 수 있어요."
                     : "아래 [+ 새 게임]으로 첫 모험을 시작해 보세요!";
             panel.centerText(g, t1, 330, new Color(0xf0e2c8), new Color(0x0c090d));
-            g.setFont(panel.font.deriveFont(16.5f));
+            g.setFont(panel.baseFont.deriveFont(16.5f));
             g.setColor(new Color(0xd9c29a));
             g.drawString(t2, 640 - g.getFontMetrics().stringWidth(t2) / 2, 372);
             if (loginUser == null) {
@@ -77,8 +77,8 @@ public class SavesView implements MenuView {
         g.setColor(new Color(0x1a1216));
         g.drawRect(262, y + 10, 110, 60);
         g.setFont(panel.fontBold.deriveFont(22f));
-        g.drawString("스테이지 " + saveStage + " · " + SAVE_STAGE_NAMES[saveStage], 390, y + 32);
-        g.setFont(panel.font.deriveFont(16.5f));
+        g.drawString(GamePanel.STAGE_LABEL_KO + saveStage + " · " + SAVE_STAGE_NAMES[saveStage], 390, y + 32);
+        g.setFont(panel.baseFont.deriveFont(16.5f));
         g.setColor(new Color(0x4a3a2a));
         g.drawString((save[4].equals("2") ? "단일 PC 2인" : "1인 플레이")
                 + "  ·  점수 " + String.format("%,d", Integer.parseInt(save[3])), 390, y + 54);

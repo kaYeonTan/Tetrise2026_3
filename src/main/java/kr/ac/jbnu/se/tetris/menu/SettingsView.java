@@ -57,7 +57,7 @@ public class SettingsView implements MenuView {
         }
         for (int r = 0; r < editKeys.rowCount(setTab); r++) {
             int y = 190 + r * 48;
-            g.setFont(panel.font.deriveFont(22f));
+            g.setFont(panel.baseFont.deriveFont(22f));
             g.setColor(new Color(0x1a1216));
             g.drawString(KeySettings.actionName(setTab, r), 330, y + 27);
             String label = captureRow == r ? "키를 누르세요…" : GamePanel.keyName(editKeys.get(setTab, r));
@@ -69,7 +69,7 @@ public class SettingsView implements MenuView {
         g.setFont(panel.fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x5a4a3a));
         g.drawString("키 설정은 이 컴퓨터에 저장되고 모든 사용자에게 적용돼요.", 250, 540);
-        g.setFont(panel.font.deriveFont(16.5f));
+        g.setFont(panel.baseFont.deriveFont(16.5f));
         g.setColor(setMsgError ? new Color(0xa8352a) : new Color(0x3a5a2a));
         g.drawString(setMsg, 250, 568);
         panel.drawButton(g, reset, 0, 16.5f);

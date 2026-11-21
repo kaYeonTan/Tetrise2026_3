@@ -42,14 +42,14 @@ public class TitleView implements MenuView {
         }
         g.setFont(panel.fontBold.deriveFont(66f));
         panel.shadowText(g, "TETRIS", 84, 172, new Color(0xf0e2c8), new Color(0x6b2a1a), 5);
-        g.setFont(panel.font.deriveFont(22f));
+        g.setFont(panel.baseFont.deriveFont(22f));
         panel.shadowText(g, "다섯 성의 보스를 무너뜨려라", 90, 214, new Color(0xd9c29a), new Color(0x0c090d), 2);
         panel.drawButton(g, single, 1, 22f);
         panel.drawButton(g, multi, 0, 22f);
         panel.drawButton(g, ranking, 0, 22f);
         panel.drawButton(g, settings, 0, 22f);
         panel.drawButton(g, quit, 0, 18f);
-        g.setFont(panel.font.deriveFont(22f));
+        g.setFont(panel.baseFont.deriveFont(22f));
         String loginUser = panel.getLoginUser();
         if (loginUser != null) {
             panel.drawButton(g, logout, 2, 16.5f);
@@ -57,7 +57,7 @@ public class TitleView implements MenuView {
         } else {
             panel.drawButton(g, login, 2, 16.5f);
             panel.drawButton(g, signUp, 2, 16.5f);
-            g.setFont(panel.font.deriveFont(22f));
+            g.setFont(panel.baseFont.deriveFont(22f));
             panel.shadowText(g, "게스트로 플레이 중", 88, 672, new Color(0xd9c29a), new Color(0x0c090d), 2);
         }
         g.setFont(panel.fontSmall.deriveFont(13.5f));
