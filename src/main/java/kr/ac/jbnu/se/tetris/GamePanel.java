@@ -3066,6 +3066,13 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         return nick;
     }
 
+    /** 스테이지2 가비지 라인 동기화용 (방장 엔진 처리 후 UI 상태). */
+    public void applyOnlineGarbageRaise(int player0Hole, int player1Hole) {
+        garbageSeq++;
+        garbageHole0 = player0Hole;
+        garbageHole1 = player1Hole;
+    }
+
     /** 온라인 스냅샷: 보스 기믹 필드를 memento에 기록 (방장 → 참가자). */
     public void fillOnlineBossSyncFields(CoopGameMemento mem) {
         if (mem == null) {
