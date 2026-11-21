@@ -17,7 +17,6 @@ public final class DesertArt implements StageArt {
         canvas.outline(0x1f2a14);
         return canvas.toImage(3);
     }
-    public void effect(Graphics2D g, int width, int height, long time) {  }
     static void desertBg(Pix c, Random rnd) {
         bands(c, new int[]{0xc9563f, 0xd96a45, 0xe8824c, 0xf29d56, 0xf7b866, 0xfbd27e}, 0, 160);
         c.ellipse(300, 96, 27, 27, 0xffd36b);

@@ -16,7 +16,9 @@ public abstract class AwakeningEffect {
             case 3 -> new GrassAwakening(); case 4 -> new SnowAwakening();
             case 5 -> new SkyAwakening();
             default -> new AwakeningEffect(stage) {
-                protected void drawParticles(Graphics2D g, int passed, double progress, int bossX) {}
+                protected void drawParticles(Graphics2D g, int passed, double progress, int bossX) {
+                    // 해당하지 않는 스테이지에는 입자 효과가 없음
+                }
             };
         };
     }

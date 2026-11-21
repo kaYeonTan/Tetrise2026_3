@@ -32,7 +32,7 @@ public class RankingView implements MenuView {
         panel.centerText(g, "명예의 전당", 92, new Color(0xf0e2c8), new Color(0x6b2a1a));
         panel.drawButton(g, scoreTab, panel.rankTab() == 0 ? 1 : 0, 16.5f);
         panel.drawButton(g, stageTab, panel.rankTab() == 1 ? 1 : 0, 16.5f);
-        g.setFont(panel.font.deriveFont(16.5f));
+        g.setFont(panel.baseFont.deriveFont(16.5f));
         g.setColor(new Color(0xd9c29a));
         g.drawString(panel.rankTab() == 0 ? "플레이어별 최고 점수 순" : "가장 멀리 간 스테이지 순 · 같으면 점수 순", 650, 180);
         g.setColor(new Color(0x1a1216));
@@ -49,7 +49,7 @@ public class RankingView implements MenuView {
         g.setColor(new Color(0x4a3f52));
         g.fillRect(182, 258, 916, 3);
         if (panel.rankList().isEmpty()) {
-            g.setFont(panel.font.deriveFont(22f));
+            g.setFont(panel.baseFont.deriveFont(22f));
             panel.centerText(g, "아직 기록이 없어요. 첫 번째 용사가 되어 보세요!", 450, new Color(0xf0e2c8), new Color(0x0c090d));
         }
         SimpleDateFormat df = new SimpleDateFormat("MM.dd");
@@ -77,15 +77,15 @@ public class RankingView implements MenuView {
             g.drawString("" + (index + 1), 200, y + 24);
         } else {
             g.setColor(new Color(0x9a8f9f));
-            g.setFont(panel.font.deriveFont(16.5f));
+            g.setFont(panel.baseFont.deriveFont(16.5f));
             g.drawString("" + (index + 1), 200, y + 24);
         }
-        g.setFont(panel.font.deriveFont(22f));
+        g.setFont(panel.baseFont.deriveFont(22f));
         g.setColor(isMine ? new Color(0xe9c98f) : new Color(0xf0e2c8));
         g.drawString(record.nick() + (isMine ? " (나)" : ""), 280, y + 26);
         g.setColor(new Color(0xf0e2c8));
         g.drawString(String.format("%,d", record.score()), 550, y + 26);
-        g.setFont(panel.font.deriveFont(16.5f));
+        g.setFont(panel.baseFont.deriveFont(16.5f));
         if (record.clear()) {
             g.setColor(new Color(0xe9c98f));
             g.drawString("전체 클리어", 730, y + 24);

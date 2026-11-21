@@ -45,7 +45,7 @@ public class GameWindow {
         router.register(Route.STAGE_RUSH, () -> stageScreen);
 
         // UI 폰트 설정
-        Font f = stageScreen.getPanel().font.deriveFont(16.5f);
+        Font f = stageScreen.getPanel().baseFont.deriveFont(16.5f);
         UIManager.put("OptionPane.messageFont", f);
         UIManager.put("OptionPane.buttonFont", f);
 

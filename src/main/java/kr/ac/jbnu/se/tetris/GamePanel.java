@@ -65,6 +65,9 @@ import kr.ac.jbnu.se.tetris.network.lobby.LobbyService;
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
 
 public class GamePanel extends JPanel implements ActionListener, BossPatternTarget {
+    private static final String STAGE_LABEL = "STAGE ";
+    public static final String STAGE_LABEL_KO = "스테이지 ";
+    private static final String COOP_SLOT_LABEL = "협동 슬롯 ";
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -88,7 +91,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     private String loginUser = null;
 
-    public Font font;
+    public Font baseFont;
     public Font fontBold;
     public Font fontSmall;
     transient BufferedImage mapImg;
@@ -107,8 +110,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     private transient boolean returningToOnlineLobby;
     public transient CoopEngineBridge coopEngineBridge;
     public String lastOnlineRoomId;
-    public CoopGameMemento pendingCoopResume;
-    java.util.List<SaveSlotMeta> coopSlotList = new ArrayList<>();
+    public transient CoopGameMemento pendingCoopResume;
+    transient java.util.List<SaveSlotMeta> coopSlotList = new ArrayList<>();
     /** 8=협동 슬롯 UI — 1 저장, 2 불러오기, 3 온라인 참가자 필수 저장 */
     int coopSlotMode;
     /** 슬롯 UI 닫기/완료 후 돌아갈 화면 */
@@ -155,7 +158,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     static final int BOSS_MAX_DRAW_WIDTH = 520;
     static final int BOSS_MAX_DRAW_HEIGHT = 560;
 
-    private final HitFlash hitFlash = new HitFlash();
+    private final transient HitFlash hitFlash = new HitFlash();
     int bossAwakeningEffect = 0;
     public String saveFile = null;
     public String msg = "";
@@ -225,11 +228,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
 
     int rankTab = 0;
-    java.util.List<RecordEntry> rankList = new ArrayList<>();
+    transient java.util.List<RecordEntry> rankList = new ArrayList<>();
     ArrayList<String[]> saveList = new ArrayList<>();
 
     Random random = new Random();
-    public final BossPatternController bossPattern = new BossPatternController(random);
+    public final transient BossPatternController bossPattern = new BossPatternController(random);
     private final transient MaxMinBrain maxMinBrain = new MaxMinBrain();
     private final transient SoundManager soundManager;
     public int gravityMultiplier = 1;
@@ -285,9 +288,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         return in;
     }
 
-    private final Repositories repos;
-    private final java.util.Map<ScreenId, MenuView> views = new java.util.EnumMap<>(ScreenId.class);
-    private final SettingsView settingsView;
+    private final transient Repositories repos;
+    private final transient java.util.Map<ScreenId, MenuView> views = new java.util.EnumMap<>(ScreenId.class);
+    private final transient SettingsView settingsView;
 
     public GamePanel(Repositories repos) {
         this(new SoundManager(), repos);
@@ -309,7 +312,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         setLayout(null);
         try {
             InputStream in = openResource("/fonts/Galmuri11.ttf");
-            font = Font.createFont(Font.TRUETYPE_FONT, in);
+            baseFont = Font.createFont(Font.TRUETYPE_FONT, in);
             in = openResource("/fonts/Galmuri11-Bold.ttf");
             fontBold = Font.createFont(Font.TRUETYPE_FONT, in);
             in = openResource("/fonts/Galmuri9.ttf");
@@ -317,9 +320,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             mapImg = ImageIO.read(openResource("/images/worldmap.png"));
         } catch (java.awt.FontFormatException | java.io.IOException e) {
             System.out.println("font or image load error");
-            font = new Font("Dialog", Font.PLAIN, 12);
+            baseFont = new Font("Dialog", Font.PLAIN, 12);
             fontBold = new Font("Dialog", Font.BOLD, 12);
-            fontSmall = font;
+            fontSmall = baseFont;
         }
         SwingUtilities.invokeLater(() -> {
             addKeyListener(new KeyHandler());
@@ -433,7 +436,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             } else {
                 stage++;
                 startStage();
-                msg = "STAGE " + stage + " 시작!";
+                msg = STAGE_LABEL + stage + " 시작!";
                 msgTimer = 90;
             }
         }
@@ -501,6 +504,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (screen != SCREEN_GAME) {
             return;
         }
+        updateSecondPlayerGravity(speed);
+    }
+
+    private void updateSecondPlayerGravity(int speed) {
         if (isTwoPlayer && runsLocalGravity(1)) {
             int p2Speed = Math.max(1, speed / (p2FastCurrent ? 10 : gravityMultiplier));
             p2DropCount += 16;
@@ -1082,7 +1089,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         clearTimer = 0;
         stage++;
         startStage();
-        msg = "STAGE " + stage + " 시작!";
+        msg = STAGE_LABEL + stage + " 시작!";
         msgTimer = 90;
     }
 
@@ -1565,24 +1572,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     // 줄 지우고 보스 데미지까지
     int checkLine(int[][] board) {
-        int count = 0;
-        for (int r = 23; r >= 0; r--) {
-            boolean full = true;
-            for (int c = 0; c < 10; c++) {
-                if (board[r][c] == 0) {
-                    full = false;
-                    break;
-                }
-            }
-            if (full) {
-                for (int rr = r; rr > 0; rr--) {
-                    board[rr] = board[rr - 1].clone();
-                }
-                board[0] = new int[10];
-                count++;
-                r++;
-            }
-        }
+        int count = removeFullLines(board);
         if (count > 0 && !stageClear) {
             if (stage == 3) {
                 playLineClearSound(count);
@@ -1605,6 +1595,28 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             }
         }
         playLineClearSound(count);
+        return count;
+    }
+
+    private int removeFullLines(int[][] board) {
+        int count = 0;
+        for (int r = 23; r >= 0; r--) {
+            boolean full = true;
+            for (int c = 0; c < 10; c++) {
+                if (board[r][c] == 0) {
+                    full = false;
+                    break;
+                }
+            }
+            if (full) {
+                for (int rr = r; rr > 0; rr--) {
+                    board[rr] = board[rr - 1].clone();
+                }
+                board[0] = new int[10];
+                count++;
+                r++;
+            }
+        }
         return count;
     }
 
@@ -1828,7 +1840,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     /** save 배열: {파일경로, 날짜, 스테이지, 점수, 인원}. */
     public void deleteSaveAfterConfirm(String[] save) {
-        String message = "스테이지 " + save[2] + " · 점수 " + save[3] + "\n이 저장을 지울까요? 되돌릴 수 없어요.";
+        String message = STAGE_LABEL_KO + save[2] + " · 점수 " + save[3] + "\n이 저장을 지울까요? 되돌릴 수 없어요.";
         if (confirmOrCancel(message, "저장 삭제", "삭제")) {
             repos.saves().deleteSave(save[0]);
             saveList = repos.saves().getSaveList(loginUser);
@@ -1976,7 +1988,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             SaveService.saveCoop(loginUser, slot, pendingGuestCoopSave);
             pendingGuestCoopSave = null;
             awaitingGuestCoopSave = false;
-            showMsg("협동 슬롯 " + slot + "에 저장했어요.", 200);
+            showMsg(COOP_SLOT_LABEL + slot + "에 저장했어요.", 200);
         } catch (Exception ex) {
             showMsg("저장 실패: " + ex.getMessage(), 200);
         }
@@ -1990,8 +2002,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         try {
             saveCoopToSlot(slot);
             showMsg(isOnlineCoop
-                    ? "협동 슬롯 " + slot + "에 저장했어요. 참가자도 저장할 때까지 기다려 주세요."
-                    : "협동 슬롯 " + slot + "에 저장했어요.", 200);
+                    ? COOP_SLOT_LABEL + slot + "에 저장했어요. 참가자도 저장할 때까지 기다려 주세요."
+                    : COOP_SLOT_LABEL + slot + "에 저장했어요.", 200);
         } catch (Exception ex) {
             showMsg("저장 실패: " + ex.getMessage(), 200);
         }
@@ -2182,7 +2194,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         String title = coopSlotMode == 1 ? "협동 저장 · 슬롯 선택"
                 : coopSlotMode == 3 ? "참가자 저장 · 슬롯 선택" : "협동 불러오기 · 슬롯 선택";
         centerText(g, title, 150, new Color(0x1a1216), new Color(0xefe0bf));
-        g.setFont(font.deriveFont(16f));
+        g.setFont(baseFont.deriveFont(16f));
         g.setColor(new Color(0x1a1216));
         String hint;
         if (coopSlotMode == 3) {
@@ -2223,11 +2235,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     void drawButton(Graphics2D g, String text, int x, int y, int w, int h, int type, float size) {
-        new PixelButton(text, new Rectangle(x, y, w, h)).draw(g, font, isMouseInside(x, y, w, h), type, size);
+        new PixelButton(text, new Rectangle(x, y, w, h)).draw(g, baseFont, isMouseInside(x, y, w, h), type, size);
     }
 
     public void drawButton(Graphics2D g, PixelButton button, int type, float size) {
-        button.draw(g, font, button.contains(mouseX, mouseY), type, size);
+        button.draw(g, baseFont, button.contains(mouseX, mouseY), type, size);
     }
 
     public boolean clicked(PixelButton button) {
@@ -2382,26 +2394,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             return;
         }
         boolean gray = isCoopPlayerEliminated(playerIndex);
-        for (int screenRow = 0; screenRow < 20; screenRow++) {
-            int engineY = 19 - screenRow;
-            boolean blinkRow = !gray && blinkOn && session.lineClearBlinkRows[engineY];
-            for (int column = 0; column < 10; column++) {
-                Tetrominoes shape = session.shapeAt(column, engineY);
-                if (shape == Tetrominoes.NoShape) {
-                    continue;
-                }
-                int x = boardX + column * 30;
-                int y = boardY + screenRow * 30;
-                if (blinkRow) {
-                    g.setColor(Color.WHITE);
-                    g.fillRect(x + 2, y + 2, 26, 26);
-                } else if (gray) {
-                    drawCellGray(g, x, y);
-                } else {
-                    drawCell(g, x, y, 30, engineBlockValue(shape));
-                }
-            }
-        }
+        drawEngineSettledCells(g, session, boardX, boardY, blinkOn, gray);
 
         if (gray || screen == SCREEN_RESULT || stageClear || session.curPiece.getShape() == Tetrominoes.NoShape) {
             return;
@@ -2424,6 +2417,31 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 drawCell(g, boardX + x * 30, boardY + (19 - y) * 30, 30, blockVal);
             }
         }
+    }
+
+    private void drawEngineSettledCells(Graphics2D g, GameSession session, int boardX, int boardY,
+            boolean blinkOn, boolean gray) {
+        for (int screenRow = 0; screenRow < 20; screenRow++) {
+            int engineY = 19 - screenRow;
+            boolean blinkRow = !gray && blinkOn && session.lineClearBlinkRows[engineY];
+            for (int column = 0; column < 10; column++) {
+                Tetrominoes shape = session.shapeAt(column, engineY);
+                if (shape == Tetrominoes.NoShape) {
+                    continue;
+                }
+                int x = boardX + column * 30;
+                int y = boardY + screenRow * 30;
+                if (blinkRow) {
+                    g.setColor(Color.WHITE);
+                    g.fillRect(x + 2, y + 2, 26, 26);
+                } else if (gray) {
+                    drawCellGray(g, x, y);
+                } else {
+                    drawCell(g, x, y, 30, engineBlockValue(shape));
+                }
+            }
+        }
+
     }
 
     void drawSingleEngineBoard(Graphics2D g, int boardX, int boardY) {
@@ -2482,32 +2500,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         }
         int engineY = Blueprint.ROWS - 1 - row;
         if (useCoopEngineRender()) {
-            GameSession session = coopEngineBridge.session(player);
-            if (session == null || session.curPiece.getShape() == Tetrominoes.NoShape) {
-                return false;
-            }
-            for (int i = 0; i < session.curPiece.blockCount(); i++) {
-                int pieceX = session.curX + session.curPiece.x(i);
-                int pieceY = session.curY - session.curPiece.y(i);
-                if (pieceX == column && pieceY == engineY) {
-                    return true;
-                }
-            }
-            return false;
+            return isSessionBlueprintActivePieceAt(coopEngineBridge.session(player), engineY, column);
         }
         if (useAEngine()) {
-            GameSession session = aEngineBridge.session();
-            if (session == null || session.curPiece.getShape() == Tetrominoes.NoShape) {
-                return false;
-            }
-            for (int i = 0; i < session.curPiece.blockCount(); i++) {
-                int pieceX = session.curX + session.curPiece.x(i);
-                int pieceY = session.curY - session.curPiece.y(i);
-                if (pieceX == column && pieceY == engineY) {
-                    return true;
-                }
-            }
-            return false;
+            return isSessionBlueprintActivePieceAt(aEngineBridge.session(), engineY, column);
         }
         int type = player == 0 ? p1Type : p2Type;
         int rot = player == 0 ? p1Rot : p2Rot;
@@ -2524,6 +2520,19 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         return false;
     }
 
+    private boolean isSessionBlueprintActivePieceAt(GameSession session, int engineY, int column) {
+        if (session == null || session.curPiece.getShape() == Tetrominoes.NoShape) {
+            return false;
+        }
+        for (int i = 0; i < session.curPiece.blockCount(); i++) {
+            int pieceX = session.curX + session.curPiece.x(i);
+            int pieceY = session.curY - session.curPiece.y(i);
+            if (pieceX == column && pieceY == engineY) {
+                return true;
+            }
+        }
+        return false;
+    }
     boolean isPlayerBlueprintCellVisuallyOccupied(int player, int row, int column) {
         return isPlayerBlueprintCellOccupied(player, row, column)
                 || isPlayerBlueprintActivePieceAt(player, row, column);
@@ -2536,31 +2545,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         }
         for (int row = 0; row < Blueprint.ROWS; row++) {
             for (int column = 0; column < Blueprint.COLUMNS; column++) {
-                boolean occupied = isPlayerBlueprintCellOccupied(player, row, column);
-                boolean filledByOther = isBlueprintCellFilledByOtherPlayer(player, row, column);
-                int x = boardX + column * 30;
-                int y = boardY + (14 + row) * 30;
-
-                if (blueprint.mustBeEmpty(row, column)) {
-                    boolean blocked = isPlayerBlueprintCellVisuallyOccupied(player, row, column);
-                    drawBlueprintCellHighlight(g, x, y,
-                            blocked ? new Color(235, 70, 55) : new Color(190, 75, 65, 200),
-                            blocked ? 1 : 3,
-                            blocked ? 3f : 1.5f);
-                } else if (blueprint.isTarget(row, column)) {
-                    if (occupied) {
-                        drawBlueprintCellHighlight(g, x, y, new Color(90, 235, 120), 1, 2.5f);
-                    } else if (filledByOther) {
-                        drawBlueprintCellHighlight(g, x, y, new Color(150, 185, 220), 2, 2f);
-                        g.setColor(new Color(210, 230, 250));
-                        g.drawLine(x + 5, y + 20, x + 14, y + 27);
-                        g.drawLine(x + 14, y + 4, x + 27, y + 14);
-                    } else {
-                        drawBlueprintCellHighlight(g, x, y, new Color(245, 215, 150), 2, 2f);
-                        g.setColor(new Color(255, 248, 220, 180));
-                        g.drawRect(x + 5, y + 5, 19, 19);
-                    }
-                }
+                drawBlueprintOverlayCell(g, boardX, boardY, player, blueprint, row, column);
             }
         }
         for (int row = 0; row < Blueprint.ROWS; row++) {
@@ -2572,6 +2557,35 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 int y = boardY + (14 + row) * 30;
                 boolean blocked = isPlayerBlueprintCellVisuallyOccupied(player, row, column);
                 drawBlueprintForbiddenMark(g, x, y, blocked);
+            }
+        }
+    }
+
+    private void drawBlueprintOverlayCell(Graphics2D g, int boardX, int boardY, int player,
+            Blueprint blueprint, int row, int column) {
+        boolean occupied = isPlayerBlueprintCellOccupied(player, row, column);
+        boolean filledByOther = isBlueprintCellFilledByOtherPlayer(player, row, column);
+        int x = boardX + column * 30;
+        int y = boardY + (14 + row) * 30;
+
+        if (blueprint.mustBeEmpty(row, column)) {
+            boolean blocked = isPlayerBlueprintCellVisuallyOccupied(player, row, column);
+            drawBlueprintCellHighlight(g, x, y,
+                    blocked ? new Color(235, 70, 55) : new Color(190, 75, 65, 200),
+                    blocked ? 1 : 3,
+                    blocked ? 3f : 1.5f);
+        } else if (blueprint.isTarget(row, column)) {
+            if (occupied) {
+                drawBlueprintCellHighlight(g, x, y, new Color(90, 235, 120), 1, 2.5f);
+            } else if (filledByOther) {
+                drawBlueprintCellHighlight(g, x, y, new Color(150, 185, 220), 2, 2f);
+                g.setColor(new Color(210, 230, 250));
+                g.drawLine(x + 5, y + 20, x + 14, y + 27);
+                g.drawLine(x + 14, y + 4, x + 27, y + 14);
+            } else {
+                drawBlueprintCellHighlight(g, x, y, new Color(245, 215, 150), 2, 2f);
+                g.setColor(new Color(255, 248, 220, 180));
+                g.drawRect(x + 5, y + 5, 19, 19);
             }
         }
     }
@@ -2641,9 +2655,15 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     private void drawGameBoards(Graphics2D g) {
-        // 1p 보드
         int bx = isTwoPlayer ? 190 : 490;
         int by = 104;
+        drawFirstPlayerBoard(g, bx, by);
+        drawFirstPlayerHold(g);
+        drawFirstPlayerQueue(g);
+        drawSecondPlayerBoard(g, by);
+    }
+
+    private void drawFirstPlayerBoard(Graphics2D g, int bx, int by) {
         drawBoardFrame(g, bx, by);
         if (useCoopEngineRender()) {
             drawEngineSessionBoard(g, coopEngineBridge.session(0), bx, by,
@@ -2658,6 +2678,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             drawSingleEngineBoard(g, bx, by);
         }
         drawBlueprintOverlay(g, bx, by, 0);
+    }
+
+    private void drawFirstPlayerHold(Graphics2D g) {
         int hx = isTwoPlayer ? 56 : 356;
         drawBox(g, hx, 104, 116, 104, "홀드");
         if (useCoopEngineRender()) {
@@ -2673,7 +2696,53 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 drawMini(g, engineType(session.hold.getStored()), hx + 22, 150);
             }
         }
+    }
+
+    private void drawFirstPlayerQueue(Graphics2D g) {
         if (isTwoPlayer) {
+            drawFirstCoopQueue(g);
+            drawBox(g, 40, 524, 132, 176, null);
+        } else {
+            drawSinglePlayerQueue(g);
+            drawBox(g, 336, 530, 136, 170, null);
+        }
+        drawScorePanel(g, isTwoPlayer ? 40 : 336, isTwoPlayer ? 524 : 530, p1Score, p1Lines, onlineCoopPlayerLabel(0));
+
+    }
+
+    private void drawSecondPlayerBoard(Graphics2D g, int by) {
+        // 2p도 똑같이
+        if (isTwoPlayer) {
+            int bx = 790;
+            drawBoardFrame(g, bx, by);
+            if (useCoopEngineRender()) {
+                drawEngineSessionBoard(g, coopEngineBridge.session(1), bx, by,
+                        coopEngineBridge.isLineClearBlinkOn(1), 1);
+            } else {
+                boolean gray1 = isCoopPlayerEliminated(1);
+                drawLegacyCells(g, board2, bx, by, gray1);
+                if (!gray1 && screen != SCREEN_RESULT && !stageClear) {
+                    drawLegacyActivePiece(g, bx, by, board2, p2Type, p2Rot, p2X, p2Y);
+                }
+            }
+            drawBlueprintOverlay(g, bx, by, 1);
+            drawSecondPlayerHoldAndQueue(g);
+            drawBox(g, 1108, 524, 132, 176, null);
+            drawScorePanel(g, 1108, 524, p2Score, p2Lines, onlineCoopPlayerLabel(1));
+
+            g.setFont(fontBold.deriveFont(22f));
+            if (isOnlineCoop) {
+                shadowText(g, "P1 · 방장", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
+                shadowText(g, "P2 · 참가", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
+            } else {
+                shadowText(g, "P1", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
+                shadowText(g, "P2", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
+            }
+        }
+
+    }
+
+    private void drawFirstCoopQueue(Graphics2D g) {
             drawBox(g, 56, 226, 116, 280, "다음");
             for (int i = 0; i < 3; i++) {
                 if (useCoopEngineRender()) {
@@ -2685,8 +2754,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                     drawMini(g, p1Next.get(i), 56 + 22, 270 + i * 76);
                 }
             }
-            drawBox(g, 40, 524, 132, 176, null);
-        } else {
+    }
+
+    private void drawSinglePlayerQueue(Graphics2D g) {
             drawBox(g, 808, 104, 116, 400, "다음");
             if (!useAEngine()) {
                 for (int i = 0; i < 5; i++) {
@@ -2702,25 +2772,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                     }
                 }
             }
-            drawBox(g, 336, 530, 136, 170, null);
-        }
-        drawScorePanel(g, isTwoPlayer ? 40 : 336, isTwoPlayer ? 524 : 530, p1Score, p1Lines, onlineCoopPlayerLabel(0));
+    }
 
-        // 2p도 똑같이
-        if (isTwoPlayer) {
-            bx = 790;
-            drawBoardFrame(g, bx, by);
-            if (useCoopEngineRender()) {
-                drawEngineSessionBoard(g, coopEngineBridge.session(1), bx, by,
-                        coopEngineBridge.isLineClearBlinkOn(1), 1);
-            } else {
-                boolean gray1 = isCoopPlayerEliminated(1);
-                drawLegacyCells(g, board2, bx, by, gray1);
-                if (!gray1 && screen != SCREEN_RESULT && !stageClear) {
-                    drawLegacyActivePiece(g, bx, by, board2, p2Type, p2Rot, p2X, p2Y);
-                }
-            }
-            drawBlueprintOverlay(g, bx, by, 1);
+    private void drawSecondPlayerHoldAndQueue(Graphics2D g) {
             drawBox(g, 1108, 104, 116, 104, "홀드");
             if (useCoopEngineRender()) {
                 GameSession coopS1 = coopEngineBridge.session(1);
@@ -2741,19 +2795,6 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                     drawMini(g, p2Next.get(i), 1108 + 22, 270 + i * 76);
                 }
             }
-            drawBox(g, 1108, 524, 132, 176, null);
-            drawScorePanel(g, 1108, 524, p2Score, p2Lines, onlineCoopPlayerLabel(1));
-
-            g.setFont(fontBold.deriveFont(22f));
-            if (isOnlineCoop) {
-                shadowText(g, "P1 · 방장", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
-                shadowText(g, "P2 · 참가", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
-            } else {
-                shadowText(g, "P1", 56, 90, new Color(0x7fc8ff), new Color(0x0c090d), 2);
-                shadowText(g, "P2", 1108, 90, new Color(0xffa07a), new Color(0x0c090d), 2);
-            }
-        }
-
     }
 
     private void drawGameHud(Graphics2D g, kr.ac.jbnu.se.tetris.render.GameView view) {
@@ -2819,11 +2860,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         g.drawString("점수", x + 14, y + 30);
         g.drawString("지운 줄", x + 14, y + 84);
         g.drawString("플레이어", x + 14, y + 136);
-        g.setFont(font.deriveFont(22f));
+        g.setFont(baseFont.deriveFont(22f));
         g.setColor(new Color(0xf0e2c8));
         g.drawString(String.format("%,d", score), x + 14, y + 58);
         g.drawString("" + lines, x + 14, y + 112);
-        g.setFont(font.deriveFont(16.5f));
+        g.setFont(baseFont.deriveFont(16.5f));
         g.setColor(new Color(0xe9c98f));
         g.drawString(playerLabel, x + 14, y + 158);
     }
@@ -2836,7 +2877,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         g.fillRect(barX + 4, 18, 512, 68);
         g.setFont(fontSmall.deriveFont(13.5f));
         g.setColor(new Color(0x9a8f9f));
-        g.drawString("STAGE " + stage + " · " + stageNames[stage], barX + 16, 38);
+        g.drawString(STAGE_LABEL + stage + " · " + stageNames[stage], barX + 16, 38);
         g.setFont(fontBold.deriveFont(16.5f));
         g.setColor(new Color(0xf0e2c8));
         g.drawString(bossNames[stage], barX + 504 - g.getFontMetrics().stringWidth(bossNames[stage]), 38);
@@ -2855,7 +2896,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         for (int i = 1; i < 10; i++) {
             g.fillRect(barX + 19 + 482 * i / 10, 53, 2, 18);
         }
-        g.setFont(font.deriveFont(13.5f));
+        g.setFont(baseFont.deriveFont(13.5f));
         g.setColor(new Color(0xf0e2c8));
         String hpText = customVictory
                 ? "BLUEPRINT " + Math.round(progress * 100) + "%" + (violations > 0 ? "  MISPLACED " + violations : "")
@@ -2880,7 +2921,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (!(msgTimer > 0 && screen == SCREEN_GAME)) {
             return;
         }
-        g.setFont(font.deriveFont(16.5f));
+        g.setFont(baseFont.deriveFont(16.5f));
         int w = g.getFontMetrics().stringWidth(msg);
         g.setColor(new Color(0, 0, 0, 170));
         g.fillRect(640 - w / 2 - 12, 140, w + 24, 30);
@@ -2893,7 +2934,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         g.fillRect(0, 280, 1280, 140);
         g.setFont(fontBold.deriveFont(66f));
         centerText(g, "GameClear!", 350, new Color(0xe9c98f), new Color(0x6b2a1a));
-        g.setFont(font.deriveFont(22f));
+        g.setFont(baseFont.deriveFont(22f));
         centerText(g, bossName + "을(를) 쓰러뜨렸다!", 390, new Color(0xf0e2c8), new Color(0x0c090d));
     }
 
@@ -3005,11 +3046,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         g.setFont(fontBold.deriveFont(26f));
         centerPlainText(g, "다음 스테이지", 640, 235, new Color(0x1a1216));
         g.setFont(fontBold.deriveFont(22f));
-        String title = "STAGE " + next + " · " + stageNames[next];
+        String title = STAGE_LABEL + next + " · " + stageNames[next];
         centerPlainText(g, title, 640, 275, new Color(0x1a1216));
-        g.setFont(font.deriveFont(18f));
+        g.setFont(baseFont.deriveFont(18f));
         centerPlainText(g, "보스: " + bossNames[next], 640, 310, new Color(0x1a1216));
-        g.setFont(font.deriveFont(16f));
+        g.setFont(baseFont.deriveFont(16f));
         String hint = stageGimmickHint(next);
         int hintW = g.getFontMetrics().stringWidth(hint);
         if (hintW > 520) {
@@ -3018,7 +3059,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         } else {
             centerPlainText(g, hint, 640, 350, new Color(0x1a1216));
         }
-        g.setFont(font.deriveFont(15f));
+        g.setFont(baseFont.deriveFont(15f));
         String p1 = onlineCoopPlayerLabel(0) + ": "
                 + (stageReadyPlayer0 ? "준비 완료" : "대기 중…");
         String p2 = onlineCoopPlayerLabel(1) + ": "
@@ -3027,7 +3068,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         centerPlainText(g, p2, 640, 428, new Color(0x1a1216));
         boolean mineReady = isStageReady(localPlayerIndex);
         if (mineReady) {
-            g.setFont(font.deriveFont(17f));
+            g.setFont(baseFont.deriveFont(17f));
             centerPlainText(g, "상대방 확인을 기다리는 중…", 640, 455, new Color(0x1a1216));
         } else {
             drawButton(g, "다음 스테이지 진행", STAGE_ADVANCE_BTN_X, STAGE_ADVANCE_BTN_Y, STAGE_ADVANCE_BTN_W,
@@ -3267,46 +3308,62 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             return;
         }
         if (action == PlayerAction.STAGE_READY) {
-            if (screen != SCREEN_GAME || !stageAdvancePrompt || isStageReady(playerIndex)) {
-                return;
-            }
-            if (useCoopEngineHost()) {
-                setStageReady(playerIndex, true);
-                tryAdvanceOnlineCoopStage();
-            }
-            if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {
-                coopBridge.sendLocalAction(action);
-            }
+            handleCoopStageReady(playerIndex, action, fromNetwork);
             return;
         }
         if (action == PlayerAction.PAUSE) {
-            if (screen == SCREEN_GAME && !stageClear) {
-                String pauseMsg = fromNetwork ? "상대방이 일시정지했어요." : "";
-                enterLocalPause(pauseMsg);
-            }
-            if (!fromNetwork && isOnlineCoop && coopBridge != null) {
-                coopBridge.sendLocalAction(action);
-            }
+            handleCoopPause(action, fromNetwork);
             return;
         }
         if (action == PlayerAction.RESUME) {
-            if (screen == SCREEN_PAUSE && isOnlineCoop && awaitingGuestCoopSave && !fromNetwork
-                    && coopBridge != null && !coopBridge.isHost()) {
-                msg = "참가자 저장을 먼저 완료해 주세요.";
-                msgTimer = 200;
-                return;
-            }
-            if (screen == SCREEN_PAUSE) {
-                resumeLocalPause();
-            }
-            if (!fromNetwork && isOnlineCoop && coopBridge != null) {
-                coopBridge.sendLocalAction(action);
-            }
+            handleCoopResume(action, fromNetwork);
             return;
         }
         if (screen != SCREEN_GAME || stageClear) {
             return;
         }
+        applyCoopGameplayAction(playerIndex, action, fromNetwork);
+    }
+
+    private void handleCoopStageReady(int playerIndex, PlayerAction action, boolean fromNetwork) {
+        if (screen != SCREEN_GAME || !stageAdvancePrompt || isStageReady(playerIndex)) {
+            return;
+        }
+        if (useCoopEngineHost()) {
+            setStageReady(playerIndex, true);
+            tryAdvanceOnlineCoopStage();
+        }
+        if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {
+            coopBridge.sendLocalAction(action);
+        }
+    }
+
+    private void handleCoopPause(PlayerAction action, boolean fromNetwork) {
+        if (screen == SCREEN_GAME && !stageClear) {
+            String pauseMsg = fromNetwork ? "상대방이 일시정지했어요." : "";
+            enterLocalPause(pauseMsg);
+        }
+        if (!fromNetwork && isOnlineCoop && coopBridge != null) {
+            coopBridge.sendLocalAction(action);
+        }
+    }
+
+    private void handleCoopResume(PlayerAction action, boolean fromNetwork) {
+        if (screen == SCREEN_PAUSE && isOnlineCoop && awaitingGuestCoopSave && !fromNetwork
+                && coopBridge != null && !coopBridge.isHost()) {
+            msg = "참가자 저장을 먼저 완료해 주세요.";
+            msgTimer = 200;
+            return;
+        }
+        if (screen == SCREEN_PAUSE) {
+            resumeLocalPause();
+        }
+        if (!fromNetwork && isOnlineCoop && coopBridge != null) {
+            coopBridge.sendLocalAction(action);
+        }
+    }
+
+    private void applyCoopGameplayAction(int playerIndex, PlayerAction action, boolean fromNetwork) {
         if (useCoopEngineHost()) {
             coopEngineBridge.applyAction(playerIndex, action);
             if (!fromNetwork && isOnlineCoop && coopBridge != null && localPlayerIndex == playerIndex) {

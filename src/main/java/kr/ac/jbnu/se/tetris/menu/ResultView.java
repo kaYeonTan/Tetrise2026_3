@@ -26,9 +26,9 @@ public class ResultView implements MenuView {
         panel.drawPanel(g, 390, 170, 500, 380);
         g.setFont(panel.fontBold.deriveFont(44f));
         panel.centerText(g, allClear ? "ALL CLEAR!" : "GAME OVER", 240, allClear ? new Color(0x6b2a1a) : new Color(0x1a1216), new Color(0xefe0bf));
-        g.setFont(panel.font.deriveFont(22f));
+        g.setFont(panel.baseFont.deriveFont(22f));
         Color textColor = new Color(0x1a1216);
-        String summary = allClear ? "다섯 보스를 모두 쓰러뜨렸어요!" : "스테이지 " + panel.stage + "에서 쓰러졌어요.";
+        String summary = allClear ? "다섯 보스를 모두 쓰러뜨렸어요!" : GamePanel.STAGE_LABEL_KO + panel.stage + "에서 쓰러졌어요.";
         panel.centerPlainText(g, summary, 640, 300, textColor);
         String scoreText = panel.isTwoPlayer
                 ? "P1 " + String.format("%,d", panel.p1Score) + "  ·  P2 " + String.format("%,d", panel.p2Score)
@@ -37,7 +37,7 @@ public class ResultView implements MenuView {
         if (panel.isTwoPlayer) {
             panel.centerPlainText(g, "합계 " + String.format("%,d", panel.p1Score + panel.p2Score), 640, 380, textColor);
         }
-        g.setFont(panel.font.deriveFont(16.5f));
+        g.setFont(panel.baseFont.deriveFont(16.5f));
         panel.centerPlainText(g, panel.resultMsg(), 640, 430, new Color(0x3a5a2a));
         panel.drawButton(g, panel.isOnlineCoop ? new PixelButton("로비로", mainBtn.bounds()) : mainBtn, 1, 22f);
     }
