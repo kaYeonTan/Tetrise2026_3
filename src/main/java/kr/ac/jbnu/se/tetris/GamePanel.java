@@ -80,7 +80,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     private ScreenId screen = ScreenId.TITLE;
 
-    Timer timer;
+    final Timer timer;
     int tick = 0;
     int flameFrame = 0;
     float glow = 1f;
@@ -166,8 +166,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public int p1Type, p1Rot, p1X, p1Y;
     public int p1Hold = -1;
     public boolean p1HoldUsed = false;
-    public ArrayList<Integer> p1Next = new ArrayList<>();
-    public ArrayList<Integer> p1Bag = new ArrayList<>();
+    public final ArrayList<Integer> p1Next = new ArrayList<>();
+    public final ArrayList<Integer> p1Bag = new ArrayList<>();
     public int p1Score, p1Lines;
     public int p1Garbage;
     int p1DropCount;
@@ -181,8 +181,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public int p2Type, p2Rot, p2X, p2Y;
     public int p2Hold = -1;
     public boolean p2HoldUsed = false;
-    public ArrayList<Integer> p2Next = new ArrayList<>();
-    public ArrayList<Integer> p2Bag = new ArrayList<>();
+    public final ArrayList<Integer> p2Next = new ArrayList<>();
+    public final ArrayList<Integer> p2Bag = new ArrayList<>();
     public int p2Score, p2Lines;
     public int p2Garbage;
     int p2DropCount;
@@ -221,7 +221,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         keyPause = pause;
     }
 
-    HashSet<Integer> pressed = new HashSet<>();
+    final HashSet<Integer> pressed = new HashSet<>();
 
 
     int rankTab = 0;
@@ -245,7 +245,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     transient ASinglePlayerBridge aEngineBridge;
 
     // I O T S Z J L P U V X F
-    static int[][][] SHAPES = {
+    static final int[][][] SHAPES = {
         {{0, 1, 1, 1, 2, 1, 3, 1}, {2, 0, 2, 1, 2, 2, 2, 3}, {0, 2, 1, 2, 2, 2, 3, 2}, {1, 0, 1, 1, 1, 2, 1, 3}},
         {{1, 0, 2, 0, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 2, 1}, {1, 0, 2, 0, 1, 1, 2, 1}},
         {{1, 0, 0, 1, 1, 1, 2, 1}, {1, 0, 1, 1, 2, 1, 1, 2}, {0, 1, 1, 1, 2, 1, 1, 2}, {1, 0, 0, 1, 1, 1, 1, 2}},
@@ -261,7 +261,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     };
 
     // 월킥. 0~3 시계방향(현재 회전 기준), 4~7 반시계
-    static int[][][] KICK = {
+    static final int[][][] KICK = {
         {
             {0, 0, -1, 0, -1, 1, 0, -2, -1, -2}, {0, 0, 1, 0, 1, -1, 0, 2, 1, 2},
             {0, 0, 1, 0, 1, 1, 0, -2, 1, -2}, {0, 0, -1, 0, -1, -1, 0, 2, -1, 2},
