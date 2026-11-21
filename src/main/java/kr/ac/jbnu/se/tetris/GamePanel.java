@@ -78,7 +78,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public static final ScreenId SCREEN_RESULT = ScreenId.RESULT;
     public static final ScreenId SCREEN_COOP_SLOTS = ScreenId.COOP_SLOTS;
 
+    private static final long NANOS_PER_MILLISECOND = 1_000_000L;
     private ScreenId screen = ScreenId.TITLE;
+    private long lastGameTickNanos;
 
     Timer timer;
     int tick = 0;
@@ -375,10 +377,18 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             msgTimer--;
         }
         if (screen == SCREEN_GAME) {
-            update();
+            update(stageClear ? 0 : elapsedGameTickMillis());
         }
         syncSinglePlayerUiVisibility();
         repaint();
+    }
+
+    private long elapsedGameTickMillis() {
+        long elapsedNanos = System.nanoTime() - lastGameTickNanos;
+        long elapsedMillis = elapsedNanos / NANOS_PER_MILLISECOND;
+        // Keep the sub-millisecond remainder for the next tick.
+        lastGameTickNanos += elapsedMillis * NANOS_PER_MILLISECOND;
+        return elapsedMillis;
     }
 
     void syncSinglePlayerUiVisibility() {
@@ -390,13 +400,13 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         aEngineBridge.setVisible(screen == SCREEN_GAME && !stageClear);
     }
 
-    void update() {
+    void update(long deltaMillis) {
         if (stageClear) {
             updateStageClear();
             return;
         }
         if (!(isOnlineCoop && localPlayerIndex == 1)) {
-            gameTime += 16;
+            gameTime += deltaMillis;
         }
         updateTemporaryBossEffects();
         updateKeyRepeat();
@@ -411,7 +421,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (screen != SCREEN_GAME || stageClear) {
             return;
         }
-        updateBossAndNetwork();
+        updateBossAndNetwork(deltaMillis);
     }
 
     private void updateStageClear() {
@@ -515,14 +525,14 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         }
     }
 
-    private void updateBossAndNetwork() {
+    private void updateBossAndNetwork(long deltaMillis) {
         if (useCoopEngineHost()) {
             coopEngineBridge.tickHost();
         } else if (isOnlineCoop && useCoopEngineRender()) {
             coopEngineBridge.tickGuestLocal(localPlayerIndex);
         }
         if (!isOnlineCoop || localPlayerIndex == 0) {
-            bossPattern.tick(16, this);
+            bossPattern.tick(deltaMillis, this);
             bossTimer = bossPattern.elapsedMillis();
         }
         hitFlash.tick();
@@ -1218,7 +1228,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         resultMsg = "";
         startStage();
         pressed.clear();
-        screen = SCREEN_GAME;
+        setScreen(SCREEN_GAME);
     }
 
     public void startStage() {
@@ -1283,6 +1293,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             spawnP2();
         }
         startBattleBgm();
+        lastGameTickNanos = System.nanoTime();
     }
 
     void fillNext(ArrayList<Integer> next, ArrayList<Integer> bag) {
@@ -1819,7 +1830,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     public void resumeSave(String savePath) {
         if (repos.saves().loadGame(savePath, this)) {
-            screen = SCREEN_GAME;
+            setScreen(SCREEN_GAME);
             pressed.clear();
         } else {
             JOptionPane.showMessageDialog(this, "저장 파일을 읽을 수 없어요.");
@@ -1933,7 +1944,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             if (coopSlotMode == 1 || coopSlotMode == 3) {
                 screen = SCREEN_PAUSE;
             } else {
-                screen = coopSlotReturnScreen;
+                setScreen(coopSlotReturnScreen);
             }
             return;
         }
@@ -2033,7 +2044,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     private void openLobbyForCoopResume(int slot, CoopGameMemento mem) {
         pendingCoopResume = mem;
         showMsg("슬롯 " + slot + "을 불러왔어요. 로비에서 「게임 시작 (방장)」으로 이어하세요.", 260);
-        screen = coopSlotReturnScreen;
+        setScreen(coopSlotReturnScreen);
         if (coopSlotReturnScreen == SCREEN_TITLE) {
             SwingUtilities.invokeLater(() -> {
                 onlineLobbyFrame = new LobbyFrame(this);
@@ -3181,7 +3192,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         } else {
             coopEngineBridge.startOnlineGuest(stage, seed);
         }
-        screen = SCREEN_GAME;
+        setScreen(SCREEN_GAME);
         msg = playerIndex == 0 ? "온라인 협동 · 방장 (P1)" : "온라인 협동 · 참가 (P2)";
         msgTimer = 150;
         requestFocusInWindow();
@@ -3233,7 +3244,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     public void resumeLocalPause() {
-        screen = SCREEN_GAME;
+        setScreen(SCREEN_GAME);
         pressed.clear();
         if (useAEngine()) {
             aEngineBridge.resumeEngine();
@@ -3387,6 +3398,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     public void setScreen(ScreenId screen) {
+        if (screen == SCREEN_GAME && this.screen != SCREEN_GAME) {
+            lastGameTickNanos = System.nanoTime();
+        }
         this.screen = screen;
     }
 

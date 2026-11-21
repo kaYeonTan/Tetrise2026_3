@@ -35,17 +35,18 @@ public final class BossPatternController {
         elapsedMillis = 0;
     }
 
-    public void tick(int deltaMillis, BossPatternTarget target) {
-        if (pattern.intervalMillis() <= 0) {
+    public void tick(long deltaMillis, BossPatternTarget target) {
+        int intervalMillis = pattern.intervalMillis();
+        if (intervalMillis <= 0) {
             return;
         }
-        elapsedMillis += deltaMillis;
-        int warningStart = pattern.intervalMillis() - pattern.warningMillis();
+        elapsedMillis += (int) Math.min(deltaMillis, intervalMillis - elapsedMillis);
+        int warningStart = intervalMillis - pattern.warningMillis();
         if (!warning && elapsedMillis >= warningStart) {
             warning = true;
             target.showBossWarning(pattern.warningMessage());
         }
-        if (elapsedMillis >= pattern.intervalMillis()) {
+        if (elapsedMillis >= intervalMillis) {
             elapsedMillis = 0;
             warning = false;
             target.clearBossWarning();

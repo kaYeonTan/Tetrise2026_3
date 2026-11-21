@@ -3,6 +3,8 @@ package kr.ac.jbnu.se.tetris;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Graphics2D;
@@ -169,8 +171,8 @@ class GamePanelTest {
         p.coopEngineBridge.getEngine().engine(0).pause();
         p.coopEngineBridge.getEngine().engine(1).pause();
 
-        p.update();
-        assertEquals(16, p.bossTimer);
+        p.update(31);
+        assertEquals(31, p.bossTimer);
 
         GameSession player0 = p.coopEngineBridge.session(0);
         GameSession player1 = p.coopEngineBridge.session(1);
@@ -182,6 +184,23 @@ class GamePanelTest {
         assertEquals(9, occupiedCells(player1, 0));
         assertEquals(player0Y + 1, player0.curY);
         assertEquals(player1Y + 1, player1.curY);
+    }
+
+    @Test
+    void randomKeyPatternUsesElapsedTimeForActivationAndExpiry() {
+        p.newGame(true);
+        p.stage = 5;
+        p.startStage();
+        p.restoreBossPatternTimer(19_970);
+
+        p.update(31);
+        assertNotNull(p.temporaryPrimaryKeyMapping);
+        assertEquals(10_031, p.randomKeyEnd);
+
+        p.update(9_999);
+        assertNotNull(p.temporaryPrimaryKeyMapping);
+        p.update(1);
+        assertNull(p.temporaryPrimaryKeyMapping);
     }
 
     @Test
