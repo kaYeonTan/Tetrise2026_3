@@ -497,13 +497,6 @@ public class Art {
             }
         }
 
-            public void tint(int x, int y, double factor) {
-            int c = get(x, y);
-            if (c != CLEAR) {
-                set(x, y, scale(c, factor));
-            }
-        }
-
         public static int scale(int rgb, double f) {
             int r = clamp((int) (((rgb >> 16) & 0xff) * f));
             int g = clamp((int) (((rgb >> 8) & 0xff) * f));
@@ -538,17 +531,6 @@ public class Art {
 
         private boolean opaque(int[] a, int x, int y) {
             return inside(x, y) && a[y * w + x] != CLEAR;
-        }
-
-            public void draw(Pix src, int dx, int dy) {
-            for (int y = 0; y < src.h; y++) {
-                for (int x = 0; x < src.w; x++) {
-                    int c = src.px[y * src.w + x];
-                    if (c != CLEAR) {
-                        set(dx + x, dy + y, c);
-                    }
-                }
-            }
         }
 
         public BufferedImage toImage(int scale) {

@@ -121,7 +121,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     /** 방장이 선택한 슬롯 (참가자 저장 UI) */
     int onlineCoopHostSaveSlot;
-    CoopGameMemento pendingGuestCoopSave;
+    transient CoopGameMemento pendingGuestCoopSave;
     boolean awaitingGuestCoopSave;
     public int stage = 1;
     public int bossHp;
