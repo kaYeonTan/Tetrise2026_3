@@ -155,4 +155,44 @@ public final class MementoMapper {
 		applySharedCoopProgressToPanel(panel, m);
 	}
 
+	/** 방장 엔진 세션 점수·줄 수를 HUD 필드에 반영. */
+	public static void applyHudFromEngine(GamePanel panel, CoopGameEngine engine) {
+		if (panel == null || engine == null) {
+			return;
+		}
+		panel.p1Score = engine.session(0).score;
+		panel.p1Lines = engine.session(0).linesRemoved;
+		panel.p2Score = engine.session(1).score;
+		panel.p2Lines = engine.session(1).linesRemoved;
+	}
+
+	/** 방장 렌더링용 보드 격자를 엔진 세션에서 채운다. */
+	public static void applyHostBoardsFromEngine(GamePanel panel, CoopGameEngine engine) {
+		if (panel == null || engine == null) {
+			return;
+		}
+		copySessionCellsToPanelBoard(engine.session(0), panel.board1);
+		copySessionCellsToPanelBoard(engine.session(1), panel.board2);
+	}
+
+	public static void copySessionCellsToPanelBoard(GameSession s, int[][] board24) {
+		for (int r = 0; r < 24; r++) {
+			for (int c = 0; c < 10; c++) {
+				board24[r][c] = 0;
+			}
+		}
+		for (int ey = 0; ey < GameSession.HEIGHT; ey++) {
+			int pr = 23 - ey;
+			if (pr < 0 || pr >= 24) {
+				continue;
+			}
+			for (int x = 0; x < GameSession.WIDTH; x++) {
+				Tetrominoes shape = s.shapeAt(x, ey);
+				if (shape != Tetrominoes.NoShape) {
+					board24[pr][x] = GamePanel.engineBlockValue(shape);
+				}
+			}
+		}
+	}
+
 }
