@@ -31,7 +31,7 @@ public final class CoopSlotPickerDialog {
 	}
 
 	public static void showLobbyLoad(java.awt.Window owner, GamePanel panel, LobbyService client, Runnable onApplied) {
-		if (panel.loginUser == null || panel.loginUser.isBlank()) {
+		if (panel.getLoginUser() == null || panel.getLoginUser().isBlank()) {
 			JOptionPane.showMessageDialog(owner, "로그인 후 이용할 수 있어요.", "저장 불러오기",
 					JOptionPane.INFORMATION_MESSAGE);
 			return;
@@ -52,7 +52,7 @@ public final class CoopSlotPickerDialog {
 
 		JPanel slots = new JPanel(new GridLayout(3, 1, 0, 8));
 		slots.setOpaque(false);
-		List<SaveSlotMeta> list = SaveService.listCoopSlots(panel.loginUser);
+		List<SaveSlotMeta> list = SaveService.listCoopSlots(panel.getLoginUser());
 		for (int i = 0; i < 3; i++) {
 			SaveSlotMeta meta = i < list.size() ? list.get(i) : new SaveSlotMeta(i + 1, false, "비어 있음", 0);
 			int slot = meta.slot;
@@ -60,7 +60,7 @@ public final class CoopSlotPickerDialog {
 			btn.setEnabled(meta.occupied);
 			btn.addActionListener(e -> {
 				try {
-					CoopGameMemento mem = SaveService.loadCoop(panel.loginUser, slot);
+					CoopGameMemento mem = SaveService.loadCoop(panel.getLoginUser(), slot);
 					if (!mem.onlineResume) {
 						throw new LoadException("온라인 협동 저장만 불러올 수 있어요.");
 					}

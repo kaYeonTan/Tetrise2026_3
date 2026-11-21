@@ -1,6 +1,7 @@
 package kr.ac.jbnu.se.tetris.integration;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
+import kr.ac.jbnu.se.tetris.ScreenId;
 import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.CoopGameEngine;
 import kr.ac.jbnu.se.tetris.core.GameSession;
@@ -276,7 +277,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 					kr.ac.jbnu.se.tetris.network.coop.CoopSnapshot.class);
 			CoopSnapshotMapper.applyToPanel(snap, panel, true);
 		}
-		panel.screen = 5;
+		panel.setScreen(ScreenId.GAME);
 		panel.startBattleBgm();
 		if (m.player0 != null && m.player1 != null && panel.coopEngineBridge != null) {
 			panel.coopEngineBridge.applyEliminationFromMemento(m);

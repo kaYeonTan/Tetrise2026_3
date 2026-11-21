@@ -68,6 +68,10 @@ public final class ASinglePlayerBridge implements GameEngineBridge {
 		return attached && board != null ? board.getEngine().getSession(0) : null;
 	}
 
+	public Tetrominoes currentShape() {
+		return session().curPiece.getShape();
+	}
+
 	@Override
 	public boolean hasActiveEngine() {
 		return attached && board != null && board.getEngine().isStarted();

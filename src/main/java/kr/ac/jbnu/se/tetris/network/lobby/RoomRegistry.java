@@ -11,15 +11,15 @@ public class RoomRegistry {
 
 	private final Map<String, LobbyRoom> roomsById = new LinkedHashMap<>();
 
-	public int roomCount() {
+	public synchronized int roomCount() {
 		return roomsById.size();
 	}
 
-	public Optional<LobbyRoom> find(String roomId) {
+	public synchronized Optional<LobbyRoom> find(String roomId) {
 		return Optional.ofNullable(roomsById.get(roomId));
 	}
 
-	public List<LobbyRoom> allRooms() {
+	public synchronized List<LobbyRoom> allRooms() {
 		return new ArrayList<>(roomsById.values());
 	}
 
@@ -37,7 +37,7 @@ public class RoomRegistry {
 		}
 	}
 
-	public CreateOutcome createRoom(String name, RoomVisibility visibility, String hostClientId) {
+	public synchronized CreateOutcome createRoom(String name, RoomVisibility visibility, String hostClientId) {
 		String trimmed = name == null ? "" : name.trim();
 		if (trimmed.isEmpty() || trimmed.length() > 32) {
 			return new CreateOutcome(CreateResult.INVALID_NAME, null);
@@ -54,7 +54,7 @@ public class RoomRegistry {
 		OK, NOT_FOUND, FULL, WRONG_CODE, ALREADY_IN_ROOM
 	}
 
-	public JoinResult join(String roomId, String joinCode, String clientId) {
+	public synchronized JoinResult join(String roomId, String joinCode, String clientId) {
 		LobbyRoom room = roomsById.get(roomId);
 		if (room == null) {
 			return JoinResult.NOT_FOUND;
@@ -74,7 +74,7 @@ public class RoomRegistry {
 		return JoinResult.OK;
 	}
 
-	public void leave(String clientId) {
+	public synchronized void leave(String clientId) {
 		List<String> empty = new ArrayList<>();
 		for (Map.Entry<String, LobbyRoom> e : roomsById.entrySet()) {
 			LobbyRoom room = e.getValue();
@@ -89,13 +89,13 @@ public class RoomRegistry {
 	}
 
 	/** 멤버와 관계없이 방을 목록에서 제거 (온라인 세션 종료 시). */
-	public void removeRoom(String roomId) {
+	public synchronized void removeRoom(String roomId) {
 		if (roomId != null) {
 			roomsById.remove(roomId);
 		}
 	}
 
-	public Optional<LobbyRoom> roomOfClient(String clientId) {
+	public synchronized Optional<LobbyRoom> roomOfClient(String clientId) {
 		for (LobbyRoom room : roomsById.values()) {
 			if (room.memberClientIds.contains(clientId)) {
 				return Optional.of(room);
