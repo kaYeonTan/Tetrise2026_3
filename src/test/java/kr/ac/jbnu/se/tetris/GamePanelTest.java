@@ -63,6 +63,27 @@ class GamePanelTest {
     }
 
     @Test
+    void localCoopGravityUsesElapsedTimeForBothPlayers() {
+        p.newGame(true);
+        int initialP1Y = p.p1Y;
+        int initialP2Y = p.p2Y;
+
+        for (int frame = 0; frame < 31; frame++) {
+            p.update(32);
+        }
+        assertEquals(initialP1Y, p.p1Y);
+        assertEquals(initialP2Y, p.p2Y);
+
+        p.update(16);
+        assertEquals(initialP1Y + 1, p.p1Y);
+        assertEquals(initialP2Y + 1, p.p2Y);
+
+        p.update(992);
+        assertEquals(initialP1Y + 2, p.p1Y);
+        assertEquals(initialP2Y + 2, p.p2Y);
+    }
+
+    @Test
     void tetrisDamage() {
         for (int c = 0; c < 9; c++) {
             for (int r = 20; r < 24; r++) {

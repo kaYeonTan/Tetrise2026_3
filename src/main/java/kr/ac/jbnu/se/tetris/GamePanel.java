@@ -175,7 +175,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public final ArrayList<Integer> p1Bag = new ArrayList<>();
     public int p1Score, p1Lines;
     public int p1Garbage;
-    int p1DropCount;
+    long p1DropCount;
     /** 좌·우: 첫 입력 후 이 시간(ms) 동안은 추가 이동 없음 (짧은 탭이 여러 칸으로 잡히는 것 방지) */
     static final int HORIZONTAL_DAS_DELAY_MS = 400;
     static final int HORIZONTAL_ARR_INTERVAL_MS = 90;
@@ -190,7 +190,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public final ArrayList<Integer> p2Bag = new ArrayList<>();
     public int p2Score, p2Lines;
     public int p2Garbage;
-    int p2DropCount;
+    long p2DropCount;
     int p2LeftCount, p2RightCount, p2DownCount;
 
     // 왼 오 아래 스페이스 회전 반대회전 홀드
@@ -420,7 +420,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (screen != SCREEN_GAME || stageClear) {
             return;
         }
-        updateGravity();
+        updateGravity(deltaMillis);
         if (screen != SCREEN_GAME || stageClear) {
             return;
         }
@@ -495,13 +495,13 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         }
     }
 
-    private void updateGravity() {
+    private void updateGravity(long deltaMillis) {
         int speed = baseDropIntervalMillis(stage);
         int p1Speed = Math.max(1, speed / (p1FastCurrent ? 10 : gravityMultiplier));
         if (!useAEngine() && runsLocalGravity(0)) {
-            p1DropCount += 16;
+            p1DropCount += deltaMillis;
             if (p1DropCount >= p1Speed) {
-                p1DropCount = 0;
+                p1DropCount %= p1Speed;
                 if (canPlace(board1, p1Type, p1Rot, p1X, p1Y + 1)) {
                     p1Y++;
                 } else {
@@ -514,15 +514,15 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (screen != SCREEN_GAME) {
             return;
         }
-        updateSecondPlayerGravity(speed);
+        updateSecondPlayerGravity(speed, deltaMillis);
     }
 
-    private void updateSecondPlayerGravity(int speed) {
+    private void updateSecondPlayerGravity(int speed, long deltaMillis) {
         if (isTwoPlayer && runsLocalGravity(1)) {
             int p2Speed = Math.max(1, speed / (p2FastCurrent ? 10 : gravityMultiplier));
-            p2DropCount += 16;
+            p2DropCount += deltaMillis;
             if (p2DropCount >= p2Speed) {
-                p2DropCount = 0;
+                p2DropCount %= p2Speed;
                 if (canPlace(board2, p2Type, p2Rot, p2X, p2Y + 1)) {
                     p2Y++;
                 } else {
