@@ -65,10 +65,9 @@ public class RoomRegistry {
 		if (room.isFull()) {
 			return JoinResult.FULL;
 		}
-		if (room.visibility == RoomVisibility.PRIVATE) {
-			if (joinCode == null || !joinCode.trim().equalsIgnoreCase(room.joinCode)) {
-				return JoinResult.WRONG_CODE;
-			}
+		if (room.visibility == RoomVisibility.PRIVATE
+				&& (joinCode == null || !joinCode.trim().equalsIgnoreCase(room.joinCode))) {
+			return JoinResult.WRONG_CODE;
 		}
 		room.memberClientIds.add(clientId);
 		return JoinResult.OK;

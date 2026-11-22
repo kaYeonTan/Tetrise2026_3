@@ -11,9 +11,13 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** TCP 한 줄 JSON — 요청/응답 + 서버 푸시. */
 public class LobbyClientConnection implements AutoCloseable {
+
+	private static final Logger LOG = Logger.getLogger(LobbyClientConnection.class.getName());
 
 	private final Socket socket;
 	private final BufferedReader in;
@@ -87,8 +91,8 @@ public class LobbyClientConnection implements AutoCloseable {
 					inbound.offer(msg);
 				}
 			}
-		} catch (IOException ignored) {
-			// disconnect
+		} catch (IOException ex) {
+			LOG.log(Level.FINE, "read loop ended", ex);
 		} finally {
 			open = false;
 		}

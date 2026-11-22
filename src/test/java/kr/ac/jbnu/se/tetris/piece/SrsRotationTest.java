@@ -12,6 +12,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SrsRotationTest {
 
 	@Test
+	void iAndJlstzUseDifferentFirstKicks() {
+		int[][] jlstz = KickTable.offsets(KickGroup.JLSTZ, RotationState.SPAWN, RotationState.R);
+		int[][] i = KickTable.offsets(KickGroup.I, RotationState.SPAWN, RotationState.R);
+		assertArrayEquals(new int[] { -1, 0 }, jlstz[1]);
+		assertArrayEquals(new int[] { -2, 0 }, i[1]);
+		assertEquals(1, KickTable.offsets(KickGroup.O, RotationState.R, RotationState.TWO).length);
+		assertEquals(1, KickTable.offsets(KickGroup.I, RotationState.SPAWN, RotationState.TWO).length);
+	}
+
+	@Test
 	void kickTableHasFiveTestsForT() {
 		assertEquals(5, KickTable.offsets(KickGroup.JLSTZ, RotationState.SPAWN, RotationState.R).length);
 		assertEquals(5, KickTable.offsets(KickGroup.I, RotationState.SPAWN, RotationState.R).length);

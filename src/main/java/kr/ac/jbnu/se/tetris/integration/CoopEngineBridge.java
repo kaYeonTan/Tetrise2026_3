@@ -20,8 +20,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 	private boolean drivingHost;
 	
 	// 낙하 속도 조절용 타이머 (학부생 스타일: 간단한 카운터)
-	private int dropTimer0 = 0;  // P1 낙하 타이머
-	private int dropTimer1 = 0;  // P2 낙하 타이머
+	private int dropTimer0 = 0;  // P1 낙하 타이머. P2는 참가자 쪽 guestDropTimer가 맡는다.
 	private int guestDropTimer = 0;
 	private int guestSyncedStage = -1;
 	private int guestAppliedGarbageSeq;
@@ -173,7 +172,6 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		}
 		engine.restartStage(stage);
 		dropTimer0 = 0;
-		dropTimer1 = 0;
 		syncHudFromEngine();
 	}
 
@@ -362,11 +360,6 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		boolean isLineClearBlinkOn() {
 			return e.isLineClearAnim() && e.isBlinkPhaseOn();
 		}
-	}
-
-	public static int panelRotFromSession(GameSession s) {
-		// HUD 미니맵용 — SRS 상태를 대략 0~3으로 (렌더는 엔진 보드 사용)
-		return 0;
 	}
 
 }

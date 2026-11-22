@@ -46,4 +46,20 @@ public class SevenBagRandomizerTest {
 		assertEquals(b, bag.next());
 		assertEquals(c, bag.next());
 	}
+
+	@Test
+	void restoreContinuesLaterBags() {
+		SevenBagRandomizer original = new SevenBagRandomizer(999L);
+		for (int i = 0; i < 30; i++)
+			original.next();
+		RandomizerState saved = original.saveState();
+		Tetrominoes[] ahead = new Tetrominoes[30];
+		for (int i = 0; i < ahead.length; i++)
+			ahead[i] = original.next();
+
+		SevenBagRandomizer restored = new SevenBagRandomizer(1L);
+		restored.restoreState(saved);
+		for (int i = 0; i < ahead.length; i++)
+			assertEquals(ahead[i], restored.next());
+	}
 }

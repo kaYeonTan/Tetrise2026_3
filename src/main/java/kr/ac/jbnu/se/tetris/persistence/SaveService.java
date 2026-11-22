@@ -5,9 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +22,7 @@ public final class SaveService {
 	public static final int MAX_SLOT = 3;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final DateTimeFormatter SLOT_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 	private static CoopGameRepository repository = new JsonCoopGameRepository();
 
 	private SaveService() {
@@ -117,8 +119,9 @@ public final class SaveService {
 		if (m == null) {
 			return "슬롯 " + slot + " · 손상됨";
 		}
-		SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-		String when = m.savedAtMs > 0 ? fmt.format(new Date(m.savedAtMs)) : "?";
+		String when = m.savedAtMs > 0
+				? SLOT_TIME.format(Instant.ofEpochMilli(m.savedAtMs).atZone(ZoneId.systemDefault()))
+				: "?";
 		String kind = m.onlineResume ? "온라인 협동" : "로컬 협동";
 		String partner = coopPartnerNick(m, viewerAccount);
 		String with = partner != null && !partner.isBlank() ? " · " + partner + "와 함께" : "";
@@ -133,21 +136,23 @@ public final class SaveService {
 			Path path = slotPath(userId, s);
 			if (!Files.isRegularFile(path)) {
 				out.add(new SaveSlotMeta(s, false, "비어 있음", 0));
-				continue;
-			}
-			try {
-				CoopGameMemento m = GSON.fromJson(Files.readString(path, StandardCharsets.UTF_8), CoopGameMemento.class);
-				if (m == null) {
-					out.add(new SaveSlotMeta(s, false, "손상됨", 0));
-					continue;
-				}
-				out.add(new SaveSlotMeta(s, true,
-						formatCoopSlotSummary(m, loginUser, s), m.savedAtMs));
-			} catch (Exception e) {
-				out.add(new SaveSlotMeta(s, false, "읽기 실패", 0));
+			} else {
+				out.add(readSlotMeta(loginUser, s, path));
 			}
 		}
 		return out;
+	}
+
+	private static SaveSlotMeta readSlotMeta(String loginUser, int slot, Path path) {
+		try {
+			CoopGameMemento m = GSON.fromJson(Files.readString(path, StandardCharsets.UTF_8), CoopGameMemento.class);
+			if (m == null) {
+				return new SaveSlotMeta(slot, false, "손상됨", 0);
+			}
+			return new SaveSlotMeta(slot, true, formatCoopSlotSummary(m, loginUser, slot), m.savedAtMs);
+		} catch (Exception e) {
+			return new SaveSlotMeta(slot, false, "읽기 실패", 0);
+		}
 	}
 
 	public static void deleteSlot(String loginUser, int slot) throws IOException {

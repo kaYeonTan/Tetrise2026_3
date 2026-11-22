@@ -2,6 +2,7 @@ package kr.ac.jbnu.se.tetris.network.coop;
 
 
 
+import java.io.IOException;
 import java.util.function.Consumer;
 
 
@@ -34,8 +35,6 @@ import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 
 import kr.ac.jbnu.se.tetris.persistence.MementoMapper;
 
-import kr.ac.jbnu.se.tetris.persistence.SaveService;
-
 import kr.ac.jbnu.se.tetris.persistence.SessionMemento;
 
 
@@ -61,6 +60,8 @@ public final class CoopNetworkBridge {
 	private boolean host;
 
 	private int snapshotTick;
+
+	private boolean sendFailureReported;
 
 
 
@@ -300,7 +301,8 @@ public final class CoopNetworkBridge {
 			req.action = "BLUEPRINT";
 			req.message = Long.toHexString(mask);
 			client.sendPlayerAction(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -322,8 +324,8 @@ public final class CoopNetworkBridge {
 
 			client.sendPlayerAction(req);
 
-		} catch (Exception ignored) {
-
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 
 	}
@@ -369,8 +371,8 @@ public final class CoopNetworkBridge {
 
 			client.sendCoopSnapshot(req);
 
-		} catch (Exception ignored) {
-
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 
 	}
@@ -387,13 +389,10 @@ public final class CoopNetworkBridge {
 		if (!isActive()) {
 			return;
 		}
-		try {
-			if (host) {
-				pushEliminationSnapshot();
-			} else if (eliminatedPlayerIndex == localPlayerIndex) {
-				sendMyBoard(true);
-			}
-		} catch (Exception ignored) {
+		if (host) {
+			pushEliminationSnapshot();
+		} else if (eliminatedPlayerIndex == localPlayerIndex) {
+			sendMyBoard(true);
 		}
 	}
 
@@ -401,13 +400,10 @@ public final class CoopNetworkBridge {
 		if (!isActive()) {
 			return;
 		}
-		try {
-			if (host) {
-				pushEliminationSnapshot();
-			} else {
-				sendMyBoard(true);
-			}
-		} catch (Exception ignored) {
+		if (host) {
+			pushEliminationSnapshot();
+		} else {
+			sendMyBoard(true);
 		}
 	}
 
@@ -427,7 +423,8 @@ public final class CoopNetworkBridge {
 			req.coopId = coopId;
 			req.snapshotJson = GSON.toJson(mem);
 			client.sendCoopSnapshot(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -446,7 +443,8 @@ public final class CoopNetworkBridge {
 			req.snapshotJson = GSON.toJson(board);
 			req.message = gameOver ? "GAMEOVER" : "";
 			client.sendCoopSnapshot(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -472,7 +470,8 @@ public final class CoopNetworkBridge {
 		}
 		try {
 			client.sendCoopSnapshot(LobbyMessage.of(LobbyMessageType.COOP_SAVE_OPEN));
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -482,7 +481,8 @@ public final class CoopNetworkBridge {
 		}
 		try {
 			client.sendCoopSnapshot(LobbyMessage.of(LobbyMessageType.COOP_SAVE_CANCEL));
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -495,11 +495,12 @@ public final class CoopNetworkBridge {
 			req.coopId = coopId != null ? coopId : mem.coopId;
 			req.snapshotJson = GSON.toJson(mem);
 			client.sendCoopSnapshot(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
-	public void notifySaved(int slot, CoopGameMemento mem) throws Exception {
+	public void notifySaved(int slot, CoopGameMemento mem) throws IOException {
 
 		if (!isActive() || !host) {
 
@@ -549,6 +550,18 @@ public final class CoopNetworkBridge {
 	}
 
 
+
+	private void reportSendFailure(IOException ex) {
+		if (sendFailureReported || !isActive()) {
+			return;
+		}
+		sendFailureReported = true;
+		String detail = ex.getMessage();
+		String text = detail == null || detail.isBlank()
+				? "서버와 연결이 끊어졌어요."
+				: "서버와 연결이 끊어졌어요. " + detail;
+		SwingUtilities.invokeLater(() -> panel.onCoopPeerDisconnected(text));
+	}
 
 	public static Consumer<LobbyMessage> noop() {
 
