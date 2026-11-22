@@ -1,5 +1,8 @@
 package kr.ac.jbnu.se.tetris.boss;
 
+import java.util.Optional;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
+
 public interface BossPattern {
 
     int intervalMillis();
@@ -8,20 +11,24 @@ public interface BossPattern {
 
     String warningMessage();
 
-    void attack(BossPatternTarget target);
+    default Optional<SfxType> activationSound() {
+        return Optional.empty();
+    }
 
-    default void onBoardChanged(BossPatternTarget target) {
+    void attack();
+
+    default void onBoardChanged() {
     }
 
     default boolean usesCustomVictory() {
         return false;
     }
 
-    default double progress(BossPatternTarget target) {
+    default double progress() {
         return 0.0;
     }
 
-    default int violationCount(BossPatternTarget target) {
+    default int violationCount() {
         return 0;
     }
 

@@ -33,9 +33,11 @@ public class SimpleMenuScreen implements Screen {
 
 	@Override
 	public void onEnter(RouteParams params) {
+		// 메뉴는 진입 시 추가 상태가 없다.
 	}
 
 	@Override
 	public void onExit() {
+		// 메뉴는 나갈 때 해제할 자원이 없다.
 	}
 }

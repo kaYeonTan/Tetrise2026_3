@@ -10,7 +10,7 @@ public class ParentGuard implements RouteGuard {
 			return GuardResult.deny();
 		}
 		if (to == Route.SAVE_SLOTS) {
-			if (params instanceof SaveSlotParams && ((SaveSlotParams) params).purpose == SavePurpose.LOAD)
+			if (params instanceof SaveSlotParams slot && slot.purpose == SavePurpose.LOAD)
 				return GuardResult.allow();
 			if (router.currentScreen() == Route.GAME)
 				return GuardResult.allow();

@@ -165,9 +165,17 @@ public class GameSession {
 				for (int j = 0; j < WIDTH; ++j)
 					cells[(k * WIDTH) + j] = shapeAt(j, k + 1);
 			}
+			clearCeilingRow();
 		}
 		clearLineClearBlink();
 		return numFullLines;
+	}
+
+	/** 한 줄이 내려간 뒤 천장에 남은 칸을 비운다. 비우지 않으면 같은 블록이 두 줄에 남는다. */
+	private void clearCeilingRow() {
+		int top = (HEIGHT - 1) * WIDTH;
+		for (int j = 0; j < WIDTH; ++j)
+			cells[top + j] = Tetrominoes.NoShape;
 	}
 
 	// 7-Bag에서 꺼내서 스폰
@@ -187,9 +195,7 @@ public class GameSession {
 	}
 
 	public boolean oneLineDown() {
-		if (!tryMove(curPiece, curX, curY - 1))
-			return false;
-		return true;
+		return tryMove(curPiece, curX, curY - 1);
 	}
 
 	public void hardDrop() {

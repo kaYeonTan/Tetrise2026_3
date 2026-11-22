@@ -8,6 +8,7 @@ import java.util.List;
 
 import javax.swing.JFrame;
 import javax.swing.UIManager;
+import javax.swing.WindowConstants;
 
 import kr.ac.jbnu.se.tetris.audio.SoundManager;
 import kr.ac.jbnu.se.tetris.repository.Repositories;
@@ -35,8 +36,8 @@ public class GameWindow {
         soundManager = new SoundManager();
         soundManager.preload();
 
-        // ScreenRouter 초기화
-        // TODO: AuthGuard는 로그인 세션 통합 후 추가 (현재 GamePanel 내부에서 loginUser로 관리)
+        // ScreenRouter 초기화. AuthGuard는 로그인 세션 통합 후 추가한다.
+        // 지금은 GamePanel 내부에서 loginUser로 관리한다.
         router = new ScreenRouter(frame, List.of());
 
         // StagePanelScreen: 기존 GamePanel 전체를 Screen으로 감싸서 등록
@@ -50,7 +51,7 @@ public class GameWindow {
         UIManager.put("OptionPane.buttonFont", f);
 
         // 프레임 설정
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         frame.setResizable(false);
 
         // 초기 화면: STAGE_RUSH (GamePanel이 타이틀부터 시작)

@@ -9,12 +9,15 @@ public record LobbyMyRoomUiState(
 		String rememberedJoinCode,
 		String rememberedRoomId) {
 
+	public static final String START_BUTTON = "게임 시작 (방장)";
+	public static final String GUEST_NICK = "Guest";
+
 	public static LobbyMyRoomUiState empty() {
 		return new LobbyMyRoomUiState(
 				"아직 방에 없어요.\n새 방을 만들면\n여기에 대기실 정보가 표시돼요.",
 				"로비",
 				false,
-				"게임 시작 (방장)",
+				START_BUTTON,
 				null,
 				null);
 	}
@@ -28,63 +31,86 @@ public record LobbyMyRoomUiState(
 		if (resp == null || resp.players == null) {
 			return empty();
 		}
-		String hostNick = resp.players.isEmpty() ? myNick : resp.players.get(0);
 		boolean host = "HOST".equals(resp.role);
-		String joinCode = resp.joinCode;
-		String rememberedJoinCode = prevJoinCode;
-		String rememberedRoomId = prevRoomId;
-		if (joinCode != null && !joinCode.isEmpty()) {
-			rememberedJoinCode = joinCode;
-			rememberedRoomId = resp.roomId;
-		}
-		boolean isPrivate = RoomVisibility.PRIVATE.name().equals(resp.visibility)
-				|| (host && rememberedJoinCode != null && resp.roomId != null && resp.roomId.equals(rememberedRoomId));
-		if (host && (joinCode == null || joinCode.isEmpty()) && resp.roomId != null && resp.roomId.equals(rememberedRoomId)) {
-			joinCode = rememberedJoinCode;
-		}
+		String hostNick = resp.players.isEmpty() ? myNick : resp.players.get(0);
+		Remembered remembered = remember(resp, prevJoinCode, prevRoomId);
+		String joinCode = resolveJoinCode(resp, host, remembered);
+		boolean isPrivate = isPrivate(resp, host, remembered);
+		boolean full = resp.players.size() >= 2;
+		String waiting = "대기 중 · " + resp.roomName + " · " + resp.players.size() + "/2";
+		String startText = host ? START_BUTTON : "방장이 시작할 때까지 대기";
+		String text = roomText(resp, myNick, host, hostNick, isPrivate, joinCode);
+		return new LobbyMyRoomUiState(text, waiting, host && full && clientConnected, startText,
+				remembered.code, remembered.roomId);
+	}
 
+	private static Remembered remember(LobbyMessage resp, String prevJoinCode, String prevRoomId) {
+		if (resp.joinCode != null && !resp.joinCode.isEmpty()) {
+			return new Remembered(resp.joinCode, resp.roomId);
+		}
+		return new Remembered(prevJoinCode, prevRoomId);
+	}
+
+	private static String resolveJoinCode(LobbyMessage resp, boolean host, Remembered remembered) {
+		String joinCode = resp.joinCode;
+		boolean missing = joinCode == null || joinCode.isEmpty();
+		if (host && missing && resp.roomId != null && resp.roomId.equals(remembered.roomId)) {
+			return remembered.code;
+		}
+		return joinCode;
+	}
+
+	private static boolean isPrivate(LobbyMessage resp, boolean host, Remembered remembered) {
+		if (RoomVisibility.PRIVATE.name().equals(resp.visibility)) {
+			return true;
+		}
+		return host && remembered.code != null && resp.roomId != null && resp.roomId.equals(remembered.roomId);
+	}
+
+	private static String roomText(LobbyMessage resp, String myNick, boolean host, String hostNick,
+			boolean isPrivate, String joinCode) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("방: ").append(resp.roomName).append('\n');
 		sb.append(isPrivate ? "종류: 비밀방\n" : "종류: 공개방\n");
 		sb.append("───\n");
-		if (host) {
-			sb.append(myNick);
-			if ("Guest".equalsIgnoreCase(myNick)) {
-				sb.append(" (게스트)");
-			}
-			sb.append(" (방장)\n");
-		} else {
-			sb.append(hostNick).append(" (방장)\n");
-			sb.append(myNick);
-			if ("Guest".equalsIgnoreCase(myNick)) {
-				sb.append(" (게스트)");
-			}
-			sb.append(" (참가)\n");
-		}
-		if (host && isPrivate) {
-			sb.append("───\n");
-			if (joinCode != null && !joinCode.isEmpty()) {
-				sb.append("입장 코드 (비밀번호):\n").append(joinCode).append('\n');
-				sb.append("(친구에게 알려 주세요)\n");
-			} else {
-				sb.append("입장 코드를 불러오지 못했어요.\n방 나가기 후 다시 만들어 주세요.\n");
-			}
-		}
+		appendPlayers(sb, myNick, host, hostNick);
+		appendPrivateCode(sb, host, isPrivate, joinCode);
 		sb.append("───\n");
 		sb.append(resp.players.size()).append(" / 2명");
-		if (resp.players.size() < 2) {
-			sb.append(" · 상대 대기 중");
-		} else {
-			sb.append(" · 준비 완료");
+		sb.append(resp.players.size() < 2 ? " · 상대 대기 중" : " · 준비 완료");
+		return sb.toString();
+	}
+
+	private static void appendPlayers(StringBuilder sb, String myNick, boolean host, String hostNick) {
+		if (host) {
+			appendNick(sb, myNick, "방장");
+			return;
 		}
+		sb.append(hostNick).append(" (방장)\n");
+		appendNick(sb, myNick, "참가");
+	}
 
-		boolean isHostRole = "HOST".equals(resp.role);
-		boolean full = resp.players.size() >= 2;
-		boolean startEnabled = isHostRole && full && clientConnected;
-		String startText = isHostRole ? "게임 시작 (방장)" : "방장이 시작할 때까지 대기";
-		String waiting = "대기 중 · " + resp.roomName + " · " + resp.players.size() + "/2";
+	private static void appendNick(StringBuilder sb, String nick, String roleLabel) {
+		sb.append(nick);
+		if (GUEST_NICK.equalsIgnoreCase(nick)) {
+			sb.append(" (게스트)");
+		}
+		sb.append(" (").append(roleLabel).append(")\n");
+	}
 
-		return new LobbyMyRoomUiState(sb.toString(), waiting, startEnabled, startText, rememberedJoinCode,
-				rememberedRoomId);
+	private static void appendPrivateCode(StringBuilder sb, boolean host, boolean isPrivate, String joinCode) {
+		if (!host || !isPrivate) {
+			return;
+		}
+		sb.append("───\n");
+		if (joinCode != null && !joinCode.isEmpty()) {
+			sb.append("입장 코드 (비밀번호):\n").append(joinCode).append('\n');
+			sb.append("(친구에게 알려 주세요)\n");
+			return;
+		}
+		sb.append("입장 코드를 불러오지 못했어요.\n방 나가기 후 다시 만들어 주세요.\n");
+	}
+
+	private record Remembered(String code, String roomId) {
 	}
 }

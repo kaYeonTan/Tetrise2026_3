@@ -3,8 +3,12 @@ package kr.ac.jbnu.se.tetris.network.lobby;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class LobbyClient implements LobbyService, AutoCloseable {
+
+	private static final Logger LOG = Logger.getLogger(LobbyClient.class.getName());
 
 	private LobbyClientConnection conn;
 	private String clientId;
@@ -20,9 +24,9 @@ public class LobbyClient implements LobbyService, AutoCloseable {
 		closeQuietly();
 		conn = new LobbyClientConnection(host, port);
 		LobbyMessage hello = LobbyMessage.of(LobbyMessageType.HELLO);
-		hello.nick = displayNick == null ? "Guest" : displayNick.trim();
+		hello.nick = displayNick == null ? LobbyMyRoomUiState.GUEST_NICK : displayNick.trim();
 		if (hello.nick.isEmpty()) {
-			hello.nick = "Guest";
+			hello.nick = LobbyMyRoomUiState.GUEST_NICK;
 		}
 		LobbyMessage resp = conn.request(hello);
 		expect(resp, LobbyMessageType.HELLO_OK);
@@ -139,7 +143,8 @@ public class LobbyClient implements LobbyService, AutoCloseable {
 		if (conn != null) {
 			try {
 				conn.close();
-			} catch (IOException ignored) {
+			} catch (IOException ex) {
+				LOG.log(Level.FINE, "close failed", ex);
 			}
 			conn = null;
 		}

@@ -323,7 +323,7 @@ public class LobbyFrame extends JDialog {
 		myRoomBox.setBorder(BorderFactory.createTitledBorder(
 				BorderFactory.createLineBorder(new Color(0x8a6a2a)), "내 대기실"));
 		myRoomBox.add(myRoomScroll, BorderLayout.CENTER);
-		startGameBtn = actionButton("게임 시작 (방장)", true, this::startCoopGame);
+		startGameBtn = actionButton(LobbyMyRoomUiState.START_BUTTON, true, this::startCoopGame);
 		startGameBtn.setEnabled(false);
 		myRoomBox.add(startGameBtn, BorderLayout.SOUTH);
 		myRoomBox.setPreferredSize(new Dimension(260, 200));
@@ -573,7 +573,7 @@ public class LobbyFrame extends JDialog {
 
 		}
 
-		return "Guest";
+		return LobbyMyRoomUiState.GUEST_NICK;
 
 	}
 

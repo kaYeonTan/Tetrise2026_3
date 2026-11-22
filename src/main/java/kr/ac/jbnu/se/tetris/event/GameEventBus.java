@@ -1,14 +1,14 @@
 package kr.ac.jbnu.se.tetris.event;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
 
 // 게임 안에서 일어난 일 알림 (보스, 소리 등이 구독)
 public class GameEventBus {
 
 	ArrayList<GameEventListener> all = new ArrayList<>();
 	// 타입별로만 받고 싶을 때
-	HashMap<GameEventType, ArrayList<GameEventListener>> byType = new HashMap<>();
+	EnumMap<GameEventType, ArrayList<GameEventListener>> byType = new EnumMap<>(GameEventType.class);
 
 	int publishCount = 0;
 

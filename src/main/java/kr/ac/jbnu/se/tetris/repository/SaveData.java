@@ -130,10 +130,10 @@ public final class SaveData {
     public void applyTo(GamePanel p) {
         p.newGame(players == 2);
         p.stage = stage;
+        p.gameTime = gameTime;
         p.startStage(blueprint);
         p.bossHp = bossHp;
         p.restoreBossPatternTimer(bossTimer);
-        p.gameTime = gameTime;
         int[] state1 = parseIntList(p1.state());
         p.p1Type = state1[0];
         p.p1Rot = state1[1];
