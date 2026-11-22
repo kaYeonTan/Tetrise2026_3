@@ -25,6 +25,7 @@ public final class SoundManager implements AutoCloseable {
         ensureMp3Support();
     }
 
+    private final ClipFactory clipFactory;
     private final Map<BgmType, AudioData> bgmData = new EnumMap<>(BgmType.class);
     private final Map<SfxType, AudioData> sfxData = new EnumMap<>(SfxType.class);
     private final Map<SfxType, Clip> managedEffects = new EnumMap<>(SfxType.class);
@@ -36,6 +37,14 @@ public final class SoundManager implements AutoCloseable {
     private boolean paused;
     private volatile boolean muted;
     private boolean preloaded;
+
+    public SoundManager() {
+        this(AudioSystem::getClip);
+    }
+
+    SoundManager(ClipFactory clipFactory) {
+        this.clipFactory = clipFactory;
+    }
 
     public synchronized void preload() {
         if (preloaded) {
@@ -106,8 +115,7 @@ public final class SoundManager implements AutoCloseable {
             return;
         }
         try {
-            Clip clip = AudioSystem.getClip();
-            clip.open(data.format(), data.bytes(), 0, data.bytes().length);
+            Clip clip = openClip(data);
             activeEffects.add(clip);
             clip.addLineListener(event -> {
                 if (event.getType() == LineEvent.Type.STOP) {
@@ -135,8 +143,7 @@ public final class SoundManager implements AutoCloseable {
             return;
         }
         try {
-            Clip clip = AudioSystem.getClip();
-            clip.open(data.format(), data.bytes(), 0, data.bytes().length);
+            Clip clip = openClip(data);
             managedEffects.put(type, clip);
             clip.start();
         } catch (LineUnavailableException | IllegalArgumentException e) {
@@ -187,8 +194,7 @@ public final class SoundManager implements AutoCloseable {
         }
         try {
             if (bgmClip == null || !bgmClip.isOpen()) {
-                bgmClip = AudioSystem.getClip();
-                bgmClip.open(data.format(), data.bytes(), 0, data.bytes().length);
+                bgmClip = openClip(data);
             }
             int frame = Math.min(pausedFrame, Math.max(0, bgmClip.getFrameLength() - 1));
             bgmClip.setFramePosition(frame);
@@ -196,6 +202,24 @@ public final class SoundManager implements AutoCloseable {
         } catch (LineUnavailableException | IllegalArgumentException e) {
             logFailure(currentBgm.resourcePath(), e);
             closeBgmClip();
+        }
+    }
+
+    private Clip openClip(AudioData data) throws LineUnavailableException {
+        Clip clip = clipFactory.create();
+        try {
+            byte[] bytes = data.bytes();
+            clip.open(data.format(), bytes, 0, bytes.length);
+            return clip;
+        } catch (LineUnavailableException | RuntimeException failure) {
+            try {
+                clip.close();
+            } catch (RuntimeException closeFailure) {
+                if (closeFailure != failure) {
+                    failure.addSuppressed(closeFailure);
+                }
+            }
+            throw failure;
         }
     }
 
@@ -297,6 +321,11 @@ public final class SoundManager implements AutoCloseable {
         }
         bgmData.clear();
         sfxData.clear();
+    }
+
+    @FunctionalInterface
+    interface ClipFactory {
+        Clip create() throws LineUnavailableException;
     }
 
     private record AudioData(AudioFormat format, byte[] bytes) {

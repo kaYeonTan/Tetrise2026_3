@@ -149,6 +149,12 @@ public final class ASinglePlayerBridge implements GameEngineBridge {
 			board.setGravityMultiplier(multiplier);
 	}
 
+	public void setBaseGravityDelay(int delayMillis) {
+		if (attached && board != null) {
+			board.setBaseGravityDelay(delayMillis);
+		}
+	}
+
 	public void setNextPieceGravityMultiplier(int multiplier) {
 		if (attached && board != null)
 			board.setNextPieceGravityMultiplier(multiplier);

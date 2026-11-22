@@ -126,8 +126,11 @@ public class Board extends JPanel implements ActionListener {
 	}
 
 	public void setBaseGravityDelay(int delayMillis) {
-		baseGravityDelayMillis = Math.max(1, delayMillis);
-		updateTimerDelay();
+		int delay = Math.max(1, delayMillis);
+		if (baseGravityDelayMillis != delay) {
+			baseGravityDelayMillis = delay;
+			updateTimerDelay();
+		}
 	}
 
 	public void setNextPieceGravityMultiplier(int multiplier) {
@@ -233,7 +236,7 @@ public class Board extends JPanel implements ActionListener {
 		engine.start();
 		updateTimerDelay();
 
-		timer.start();
+		timer.restart();
 
 		updateStatus();
 

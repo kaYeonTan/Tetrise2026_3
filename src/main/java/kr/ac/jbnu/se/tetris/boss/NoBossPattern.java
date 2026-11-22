@@ -23,6 +23,6 @@ final class NoBossPattern implements BossPattern {
     }
 
     @Override
-    public void attack(BossPatternTarget target) {
+    public void attack() {
     }
 }

@@ -5,6 +5,7 @@ import java.util.Random;
 public final class BossPatternController {
 
     private final Random random;
+    private final BossPatternFactory patternFactory;
     private BossPattern pattern = NoBossPattern.INSTANCE;
     private int elapsedMillis;
     private boolean warning;
@@ -12,6 +13,7 @@ public final class BossPatternController {
 
     public BossPatternController(Random random) {
         this.random = random;
+        this.patternFactory = new BossPatternFactory(random);
     }
 
     public void startStage(int stage, BossPatternTarget target) {
@@ -22,43 +24,38 @@ public final class BossPatternController {
     public void startStage(int stage, BossPatternTarget target, int restoredBlueprintIndex) {
         stop(target);
         blueprintIndex = -1;
-        if (stage == 2) {
-            pattern = new RisingBlockPattern();
-        } else if (stage == 3) {
+
+        if (stage == 3) {
             blueprintIndex = restoredBlueprintIndex >= 0
                     ? restoredBlueprintIndex
                     : random.nextInt(Blueprint.stageThreePatternCount());
-            pattern = new BlueprintPattern(Blueprint.stageThree(blueprintIndex));
-        } else if (stage == 4) {
-            pattern = new AccelerationPattern();
-        } else if (stage == 5) {
-            pattern = new RandomKeyPattern(random);
-        } else {
-            pattern = NoBossPattern.INSTANCE;
         }
+
+        pattern = patternFactory.create(stage, blueprintIndex, target);
         elapsedMillis = 0;
     }
 
-    public void tick(int deltaMillis, BossPatternTarget target) {
-        if (pattern.intervalMillis() <= 0) {
+    public void tick(long deltaMillis, BossPatternCallbacks callbacks) {
+        int intervalMillis = pattern.intervalMillis();
+        if (intervalMillis <= 0) {
             return;
         }
-        elapsedMillis += deltaMillis;
-        int warningStart = pattern.intervalMillis() - pattern.warningMillis();
+        elapsedMillis += (int) Math.min(deltaMillis, intervalMillis - elapsedMillis);
+        int warningStart = intervalMillis - pattern.warningMillis();
         if (!warning && elapsedMillis >= warningStart) {
             warning = true;
-            target.showBossWarning(pattern.warningMessage());
+            callbacks.showBossWarning(pattern.warningMessage());
         }
-        if (elapsedMillis >= pattern.intervalMillis()) {
+        if (elapsedMillis >= intervalMillis) {
             elapsedMillis = 0;
             warning = false;
-            target.clearBossWarning();
-            target.onBossPatternActivated();
-            pattern.attack(target);
+            callbacks.clearBossWarning();
+            pattern.activationSound().ifPresent(callbacks::onBossPatternActivated);
+            pattern.attack();
         }
     }
 
-    public void restoreElapsed(int elapsedMillis, BossPatternTarget target) {
+    public void restoreElapsed(int elapsedMillis, BossPatternCallbacks callbacks) {
         if (pattern.intervalMillis() <= 0) {
             this.elapsedMillis = 0;
             return;
@@ -66,9 +63,9 @@ public final class BossPatternController {
         this.elapsedMillis = Math.max(0, elapsedMillis % pattern.intervalMillis());
         warning = this.elapsedMillis >= pattern.intervalMillis() - pattern.warningMillis();
         if (warning) {
-            target.showBossWarning(pattern.warningMessage());
+            callbacks.showBossWarning(pattern.warningMessage());
         } else {
-            target.clearBossWarning();
+            callbacks.clearBossWarning();
         }
     }
 
@@ -76,20 +73,20 @@ public final class BossPatternController {
         return elapsedMillis;
     }
 
-    public void onBoardChanged(BossPatternTarget target) {
-        pattern.onBoardChanged(target);
+    public void onBoardChanged() {
+        pattern.onBoardChanged();
     }
 
     public boolean usesCustomVictory() {
         return pattern.usesCustomVictory();
     }
 
-    public double progress(BossPatternTarget target) {
-        return pattern.progress(target);
+    public double progress() {
+        return pattern.progress();
     }
 
-    public int violationCount(BossPatternTarget target) {
-        return pattern.violationCount(target);
+    public int violationCount() {
+        return pattern.violationCount();
     }
 
     public Blueprint blueprint() {
@@ -100,10 +97,10 @@ public final class BossPatternController {
         return blueprintIndex;
     }
 
-    public void stop(BossPatternTarget target) {
+    public void stop(BossPatternCallbacks callbacks) {
         warning = false;
         elapsedMillis = 0;
-        target.clearBossWarning();
-        target.resetTemporaryBossEffects();
+        callbacks.clearBossWarning();
+        callbacks.resetTemporaryBossEffects();
     }
 }

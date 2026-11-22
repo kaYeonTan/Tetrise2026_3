@@ -115,7 +115,7 @@ public final class Blueprint {
                     hasEmptyCell = true;
                 } else if (cell != '-') {
                     throw new IllegalArgumentException("Unknown blueprint cell: " + cell);
-                }
+                } else {}
             }
             if (!hasEmptyCell) {
                 throw new IllegalArgumentException("Every blueprint row needs a must-be-empty cell");

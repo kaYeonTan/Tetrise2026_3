@@ -3,10 +3,12 @@ package kr.ac.jbnu.se.tetris.boss;
 public final class BlueprintPattern implements BossPattern {
 
     private final Blueprint blueprint;
+    private final BlueprintTarget target;
     private boolean completed;
 
-    public BlueprintPattern(Blueprint blueprint) {
+    public BlueprintPattern(Blueprint blueprint, BlueprintTarget target) {
         this.blueprint = blueprint;
+        this.target = target;
     }
 
     @Override
@@ -25,11 +27,11 @@ public final class BlueprintPattern implements BossPattern {
     }
 
     @Override
-    public void attack(BossPatternTarget target) {
+    public void attack() {
     }
 
     @Override
-    public void onBoardChanged(BossPatternTarget target) {
+    public void onBoardChanged() {
         if (!completed && blueprint.isSatisfied(target::isBlueprintCellOccupied)) {
             completed = true;
             target.completeBlueprintPattern();
@@ -42,12 +44,12 @@ public final class BlueprintPattern implements BossPattern {
     }
 
     @Override
-    public double progress(BossPatternTarget target) {
+    public double progress() {
         return blueprint.fillRatio(target::isBlueprintCellOccupied);
     }
 
     @Override
-    public int violationCount(BossPatternTarget target) {
+    public int violationCount() {
         return blueprint.violationCount(target::isBlueprintCellOccupied);
     }
 

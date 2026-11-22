@@ -81,7 +81,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public static final ScreenId SCREEN_RESULT = ScreenId.RESULT;
     public static final ScreenId SCREEN_COOP_SLOTS = ScreenId.COOP_SLOTS;
 
+    private static final long NANOS_PER_MILLISECOND = 1_000_000L;
     private ScreenId screen = ScreenId.TITLE;
+    private long lastGameTickNanos;
 
     final Timer timer;
     int tick = 0;
@@ -173,7 +175,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public final ArrayList<Integer> p1Bag = new ArrayList<>();
     public int p1Score, p1Lines;
     public int p1Garbage;
-    int p1DropCount;
+    long p1DropCount;
     /** 좌·우: 첫 입력 후 이 시간(ms) 동안은 추가 이동 없음 (짧은 탭이 여러 칸으로 잡히는 것 방지) */
     static final int HORIZONTAL_DAS_DELAY_MS = 400;
     static final int HORIZONTAL_ARR_INTERVAL_MS = 90;
@@ -188,7 +190,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     public final ArrayList<Integer> p2Bag = new ArrayList<>();
     public int p2Score, p2Lines;
     public int p2Garbage;
-    int p2DropCount;
+    long p2DropCount;
     int p2LeftCount, p2RightCount, p2DownCount;
 
     // 왼 오 아래 스페이스 회전 반대회전 홀드
@@ -378,10 +380,18 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             msgTimer--;
         }
         if (screen == SCREEN_GAME) {
-            update();
+            update(stageClear ? 0 : elapsedGameTickMillis());
         }
         syncSinglePlayerUiVisibility();
         repaint();
+    }
+
+    private long elapsedGameTickMillis() {
+        long elapsedNanos = System.nanoTime() - lastGameTickNanos;
+        long elapsedMillis = elapsedNanos / NANOS_PER_MILLISECOND;
+        // Keep the sub-millisecond remainder for the next tick.
+        lastGameTickNanos += elapsedMillis * NANOS_PER_MILLISECOND;
+        return elapsedMillis;
     }
 
     void syncSinglePlayerUiVisibility() {
@@ -393,13 +403,13 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         aEngineBridge.setVisible(screen == SCREEN_GAME && !stageClear);
     }
 
-    void update() {
+    void update(long deltaMillis) {
         if (stageClear) {
             updateStageClear();
             return;
         }
         if (!(isOnlineCoop && localPlayerIndex == 1)) {
-            gameTime += 16;
+            gameTime += deltaMillis;
         }
         updateTemporaryBossEffects();
         updateKeyRepeat();
@@ -410,11 +420,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (screen != SCREEN_GAME || stageClear) {
             return;
         }
-        updateGravity();
+        updateGravity(deltaMillis);
         if (screen != SCREEN_GAME || stageClear) {
             return;
         }
-        updateBossAndNetwork();
+        updateBossAndNetwork(deltaMillis);
     }
 
     private void updateStageClear() {
@@ -485,13 +495,13 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         }
     }
 
-    private void updateGravity() {
-        int speed = baseDropIntervalMillis(stage);
+    private void updateGravity(long deltaMillis) {
+        int speed = baseDropIntervalMillis();
         int p1Speed = Math.max(1, speed / (p1FastCurrent ? 10 : gravityMultiplier));
         if (!useAEngine() && runsLocalGravity(0)) {
-            p1DropCount += 16;
+            p1DropCount += deltaMillis;
             if (p1DropCount >= p1Speed) {
-                p1DropCount = 0;
+                p1DropCount %= p1Speed;
                 if (canPlace(board1, p1Type, p1Rot, p1X, p1Y + 1)) {
                     p1Y++;
                 } else {
@@ -499,20 +509,21 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 }
             }
         } else if (useAEngine()) {
+            aEngineBridge.setBaseGravityDelay(speed);
             aEngineBridge.syncHud();
         }
         if (screen != SCREEN_GAME) {
             return;
         }
-        updateSecondPlayerGravity(speed);
+        updateSecondPlayerGravity(speed, deltaMillis);
     }
 
-    private void updateSecondPlayerGravity(int speed) {
+    private void updateSecondPlayerGravity(int speed, long deltaMillis) {
         if (isTwoPlayer && runsLocalGravity(1)) {
             int p2Speed = Math.max(1, speed / (p2FastCurrent ? 10 : gravityMultiplier));
-            p2DropCount += 16;
+            p2DropCount += deltaMillis;
             if (p2DropCount >= p2Speed) {
-                p2DropCount = 0;
+                p2DropCount %= p2Speed;
                 if (canPlace(board2, p2Type, p2Rot, p2X, p2Y + 1)) {
                     p2Y++;
                 } else {
@@ -522,14 +533,14 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         }
     }
 
-    private void updateBossAndNetwork() {
+    private void updateBossAndNetwork(long deltaMillis) {
         if (useCoopEngineHost()) {
-            coopEngineBridge.tickHost();
+            coopEngineBridge.tickHost(deltaMillis);
         } else if (isOnlineCoop && useCoopEngineRender()) {
-            coopEngineBridge.tickGuestLocal(localPlayerIndex);
+            coopEngineBridge.tickGuestLocal(localPlayerIndex, deltaMillis);
         }
         if (!isOnlineCoop || localPlayerIndex == 0) {
-            bossPattern.tick(16, this);
+            bossPattern.tick(deltaMillis, this);
             bossTimer = bossPattern.elapsedMillis();
         }
         hitFlash.tick();
@@ -546,8 +557,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         return !isTwoPlayer && aEngineBridge != null && aEngineBridge.isAttached();
     }
 
-    static int baseDropIntervalMillis(int stage) {
-        return Math.max(1, 1000 - (stage - 1) * 150);
+    public int baseDropIntervalMillis() {
+        long stageInterval = 2_000 - (Math.max(1, stage) - 1) * 150L;
+        long elapsedSteps = Math.max(0, gameTime) / 30_000;
+        return (int) Math.max(400, stageInterval - elapsedSteps * 100);
     }
 
     int[] currentPrimaryKeys() {
@@ -733,10 +746,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     boolean raiseBoardAndPiece(int[][] board, boolean playerOne, int hole) {
-        for (int c = 0; c < 10; c++) {
-            if (board[0][c] != 0) {
-                return false;
-            }
+        if (!GarbageRows.hasEmptyTopRow(board)) {
+            return false;
         }
         int type = playerOne ? p1Type : p2Type;
         int rot = playerOne ? p1Rot : p2Rot;
@@ -746,15 +757,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 return false;
             }
         }
-        for (int r = 0; r < 23; r++) {
-            board[r] = board[r + 1];
-        }
-        board[23] = new int[10];
-        for (int c = 0; c < 10; c++) {
-            if (c != hole) {
-                board[23][c] = 8;
-            }
-        }
+        GarbageRows.insert(board, () -> hole);
         if (playerOne) {
             p1Y--;
         } else {
@@ -776,13 +779,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     @Override
-    public void onBossPatternActivated() {
-        if (stage == 2) {
-            soundManager.playSfx(SfxType.STAGE_2_PATTERN);
-        } else if (stage == 4) {
-            soundManager.playManagedSfx(SfxType.STAGE_4_PATTERN);
-        } else if (stage == 5) {
-            soundManager.playSfx(SfxType.STAGE_5_PATTERN);
+    public void onBossPatternActivated(SfxType sound) {
+        if (sound.usesManagedPlayback()) {
+            soundManager.playManagedSfx(sound);
+        } else {
+            soundManager.playSfx(sound);
         }
     }
 
@@ -976,7 +977,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             coopBridge.sendBlueprintMask(localBlueprintMask());
             return;
         }
-        bossPattern.onBoardChanged(this);
+        bossPattern.onBoardChanged();
     }
 
     long localBlueprintMask() {
@@ -1009,7 +1010,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             return;
         }
         if (stage == 3 && !stageClear) {
-            bossPattern.onBoardChanged(this);
+            bossPattern.onBoardChanged();
         }
     }
 
@@ -1225,7 +1226,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         resultMsg = "";
         startStage();
         pressed.clear();
-        screen = SCREEN_GAME;
+        setScreen(SCREEN_GAME);
     }
 
     public void startStage() {
@@ -1282,7 +1283,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             // 저장 호환용 GamePanel 상태도 A 엔진과 함께 초기화한다.
             spawnP1();
             ensureAEngineBridge();
-            aEngineBridge.startStage(stage, baseDropIntervalMillis(stage));
+            aEngineBridge.startStage(stage, baseDropIntervalMillis());
         } else if (useCoopEngineHost()) {
             coopEngineBridge.restartStageEngine(stage);
         } else {
@@ -1290,6 +1291,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             spawnP2();
         }
         startBattleBgm();
+        lastGameTickNanos = System.nanoTime();
     }
 
     void fillNext(ArrayList<Integer> next, ArrayList<Integer> bag) {
@@ -1621,21 +1623,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     boolean addGarbage(int[][] board) {
-        for (int c = 0; c < 10; c++) {
-            if (board[0][c] != 0) {
-                return false;
-            }
+        if (!GarbageRows.hasEmptyTopRow(board)) {
+            return false;
         }
-        for (int r = 0; r < 23; r++) {
-            board[r] = board[r + 1];
-        }
-        board[23] = new int[10];
-        int hole = random.nextInt(10);
-        for (int c = 0; c < 10; c++) {
-            if (c != hole) {
-                board[23][c] = 8;
-            }
-        }
+        GarbageRows.insert(board, () -> random.nextInt(board[0].length));
         return true;
     }
 
@@ -1831,7 +1822,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     public void resumeSave(String savePath) {
         if (repos.saves().loadGame(savePath, this)) {
-            screen = SCREEN_GAME;
+            setScreen(SCREEN_GAME);
             pressed.clear();
         } else {
             JOptionPane.showMessageDialog(this, "저장 파일을 읽을 수 없어요.");
@@ -1945,7 +1936,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             if (coopSlotMode == 1 || coopSlotMode == 3) {
                 screen = SCREEN_PAUSE;
             } else {
-                screen = coopSlotReturnScreen;
+                setScreen(coopSlotReturnScreen);
             }
             return;
         }
@@ -2045,7 +2036,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     private void openLobbyForCoopResume(int slot, CoopGameMemento mem) {
         pendingCoopResume = mem;
         showMsg("슬롯 " + slot + "을 불러왔어요. 로비에서 「게임 시작 (방장)」으로 이어하세요.", 260);
-        screen = coopSlotReturnScreen;
+        setScreen(coopSlotReturnScreen);
         if (coopSlotReturnScreen == SCREEN_TITLE) {
             SwingUtilities.invokeLater(() -> {
                 onlineLobbyFrame = new LobbyFrame(this);
@@ -2884,8 +2875,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         g.setColor(new Color(0x1a1216));
         g.fillRect(barX + 16, 50, 488, 24);
         boolean customVictory = bossPattern.usesCustomVictory();
-        double progress = customVictory ? bossPattern.progress(this) : (double) bossHp / bossMax;
-        int violations = customVictory ? bossPattern.violationCount(this) : 0;
+        double progress = customVictory ? bossPattern.progress() : (double) bossHp / bossMax;
+        int violations = customVictory ? bossPattern.violationCount() : 0;
         int filled = (int) (482.0 * Math.max(0.0, Math.min(1.0, progress)));
         boolean blueprintOk = customVictory && violations == 0;
         g.setColor(blueprintOk ? new Color(0x4fa65a) : new Color(0xc9432f));
@@ -3229,7 +3220,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         } else {
             coopEngineBridge.startOnlineGuest(stage, seed);
         }
-        screen = SCREEN_GAME;
+        setScreen(SCREEN_GAME);
         msg = playerIndex == 0 ? "온라인 협동 · 방장 (P1)" : "온라인 협동 · 참가 (P2)";
         msgTimer = 150;
         requestFocusInWindow();
@@ -3281,7 +3272,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     public void resumeLocalPause() {
-        screen = SCREEN_GAME;
+        setScreen(SCREEN_GAME);
         pressed.clear();
         if (useAEngine()) {
             aEngineBridge.resumeEngine();
@@ -3451,6 +3442,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     public void setScreen(ScreenId screen) {
+        if (screen == SCREEN_GAME && this.screen != SCREEN_GAME) {
+            lastGameTickNanos = System.nanoTime();
+        }
         this.screen = screen;
     }
 

@@ -3,14 +3,16 @@ package kr.ac.jbnu.se.tetris;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
-import javax.swing.JLabel;
 import kr.ac.jbnu.se.tetris.boss.Blueprint;
 import kr.ac.jbnu.se.tetris.repository.Repositories;
 import kr.ac.jbnu.se.tetris.core.GameSession;
@@ -44,19 +46,70 @@ class GamePanelTest {
     }
 
     @Test
-    void singlePlayerGravityUsesTwoPlayerStageSpeed() {
-        Board board = new Board(new JLabel());
-        int[] expectedDelays = {1000, 850, 700, 550, 400};
+    void baseGravityDelayUsesStageAndPlayTimeWithAMinimum() {
+        int[] expectedDelays = {2_000, 1_850, 1_700, 1_550, 1_400};
 
         for (int stage = 1; stage <= expectedDelays.length; stage++) {
-            int delay = GamePanel.baseDropIntervalMillis(stage);
-            board.setBaseGravityDelay(delay);
-            assertEquals(expectedDelays[stage - 1], board.timer.getDelay());
+            p.stage = stage;
+            assertEquals(expectedDelays[stage - 1], p.baseDropIntervalMillis());
         }
 
-        board.setBaseGravityDelay(GamePanel.baseDropIntervalMillis(4));
-        board.setGravityMultiplier(3);
-        assertEquals(550 / 3, board.timer.getDelay());
+        p.gameTime = 60_000;
+        assertEquals(1_200, p.baseDropIntervalMillis());
+        p.gameTime = Long.MAX_VALUE;
+        assertEquals(400, p.baseDropIntervalMillis());
+    }
+
+    @Test
+    void singlePlayerUpdatesTheTimerAndAppliesBossAcceleration() throws ReflectiveOperationException {
+        Board board = singlePlayerBoard(p);
+        board.timer.stop();
+        assertEquals(2_000, board.timer.getDelay());
+
+        p.update(29_999);
+        assertEquals(2_000, board.timer.getDelay());
+        p.update(1);
+        assertEquals(1_900, board.timer.getDelay());
+
+        p.stage = 4;
+        p.startStage();
+        board.timer.stop();
+        assertEquals(1_450, board.timer.getDelay());
+        p.gameTime = 59_999;
+        p.restoreBossPatternTimer(29_999);
+        p.update(1);
+        assertEquals(1_350 / 5, board.timer.getDelay());
+        p.update(5_000);
+        assertEquals(1_350, board.timer.getDelay());
+    }
+
+    @Test
+    void localCoopGravityUsesElapsedTimeForBothPlayers() {
+        p.newGame(true);
+        int initialP1Y = p.p1Y;
+        int initialP2Y = p.p2Y;
+
+        for (int frame = 0; frame < 62; frame++) {
+            p.update(32);
+        }
+        assertEquals(initialP1Y, p.p1Y);
+        assertEquals(initialP2Y, p.p2Y);
+
+        p.update(24);
+        assertEquals(initialP1Y + 1, p.p1Y);
+        assertEquals(initialP2Y + 1, p.p2Y);
+
+        p.update(1_992);
+        assertEquals(initialP1Y + 2, p.p1Y);
+        assertEquals(initialP2Y + 2, p.p2Y);
+
+        p.gameTime = 30_000;
+        p.update(1_899);
+        assertEquals(initialP1Y + 2, p.p1Y);
+        assertEquals(initialP2Y + 2, p.p2Y);
+        p.update(1);
+        assertEquals(initialP1Y + 3, p.p1Y);
+        assertEquals(initialP2Y + 3, p.p2Y);
     }
 
     @Test
@@ -123,10 +176,11 @@ class GamePanelTest {
     }
 
     @Test
-    void stageThreeSaveKeepsSelectedBlueprint() {
+    void stageThreeSaveKeepsSelectedBlueprintAndPlayTime() throws ReflectiveOperationException {
         p.setLoginUser("tester");
         p.stage = 3;
         p.startStage();
+        p.gameTime = 60_000;
         int selectedBlueprint = p.bossPattern.blueprintIndex();
 
         assertTrue(repos.saves().saveGame(p));
@@ -134,7 +188,16 @@ class GamePanelTest {
         loaded.timer.stop();
         assertTrue(repos.saves().loadGame(p.saveFile, loaded));
         assertEquals(selectedBlueprint, loaded.bossPattern.blueprintIndex());
+        Board loadedBoard = singlePlayerBoard(loaded);
+        loadedBoard.timer.stop();
+        assertEquals(1_500, loadedBoard.timer.getInitialDelay());
         repos.saves().deleteSave(p.saveFile);
+    }
+
+    private static Board singlePlayerBoard(GamePanel panel) throws ReflectiveOperationException {
+        var boardField = panel.aEngineBridge.getClass().getDeclaredField("board");
+        boardField.setAccessible(true);
+        return (Board) boardField.get(panel.aEngineBridge);
     }
 
     @Test
@@ -156,6 +219,73 @@ class GamePanelTest {
     }
 
     @Test
+    void risingPatternLeavesBothBoardsUnchangedWhenFirstPlayerTopRowIsOccupied() {
+        p.newGame(true);
+        p.board1[0][4] = 3;
+        int[][] expectedBoard1 = new int[24][10];
+        expectedBoard1[0][4] = 3;
+        int p1Y = p.p1Y;
+        int p2Y = p.p2Y;
+
+        p.raiseBlocks(2);
+
+        assertEquals(GamePanel.SCREEN_RESULT, p.getScreen());
+        assertArrayEquals(expectedBoard1, p.board1);
+        assertArrayEquals(new int[24][10], p.board2);
+        assertEquals(p1Y, p.p1Y);
+        assertEquals(p2Y, p.p2Y);
+    }
+
+    @Test
+    void risingPatternKeepsFirstPlayerShiftWhenSecondPlayerPieceWouldCrossTop() {
+        p.newGame(true);
+        p.p1Y = 3;
+        p.p2Type = 1;
+        p.p2Rot = 0;
+        p.p2Y = 0;
+        p.board1[1][0] = 3;
+        p.board2[1][0] = 4;
+        int[][] expectedBoard1 = new int[24][10];
+        expectedBoard1[0][0] = 3;
+        Arrays.fill(expectedBoard1[23], 8);
+        expectedBoard1[23][2] = 0;
+        int[][] expectedBoard2 = new int[24][10];
+        expectedBoard2[1][0] = 4;
+
+        p.raiseBlocks(2);
+
+        assertEquals(GamePanel.SCREEN_RESULT, p.getScreen());
+        assertArrayEquals(expectedBoard1, p.board1);
+        assertArrayEquals(expectedBoard2, p.board2);
+        assertEquals(2, p.p1Y);
+        assertEquals(0, p.p2Y);
+    }
+
+    @Test
+    void addGarbageSkipsRandomHoleWhenBlockedAndShiftsRowsOnSuccess() {
+        p.random.setSeed(7L);
+        Random expectedRandom = new Random(7L);
+        int[][] board = new int[24][10];
+        board[0][4] = 3;
+        board[23][5] = 6;
+        int[][] expected = new int[24][10];
+        expected[0][4] = 3;
+        expected[23][5] = 6;
+
+        assertFalse(p.addGarbage(board));
+        assertArrayEquals(expected, board);
+
+        board[0][4] = 0;
+        assertTrue(p.addGarbage(board));
+        expected[0][4] = 0;
+        expected[22][5] = 6;
+        Arrays.fill(expected[23], 8);
+        expected[23][expectedRandom.nextInt(10)] = 0;
+        assertArrayEquals(expected, board);
+        assertEquals(expectedRandom.nextLong(), p.random.nextLong());
+    }
+
+    @Test
     void onlineHostTicksRisingPatternAndRaisesBothAuthoritativeBoards() {
         p.newGame(true);
         p.isOnlineCoop = true;
@@ -169,8 +299,8 @@ class GamePanelTest {
         p.coopEngineBridge.getEngine().engine(0).pause();
         p.coopEngineBridge.getEngine().engine(1).pause();
 
-        p.update();
-        assertEquals(16, p.bossTimer);
+        p.update(31);
+        assertEquals(31, p.bossTimer);
 
         GameSession player0 = p.coopEngineBridge.session(0);
         GameSession player1 = p.coopEngineBridge.session(1);
@@ -182,6 +312,57 @@ class GamePanelTest {
         assertEquals(9, occupiedCells(player1, 0));
         assertEquals(player0Y + 1, player0.curY);
         assertEquals(player1Y + 1, player1.curY);
+    }
+
+    @Test
+    void onlinePlayersUseRealTicksAndTheSharedPlayTimeForGravity() {
+        p.beginOnlineCoop(0, "gravity-test", 7L);
+        GamePanel guest = new GamePanel(repos);
+        guest.timer.stop();
+        guest.beginOnlineCoop(1, "gravity-test", 7L);
+        GameSession hostBoard = p.coopEngineBridge.session(0);
+        GameSession guestBoard = guest.coopEngineBridge.session(1);
+        int hostY = hostBoard.curY;
+        int guestY = guestBoard.curY;
+
+        p.update(1_999);
+        guest.update(1_999);
+        assertEquals(hostY, hostBoard.curY);
+        assertEquals(guestY, guestBoard.curY);
+        p.update(1);
+        guest.update(1);
+        assertEquals(hostY - 1, hostBoard.curY);
+        assertEquals(guestY - 1, guestBoard.curY);
+
+        p.gameTime = 29_999;
+        p.update(1);
+        CoopGameMemento snapshot = p.coopEngineBridge.createMemento("gravity-test");
+        guest.coopEngineBridge.syncGuestFromMemento(snapshot);
+        assertEquals(30_000, guest.gameTime);
+        int syncedGuestY = guestBoard.curY;
+        guest.update(1_899);
+        assertEquals(syncedGuestY, guestBoard.curY);
+        guest.update(1);
+        p.update(1_899);
+        assertEquals(syncedGuestY - 1, guestBoard.curY);
+        assertEquals(hostY - 2, hostBoard.curY);
+    }
+
+    @Test
+    void randomKeyPatternUsesElapsedTimeForActivationAndExpiry() {
+        p.newGame(true);
+        p.stage = 5;
+        p.startStage();
+        p.restoreBossPatternTimer(19_970);
+
+        p.update(31);
+        assertNotNull(p.temporaryPrimaryKeyMapping);
+        assertEquals(10_031, p.randomKeyEnd);
+
+        p.update(9_999);
+        assertNotNull(p.temporaryPrimaryKeyMapping);
+        p.update(1);
+        assertNull(p.temporaryPrimaryKeyMapping);
     }
 
     @Test

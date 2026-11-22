@@ -5,9 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
 import org.junit.jupiter.api.Test;
 
 class BossPatternControllerTest {
@@ -71,17 +74,66 @@ class BossPatternControllerTest {
         target.garbageHole = 6;
         BossPatternController controller = new BossPatternController(new Random(1));
         controller.startStage(2, target);
+        target.events.clear();
 
         controller.tick(16_999, target);
         assertFalse(target.warning);
         controller.tick(1, target);
         assertTrue(target.warning);
+        assertTrue(target.events.isEmpty());
         controller.tick(3_000, target);
 
+        assertEquals(List.of("clear warning", "STAGE_2_PATTERN", "raise blocks"), target.events);
+        assertFalse(SfxType.STAGE_2_PATTERN.usesManagedPlayback());
         assertEquals(1, target.raised);
         assertEquals(6, target.raisedHole);
         assertFalse(target.warning);
         assertEquals(0, controller.elapsedMillis());
+    }
+
+    @Test
+    void risingBlockPatternCanAttackWithOnlyItsOwnTarget() {
+        List<String> events = new ArrayList<>();
+        RisingBlockTarget target = new RisingBlockTarget() {
+            @Override
+            public int selectGarbageHole() {
+                return 4;
+            }
+
+            @Override
+            public void raiseBlocks(int hole) {
+                events.add("raise at " + hole);
+            }
+
+            @Override
+            public void showBossMessage(String message) {
+                events.add("show message");
+            }
+        };
+
+        new RisingBlockPattern(target).attack();
+
+        assertEquals(List.of("raise at 4", "show message"), events);
+    }
+
+    @Test
+    void stageChangeClearsWarningAndUsesNewPattern() {
+        FakeTarget target = new FakeTarget();
+        BossPatternController controller = new BossPatternController(new Random(1));
+        controller.startStage(2, target);
+        controller.tick(17_000, target);
+        assertTrue(target.warning);
+
+        controller.startStage(4, target);
+
+        assertFalse(target.warning);
+        assertEquals(0, controller.elapsedMillis());
+        assertEquals(2, target.effectResets);
+        target.events.clear();
+        controller.tick(30_000, target);
+        assertEquals(List.of("clear warning", "STAGE_4_PATTERN"), target.events);
+        assertEquals(5_000, target.accelerationDuration);
+        assertEquals(0, target.raised);
     }
 
     @Test
@@ -99,9 +151,12 @@ class BossPatternControllerTest {
         FakeTarget target = new FakeTarget();
         BossPatternController controller = new BossPatternController(new Random(1));
         controller.startStage(4, target);
+        target.events.clear();
         controller.tick(30_000, target);
+        assertEquals(List.of("clear warning", "STAGE_4_PATTERN"), target.events);
+        assertTrue(SfxType.STAGE_4_PATTERN.usesManagedPlayback());
         assertEquals(5_000, target.accelerationDuration);
-        assertEquals(3, target.gravityMultiplier);
+        assertEquals(5, target.gravityMultiplier);
         assertEquals(10, target.nextPieceMultiplier);
     }
 
@@ -110,6 +165,9 @@ class BossPatternControllerTest {
         FakeTarget target = new FakeTarget();
         BossPatternController controller = new BossPatternController(new Random(1));
         controller.startStage(3, target);
+        target.events.clear();
+        controller.tick(60_000, target);
+        assertTrue(target.events.isEmpty());
         Blueprint blueprint = controller.blueprint();
 
         for (int row = 0; row < Blueprint.ROWS; row++) {
@@ -119,14 +177,14 @@ class BossPatternControllerTest {
         }
         int[] forbiddenCell = findForbiddenCell(blueprint);
         target.occupied[forbiddenCell[0]][forbiddenCell[1]] = true;
-        controller.onBoardChanged(target);
+        controller.onBoardChanged();
         assertFalse(target.blueprintCompleted);
-        assertEquals(1, controller.violationCount(target));
+        assertEquals(1, controller.violationCount());
 
         target.occupied[forbiddenCell[0]][forbiddenCell[1]] = false;
-        controller.onBoardChanged(target);
+        controller.onBoardChanged();
         assertTrue(target.blueprintCompleted);
-        assertEquals(1.0, controller.progress(target));
+        assertEquals(1.0, controller.progress());
     }
 
     private int[] findForbiddenCell(Blueprint blueprint) {
@@ -146,7 +204,10 @@ class BossPatternControllerTest {
         target.twoPlayer = true;
         BossPatternController controller = new BossPatternController(new Random(2));
         controller.startStage(5, target);
+        target.events.clear();
         controller.tick(20_000, target);
+        assertEquals(List.of("clear warning", "STAGE_5_PATTERN"), target.events);
+        assertFalse(SfxType.STAGE_5_PATTERN.usesManagedPlayback());
         assertEquals(10_000, target.keyDuration);
         int[] identity = {0, 1, 2, 3, 4, 5, 6};
         assertFalse(java.util.Arrays.equals(identity, target.primaryMapping));
@@ -154,6 +215,7 @@ class BossPatternControllerTest {
     }
 
     private static final class FakeTarget implements BossPatternTarget {
+        final List<String> events = new ArrayList<>();
         boolean warning;
         int raised;
         int garbageHole;
@@ -165,6 +227,7 @@ class BossPatternControllerTest {
         int[] primaryMapping;
         int[] secondaryMapping;
         int keyDuration;
+        int effectResets;
         boolean[][] occupied = new boolean[Blueprint.ROWS][Blueprint.COLUMNS];
         boolean blueprintCompleted;
 
@@ -176,6 +239,12 @@ class BossPatternControllerTest {
         @Override
         public void clearBossWarning() {
             warning = false;
+            events.add("clear warning");
+        }
+
+        @Override
+        public void onBossPatternActivated(SfxType sound) {
+            events.add(sound.name());
         }
 
         @Override
@@ -189,6 +258,7 @@ class BossPatternControllerTest {
 
         @Override
         public void raiseBlocks(int hole) {
+            events.add("raise blocks");
             raised++;
             raisedHole = hole;
         }
@@ -229,6 +299,7 @@ class BossPatternControllerTest {
 
         @Override
         public void resetTemporaryBossEffects() {
+            effectResets++;
         }
 
         @Override
