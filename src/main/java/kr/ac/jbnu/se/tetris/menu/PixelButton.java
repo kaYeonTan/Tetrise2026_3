@@ -25,18 +25,18 @@ public record PixelButton(String label, Rectangle bounds) {
         Color fill;
         Color textColor;
         switch (type) {
-            case 1:
+            case 1 -> {
                 fill = hover ? new Color(0xc24536) : new Color(0xa8352a);
                 textColor = new Color(0xfff4e6);
-                break;
-            case 2:
+            }
+            case 2 -> {
                 fill = hover ? new Color(0x4a3f52) : new Color(0x3a3040);
                 textColor = new Color(0xf0e2c8);
-                break;
-            default:
+            }
+            default -> {
                 fill = hover ? new Color(0xefe0bf) : new Color(0xd9c29a);
                 textColor = new Color(0x1a1216);
-                break;
+            }
         }
         g.setColor(fill);
         g.fillRect(x + 4, y + 4, w - 8, h - 8);

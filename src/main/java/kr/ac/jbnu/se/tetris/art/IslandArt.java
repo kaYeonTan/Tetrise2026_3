@@ -13,7 +13,7 @@ public final class IslandArt implements StageArt {
     }
     public BufferedImage monster(int stage) {
         Pix canvas = new Pix(100, 112);
-        islandMonster(canvas, new Random(stage * 101L + 1));
+        islandMonster(canvas);
         canvas.outline(0x0b2230);
         return canvas.toImage(3);
     }
@@ -66,7 +66,7 @@ public final class IslandArt implements StageArt {
         }
     }
 
-    static void islandMonster(Pix c, Random rnd) {
+    static void islandMonster(Pix c) {
         int skin = 0x4fb3c4;
         int dark = 0x2f8a9e;
         int light = 0x8fe0e8;

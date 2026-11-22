@@ -2,7 +2,6 @@ package kr.ac.jbnu.se.tetris.integration;
 
 import kr.ac.jbnu.se.tetris.GamePanel;
 import kr.ac.jbnu.se.tetris.ScreenId;
-import kr.ac.jbnu.se.tetris.Tetrominoes;
 import kr.ac.jbnu.se.tetris.core.CoopGameEngine;
 import kr.ac.jbnu.se.tetris.core.GameSession;
 import kr.ac.jbnu.se.tetris.core.PlayerAction;
@@ -138,9 +137,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		}
 		boolean player0Raised = engine.engine(0).raiseGarbageLine(player0Hole);
 		boolean player1Raised = engine.engine(1).raiseGarbageLine(player1Hole);
-		panel.garbageSeq++;
-		panel.garbageHole0 = player0Hole;
-		panel.garbageHole1 = player1Hole;
+		panel.applyOnlineGarbageRaise(player0Hole, player1Hole);
 		return player0Raised && player1Raised;
 	}
 
@@ -247,13 +244,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 	}
 
 	public void syncHudFromEngine() {
-		if (engine == null) {
-			return;
-		}
-		panel.p1Score = engine.session(0).score;
-		panel.p1Lines = engine.session(0).linesRemoved;
-		panel.p2Score = engine.session(1).score;
-		panel.p2Lines = engine.session(1).linesRemoved;
+		MementoMapper.applyHudFromEngine(panel, engine);
 	}
 
 	/** 네트워크 스냅샷 전 panel 보드 동기화. */
@@ -261,8 +252,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		if (!isDrivingHost()) {
 			return;
 		}
-		sessionCellsToPanelBoard(engine.session(0), panel.board1);
-		sessionCellsToPanelBoard(engine.session(1), panel.board2);
+		MementoMapper.applyHostBoardsFromEngine(panel, engine);
 	}
 
 	public static void applyLoadedMemento(GamePanel panel, CoopGameMemento m) {
@@ -379,23 +369,4 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		return 0;
 	}
 
-	public static void sessionCellsToPanelBoard(GameSession s, int[][] board24) {
-		for (int r = 0; r < 24; r++) {
-			for (int c = 0; c < 10; c++) {
-				board24[r][c] = 0;
-			}
-		}
-		for (int ey = 0; ey < GameSession.HEIGHT; ey++) {
-			int pr = 23 - ey;
-			if (pr < 0 || pr >= 24) {
-				continue;
-			}
-			for (int x = 0; x < GameSession.WIDTH; x++) {
-				Tetrominoes shape = s.shapeAt(x, ey);
-				if (shape != Tetrominoes.NoShape) {
-					board24[pr][x] = GamePanel.engineBlockValue(shape);
-				}
-			}
-		}
-	}
 }

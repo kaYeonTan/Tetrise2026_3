@@ -5,6 +5,7 @@ package kr.ac.jbnu.se.tetris;
 import java.awt.BorderLayout;
 
 import java.awt.Color;
+import java.awt.Component;
 
 import java.awt.Dimension;
 
@@ -51,9 +52,10 @@ import javax.swing.Timer;
 
 
 
-import com.google.gson.Gson;
-
 import kr.ac.jbnu.se.tetris.network.coop.CoopNetworkBridge;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyCoopResumeFlow;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyMyRoomUiState;
+import kr.ac.jbnu.se.tetris.network.lobby.LobbyRoomFlow;
 import kr.ac.jbnu.se.tetris.ui.CoopSlotPickerDialog;
 import kr.ac.jbnu.se.tetris.network.lobby.LobbyClient;
 
@@ -88,11 +90,11 @@ public class LobbyFrame extends JDialog {
 
 	private final GamePanel panel;
 
-	private LobbyClient client;
+	private transient LobbyClient client;
 
 	private final DefaultListModel<String> roomModel = new DefaultListModel<>();
 
-	private List<RoomSnapshot> lastRooms = List.of();
+	private transient List<RoomSnapshot> lastRooms = List.of();
 
 	private Timer refreshTimer;
 
@@ -169,7 +171,7 @@ public class LobbyFrame extends JDialog {
 
 	private Font uiFont() {
 
-		return panel.font.deriveFont(15f);
+		return panel.baseFont.deriveFont(15f);
 
 	}
 
@@ -358,7 +360,7 @@ public class LobbyFrame extends JDialog {
 
 		JLabel roomNameLabel = new JLabel("새 방 이름");
 		roomNameLabel.setFont(uiFont());
-		roomNameLabel.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		roomNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actions.add(roomNameLabel);
 		actions.add(Box.createVerticalStrut(4));
 
@@ -367,14 +369,14 @@ public class LobbyFrame extends JDialog {
 		Dimension nameSize = new Dimension(260, 32);
 		roomNameField.setPreferredSize(nameSize);
 		roomNameField.setMaximumSize(nameSize);
-		roomNameField.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		roomNameField.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actions.add(roomNameField);
 		actions.add(Box.createVerticalStrut(8));
 
 		roomVisibilitySelector = new JComboBox<>(new String[]{"공개 방", "비밀 방"});
 		roomVisibilitySelector.setFont(uiFont());
 		roomVisibilitySelector.setMaximumSize(new Dimension(260, 32));
-		roomVisibilitySelector.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		roomVisibilitySelector.setAlignmentX(Component.LEFT_ALIGNMENT);
 		actions.add(roomVisibilitySelector);
 		actions.add(Box.createVerticalStrut(6));
 
@@ -426,150 +428,32 @@ public class LobbyFrame extends JDialog {
 
 
 	private void clearMyRoomPanel() {
-
-		myRoomPanel.setText("아직 방에 없어요.\n새 방을 만들면\n여기에 대기실 정보가 표시돼요.");
-
-		waitingLabel.setText("로비");
-
-		rememberedJoinCode = null;
-
-		rememberedRoomId = null;
-
-		if (startGameBtn != null) {
-			startGameBtn.setEnabled(false);
-			startGameBtn.setText("게임 시작 (방장)");
-		}
-
+		applyMyRoomUi(LobbyMyRoomUiState.empty());
 	}
 
 
 
 	private void applyMyRoomFromServer(LobbyMessage resp) {
-
 		if (resp == null || resp.players == null) {
-
 			clearMyRoomPanel();
-
 			return;
-
 		}
-
 		String myNick = client != null ? client.getNick() : displayNick();
+		boolean connected = client != null && client.isConnected();
+		LobbyMyRoomUiState state = LobbyMyRoomUiState.fromServerResponse(resp, myNick, rememberedJoinCode,
+				rememberedRoomId, connected);
+		applyMyRoomUi(state);
+	}
 
-		String hostNick = resp.players.isEmpty() ? myNick : resp.players.get(0);
-
-		boolean host = "HOST".equals(resp.role);
-
-		if (resp.joinCode != null && !resp.joinCode.isEmpty()) {
-
-			rememberedJoinCode = resp.joinCode;
-
-			rememberedRoomId = resp.roomId;
-
-		}
-
-		boolean isPrivate = RoomVisibility.PRIVATE.name().equals(resp.visibility)
-
-				|| (host && rememberedJoinCode != null && resp.roomId != null
-
-						&& resp.roomId.equals(rememberedRoomId));
-
-		String joinCode = resp.joinCode;
-
-		if (host && (joinCode == null || joinCode.isEmpty()) && resp.roomId != null
-
-				&& resp.roomId.equals(rememberedRoomId)) {
-
-			joinCode = rememberedJoinCode;
-
-		}
-
-		StringBuilder sb = new StringBuilder();
-
-		sb.append("방: ").append(resp.roomName).append('\n');
-
-		if (isPrivate) {
-
-			sb.append("종류: 비밀방\n");
-
-		} else {
-
-			sb.append("종류: 공개방\n");
-
-		}
-
-		sb.append("───\n");
-
-		if (host) {
-
-			sb.append(myNick);
-
-			if ("Guest".equalsIgnoreCase(myNick)) {
-
-				sb.append(" (게스트)");
-
-			}
-
-			sb.append(" (방장)\n");
-
-		} else {
-
-			sb.append(hostNick).append(" (방장)\n");
-
-			sb.append(myNick);
-
-			if ("Guest".equalsIgnoreCase(myNick)) {
-
-				sb.append(" (게스트)");
-
-			}
-
-			sb.append(" (참가)\n");
-
-		}
-
-		if (host && isPrivate) {
-
-			sb.append("───\n");
-
-			if (joinCode != null && !joinCode.isEmpty()) {
-
-				sb.append("입장 코드 (비밀번호):\n").append(joinCode).append('\n');
-
-				sb.append("(친구에게 알려 주세요)\n");
-
-			} else {
-
-				sb.append("입장 코드를 불러오지 못했어요.\n방 나가기 후 다시 만들어 주세요.\n");
-
-			}
-
-		}
-
-		sb.append("───\n");
-
-		sb.append(resp.players.size()).append(" / 2명");
-
-		if (resp.players.size() < 2) {
-
-			sb.append(" · 상대 대기 중");
-
-		} else {
-
-			sb.append(" · 준비 완료");
-
-		}
-
-		myRoomPanel.setText(sb.toString());
-
-		waitingLabel.setText("대기 중 · " + resp.roomName + " · " + resp.players.size() + "/2");
-		boolean isHostRole = "HOST".equals(resp.role);
-		boolean full = resp.players.size() >= 2;
+	private void applyMyRoomUi(LobbyMyRoomUiState state) {
+		rememberedJoinCode = state.rememberedJoinCode();
+		rememberedRoomId = state.rememberedRoomId();
+		myRoomPanel.setText(state.myRoomText());
+		waitingLabel.setText(state.waitingLabelText());
 		if (startGameBtn != null) {
-			startGameBtn.setEnabled(isHostRole && full && client != null && client.isConnected());
-			startGameBtn.setText(isHostRole ? "게임 시작 (방장)" : "방장이 시작할 때까지 대기");
+			startGameBtn.setEnabled(state.startEnabled());
+			startGameBtn.setText(state.startButtonText());
 		}
-
 	}
 
 
@@ -584,7 +468,7 @@ public class LobbyFrame extends JDialog {
 
 		try {
 
-			LobbyMessage mine = client.fetchMyRoom();
+			LobbyMessage mine = LobbyRoomFlow.fetchMyRoom(client);
 
 			if (mine == null) {
 
@@ -671,7 +555,7 @@ public class LobbyFrame extends JDialog {
 
 		b.setMaximumSize(size);
 
-		b.setAlignmentX(JPanel.LEFT_ALIGNMENT);
+		b.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 		b.addActionListener(e -> action.run());
 
@@ -775,9 +659,19 @@ public class LobbyFrame extends JDialog {
 
 		connectBtn.setEnabled(false);
 
-		try {
+		class PendingClient implements AutoCloseable {
+			private final LobbyClient value = new LobbyClient();
+			private boolean transferred;
 
-			client = new LobbyClient();
+			@Override
+			public void close() {
+				if (!transferred) value.close();
+			}
+		}
+
+		try (PendingClient pending = new PendingClient()) {
+
+			client = pending.value;
 
 			client.connect(host, port, panel.getLoginUser().trim());
 			CoopNetworkBridge bridge = new CoopNetworkBridge(panel);
@@ -792,6 +686,7 @@ public class LobbyFrame extends JDialog {
 			startAutoRefresh();
 
 			refreshRooms();
+			pending.transferred = true;
 
 		} catch (Exception ex) {
 
@@ -849,20 +744,12 @@ public class LobbyFrame extends JDialog {
 
 		try {
 
-			lastRooms = client.listRooms();
+			lastRooms = LobbyRoomFlow.listRooms(client);
 
 			roomModel.clear();
 
 			for (RoomSnapshot r : lastRooms) {
-
-				String lock = r.visibility == RoomVisibility.PRIVATE ? "[비밀]" : "[공개]";
-
-				String state = r.joinable ? "입장 가능" : "만원";
-
-				roomModel.addElement(String.format("%s %s · %s · %d/%d · %s",
-
-						lock, r.name, r.hostNick, r.playerCount, r.maxPlayers, state));
-
+				roomModel.addElement(LobbyRoomFlow.formatRoomListLine(r));
 			}
 
 			if (lastRooms.isEmpty()) {
@@ -922,7 +809,7 @@ public class LobbyFrame extends JDialog {
 
 		try {
 
-			LobbyMessage resp = client.createRoom(name, visibility);
+			LobbyMessage resp = LobbyRoomFlow.createRoom(client, name, visibility);
 
 			if (LobbyMessageType.ERROR.name().equals(resp.type)) {
 
@@ -997,7 +884,7 @@ public class LobbyFrame extends JDialog {
 
 		try {
 
-			LobbyMessage resp = client.joinRoom(room.roomId, code);
+			LobbyMessage resp = LobbyRoomFlow.joinRoom(client, room.roomId, code);
 
 			if (LobbyMessageType.ERROR.name().equals(resp.type)) {
 
@@ -1033,37 +920,13 @@ public class LobbyFrame extends JDialog {
 			return;
 		}
 		try {
-			if (panel.pendingCoopResume != null) {
-				LobbyMessage room = client.fetchMyRoom();
-				if (room == null || room.players == null || room.players.size() < 2) {
-					JOptionPane.showMessageDialog(this, "2명이 모여야 저장 이어하기를 할 수 있어요.");
-					return;
-				}
-				var mem = panel.pendingCoopResume;
-				if (mem.hostAccountId == null || mem.guestAccountId == null) {
-					JOptionPane.showMessageDialog(this, "예전 형식 저장이라 온라인 이어하기를 할 수 없어요.");
-					return;
-				}
-				String hostNick = room.players.get(0);
-				String guestNick = room.players.get(1);
-				try {
-					kr.ac.jbnu.se.tetris.persistence.SaveService.assertOnlineRoomMatchesSave(mem, hostNick, guestNick);
-				} catch (kr.ac.jbnu.se.tetris.persistence.LoadException ex) {
-					JOptionPane.showMessageDialog(this, ex.getMessage());
-					return;
-				}
-				panel.pendingCoopResume = kr.ac.jbnu.se.tetris.persistence.SaveService.remapForCurrentOnlineHost(mem,
-						hostNick, guestNick);
+			Object prepared = LobbyCoopResumeFlow.prepareStart(client, panel);
+			if (prepared instanceof LobbyCoopResumeFlow.ValidationError err) {
+				JOptionPane.showMessageDialog(this, err.userMessage());
+				return;
 			}
-			LobbyMessage resp;
-			if (panel.pendingCoopResume != null) {
-				Gson gson = new Gson();
-				String json = gson.toJson(panel.pendingCoopResume);
-				resp = client.resumeCoop(panel.pendingCoopResume.coopId, panel.pendingCoopResume.seed, json);
-				panel.pendingCoopResume = null;
-			} else {
-				resp = client.startGame();
-			}
+			LobbyMessage resp = LobbyCoopResumeFlow.executeStart(client,
+					(LobbyCoopResumeFlow.StartRequest) prepared);
 			if (LobbyMessageType.ERROR.name().equals(resp.type)) {
 				JOptionPane.showMessageDialog(this, resp.message);
 				return;
@@ -1104,7 +967,7 @@ public class LobbyFrame extends JDialog {
 
 		try {
 
-			client.leaveRoom();
+			LobbyRoomFlow.leaveRoom(client);
 
 			clearMyRoomPanel();
 

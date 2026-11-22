@@ -4,5 +4,7 @@ import java.awt.image.BufferedImage;
 public interface StageArt {
     BufferedImage background(int stage);
     BufferedImage monster(int stage);
-    void effect(Graphics2D g, int width, int height, long time);
+    default void effect(Graphics2D g, int width, int height, long time) {
+        // 기본: 별도 화면 효과 없음
+    }
 }

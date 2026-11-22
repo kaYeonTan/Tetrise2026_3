@@ -13,7 +13,11 @@ import javax.imageio.ImageIO;
 
 public class Art {
 
+    // 도트 그림 데이터(o: 겉불꽃, m: 중간 불꽃, c: 속불꽃, .: 투명)라 맞춤법 검사 제외
+    @SuppressWarnings("SpellCheckingInspection")
     public static final String FLAME_CORE_ROW = "ommcmmo";
+    // 도트 그림 데이터(o: 겉불꽃, m: 중간 불꽃, c: 속불꽃, .: 투명)라 맞춤법 검사 제외
+    @SuppressWarnings("SpellCheckingInspection")
     public static final String FLAME_BODY_ROW = ".ommmo.";
     public enum MonsterPose {
         IDLE, HIT, DEATH
@@ -184,6 +188,8 @@ public class Art {
         return flameFrames[frame % FLAME_FRAME_COUNT];
     }
 
+    // 도트 그림 데이터(o: 겉불꽃, m: 중간 불꽃, c: 속불꽃, .: 투명)라 맞춤법 검사 제외
+    @SuppressWarnings("SpellCheckingInspection")
     private static BufferedImage[] buildFlameFrames() {
         String[][] shapes = {
             {"...o...", "...o...", "..oo...", "..ooo..", ".oomo..", FLAME_BODY_ROW,
@@ -491,13 +497,6 @@ public class Art {
             }
         }
 
-            public void tint(int x, int y, double factor) {
-            int c = get(x, y);
-            if (c != CLEAR) {
-                set(x, y, scale(c, factor));
-            }
-        }
-
         public static int scale(int rgb, double f) {
             int r = clamp((int) (((rgb >> 16) & 0xff) * f));
             int g = clamp((int) (((rgb >> 8) & 0xff) * f));
@@ -532,17 +531,6 @@ public class Art {
 
         private boolean opaque(int[] a, int x, int y) {
             return inside(x, y) && a[y * w + x] != CLEAR;
-        }
-
-            public void draw(Pix src, int dx, int dy) {
-            for (int y = 0; y < src.h; y++) {
-                for (int x = 0; x < src.w; x++) {
-                    int c = src.px[y * src.w + x];
-                    if (c != CLEAR) {
-                        set(dx + x, dy + y, c);
-                    }
-                }
-            }
         }
 
         public BufferedImage toImage(int scale) {
