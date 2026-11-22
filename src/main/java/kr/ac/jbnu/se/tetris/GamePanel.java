@@ -496,7 +496,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     private void updateGravity(long deltaMillis) {
-        int speed = baseDropIntervalMillis(stage);
+        int speed = baseDropIntervalMillis();
         int p1Speed = Math.max(1, speed / (p1FastCurrent ? 10 : gravityMultiplier));
         if (!useAEngine() && runsLocalGravity(0)) {
             p1DropCount += deltaMillis;
@@ -509,6 +509,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 }
             }
         } else if (useAEngine()) {
+            aEngineBridge.setBaseGravityDelay(speed);
             aEngineBridge.syncHud();
         }
         if (screen != SCREEN_GAME) {
@@ -534,9 +535,9 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
 
     private void updateBossAndNetwork(long deltaMillis) {
         if (useCoopEngineHost()) {
-            coopEngineBridge.tickHost();
+            coopEngineBridge.tickHost(deltaMillis);
         } else if (isOnlineCoop && useCoopEngineRender()) {
-            coopEngineBridge.tickGuestLocal(localPlayerIndex);
+            coopEngineBridge.tickGuestLocal(localPlayerIndex, deltaMillis);
         }
         if (!isOnlineCoop || localPlayerIndex == 0) {
             bossPattern.tick(deltaMillis, this);
@@ -556,8 +557,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         return !isTwoPlayer && aEngineBridge != null && aEngineBridge.isAttached();
     }
 
-    static int baseDropIntervalMillis(int stage) {
-        return Math.max(1, 1000 - (stage - 1) * 150);
+    public int baseDropIntervalMillis() {
+        long stageInterval = 2_000 - (Math.max(1, stage) - 1) * 150L;
+        long elapsedSteps = Math.max(0, gameTime) / 30_000;
+        return (int) Math.max(400, stageInterval - elapsedSteps * 100);
     }
 
     int[] currentPrimaryKeys() {
@@ -1280,7 +1283,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             // 저장 호환용 GamePanel 상태도 A 엔진과 함께 초기화한다.
             spawnP1();
             ensureAEngineBridge();
-            aEngineBridge.startStage(stage, baseDropIntervalMillis(stage));
+            aEngineBridge.startStage(stage, baseDropIntervalMillis());
         } else if (useCoopEngineHost()) {
             coopEngineBridge.restartStageEngine(stage);
         } else {

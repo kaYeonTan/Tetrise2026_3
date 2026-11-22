@@ -19,10 +19,8 @@ public final class CoopEngineBridge implements GameEngineBridge {
 	private CoopGameEngine engine;
 	private boolean drivingHost;
 	
-	// 낙하 속도 조절용 타이머 (학부생 스타일: 간단한 카운터)
-	private int dropTimer0 = 0;  // P1 낙하 타이머
-	private int dropTimer1 = 0;  // P2 낙하 타이머
-	private int guestDropTimer = 0;
+	private long hostDropTimer;
+	private long guestDropTimer;
 	private int guestSyncedStage = -1;
 	private int guestAppliedGarbageSeq;
 
@@ -43,6 +41,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		wireHostEvents();
 		engine.startCoop(stage, seed);
 		drivingHost = true;
+		hostDropTimer = 0;
 		guestSyncedStage = stage;
 		syncHudFromEngine();
 	}
@@ -63,7 +62,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		engine = null;
 	}
 
-	public void tickHost() {
+	public void tickHost(long deltaMillis) {
 		if (!isDrivingHost()) {
 			return;
 		}
@@ -71,27 +70,28 @@ public final class CoopEngineBridge implements GameEngineBridge {
 			syncHudFromEngine();
 			return;
 		}
-		// 학부생 스타일: 간단한 시간 기반 낙하
-		// 스테이지에 따라 낙하 속도가 달라짐 (1000ms → 400ms)
-		int dropSpeed = getDropSpeed();
-		
-		// 16ms마다 호출되니까 타이머 증가
-		dropTimer0 += 16;
-		
 		// P1만 낙하. P2는 참가자가 보낸 보드를 그대로 그린다.
-		if (dropTimer0 >= dropSpeed) {
-			dropTimer0 = 0;
-			engine.engine(0).tick();
-		}
-		
+		hostDropTimer = tickGravity(0, hostDropTimer + deltaMillis);
 		syncHudFromEngine();
 	}
-	
+
 	private int getDropSpeed() {
-		int stage = panel.stage;
-		int base = Math.max(400, 1000 - (stage - 1) * 150);
-		int grav = panel.gravityMultiplier <= 0 ? 1 : panel.gravityMultiplier;
-		return Math.max(1, base / grav);
+		int multiplier = Math.max(1, panel.gravityMultiplier);
+		return Math.max(1, panel.baseDropIntervalMillis() / multiplier);
+	}
+
+	private long tickGravity(int playerIndex, long elapsedMillis) {
+		var playerEngine = engine.engine(playerIndex);
+		if (playerEngine.isLineClearAnim()) {
+			playerEngine.tick();
+			return 0;
+		}
+		int intervalMillis = getDropSpeed();
+		if (elapsedMillis >= intervalMillis) {
+			playerEngine.tick();
+			return elapsedMillis % intervalMillis;
+		}
+		return elapsedMillis;
 	}
 
 	public void applyAction(int playerIndex, PlayerAction action) {
@@ -115,19 +115,14 @@ public final class CoopEngineBridge implements GameEngineBridge {
 	}
 
 	/** 참가자: 내 플레이어 보드만 중력·줄삭제 등 엔진 틱. */
-	public void tickGuestLocal(int localPlayerIndex) {
+	public void tickGuestLocal(int localPlayerIndex, long deltaMillis) {
 		if (drivingHost || engine == null || localPlayerIndex < 0 || localPlayerIndex > 1) {
 			return;
 		}
 		if (panel.isCoopPlayerEliminated(localPlayerIndex)) {
 			return;
 		}
-		int dropSpeed = getDropSpeed();
-		guestDropTimer += 16;
-		if (guestDropTimer >= dropSpeed) {
-			guestDropTimer = 0;
-			engine.engine(localPlayerIndex).tick();
-		}
+		guestDropTimer = tickGravity(localPlayerIndex, guestDropTimer + deltaMillis);
 	}
 
 	/** Applies the stage 2 boss garbage row to both authoritative online boards. */
@@ -172,8 +167,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 			return;
 		}
 		engine.restartStage(stage);
-		dropTimer0 = 0;
-		dropTimer1 = 0;
+		hostDropTimer = 0;
 		syncHudFromEngine();
 	}
 
@@ -189,6 +183,7 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		wireHostEvents();
 		engine.restoreCoop(memento);
 		drivingHost = true;
+		hostDropTimer = 0;
 		guestSyncedStage = memento.stage;
 		syncHudFromEngine();
 	}

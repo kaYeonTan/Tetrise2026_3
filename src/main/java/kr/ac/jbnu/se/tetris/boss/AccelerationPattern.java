@@ -35,7 +35,7 @@ public final class AccelerationPattern implements BossPattern {
     public void attack() {
         var forcedPiece = target.selectForcedPiece();
         target.replaceCurrentPiece(forcedPiece);
-        target.startAcceleration(5_000, 3, 10);
+        target.startAcceleration(5_000, 5, 10);
         target.showBossMessage("눈보라! " + forcedPiece + " 블록이 강제로 내려온다");
     }
 }

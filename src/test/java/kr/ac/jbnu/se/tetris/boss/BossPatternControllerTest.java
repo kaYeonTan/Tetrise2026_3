@@ -156,7 +156,7 @@ class BossPatternControllerTest {
         assertEquals(List.of("clear warning", "STAGE_4_PATTERN"), target.events);
         assertTrue(SfxType.STAGE_4_PATTERN.usesManagedPlayback());
         assertEquals(5_000, target.accelerationDuration);
-        assertEquals(3, target.gravityMultiplier);
+        assertEquals(5, target.gravityMultiplier);
         assertEquals(10, target.nextPieceMultiplier);
     }
 
