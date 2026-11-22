@@ -359,9 +359,4 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		}
 	}
 
-	public static int panelRotFromSession(GameSession s) {
-		// HUD 미니맵용 — SRS 상태를 대략 0~3으로 (렌더는 엔진 보드 사용)
-		return 0;
-	}
-
 }

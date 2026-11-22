@@ -1,5 +1,7 @@
 package kr.ac.jbnu.se.tetris.network.lobby;
 
+import java.util.logging.Logger;
+
 /**
  * 로비 전용 프로세스 진입점.
  * 
@@ -20,28 +22,31 @@ package kr.ac.jbnu.se.tetris.network.lobby;
  */
 public final class LobbyServerMain {
 
+	private static final Logger LOG = Logger.getLogger(LobbyServerMain.class.getName());
+	private static final String BANNER = "========================================";
+
 	public static void main(String[] args) throws Exception {
 		// 포트 결정: 인자 > 환경변수 > 기본값
 		int port = getPort(args);
 		
-		System.out.println("========================================");
-		System.out.println("   테트리스 로비 서버 (3조)");
-		System.out.println("========================================");
-		System.out.println("포트: " + port);
-		System.out.println("최대 방 개수: " + LobbyConfig.MAX_ROOMS);
-		System.out.println("방당 최대 인원: " + LobbyConfig.MAX_PLAYERS_PER_ROOM);
-		System.out.println("----------------------------------------");
+		log(BANNER);
+		log("   테트리스 로비 서버 (3조)");
+		log(BANNER);
+		log("포트: " + port);
+		log("최대 방 개수: " + LobbyConfig.MAX_ROOMS);
+		log("방당 최대 인원: " + LobbyConfig.MAX_PLAYERS_PER_ROOM);
+		log("----------------------------------------");
 		
 		LobbyServer server = new LobbyServer();
 		server.start(port);
 		
-		System.out.println("");
-		System.out.println("[팁] 원격 접속하려면:");
-		System.out.println("  1. 같은 네트워크: 이 PC의 IP 주소 사용");
-		System.out.println("  2. 다른 네트워크: ngrok tcp " + port + " 실행");
-		System.out.println("");
-		System.out.println("Ctrl+C 로 종료");
-		System.out.println("========================================");
+		log("");
+		log("[팁] 원격 접속하려면:");
+		log("  1. 같은 네트워크: 이 PC의 IP 주소 사용");
+		log("  2. 다른 네트워크: ngrok tcp " + port + " 실행");
+		log("");
+		log("Ctrl+C 로 종료");
+		log(BANNER);
 		
 		// 서버가 종료될 때까지 대기
 		Thread.currentThread().join();
@@ -57,7 +62,7 @@ public final class LobbyServerMain {
 			try {
 				return Integer.parseInt(args[0]);
 			} catch (NumberFormatException e) {
-				System.out.println("[경고] 잘못된 포트 번호: " + args[0]);
+				log("[경고] 잘못된 포트 번호: " + args[0]);
 			}
 		}
 		
@@ -67,12 +72,16 @@ public final class LobbyServerMain {
 			try {
 				return Integer.parseInt(envPort);
 			} catch (NumberFormatException e) {
-				System.out.println("[경고] 환경변수 PORT 값이 잘못됨: " + envPort);
+				log("[경고] 환경변수 PORT 값이 잘못됨: " + envPort);
 			}
 		}
 		
 		// 3. 기본값
 		return LobbyConfig.DEFAULT_PORT;
+	}
+
+	private static void log(String line) {
+		LOG.info(line);
 	}
 
 	private LobbyServerMain() {

@@ -3,6 +3,7 @@ package kr.ac.jbnu.se.tetris.piece;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 
 import kr.ac.jbnu.se.tetris.Shape;
@@ -17,15 +18,15 @@ public class SevenBagRandomizer implements Randomizer {
 			Tetrominoes.TShape, Tetrominoes.SquareShape, Tetrominoes.LShape, Tetrominoes.MirroredLShape };
 
 	long seed;
-	Random r;
-	ArrayList<Tetrominoes> queue = new ArrayList<>();
+	ReplayRandom r;
+	List<Tetrominoes> queue = new ArrayList<>();
 	PentominoPolicy policy;
 	int stage = 1;
 
 	public SevenBagRandomizer(long seed, PentominoPolicy policy) {
 		this.seed = seed;
 		this.policy = policy != null ? policy : PentominoPolicy.defaults();
-		r = new Random(seed);
+		r = new ReplayRandom(seed);
 		ensureQueue(7);
 	}
 
@@ -43,8 +44,7 @@ public class SevenBagRandomizer implements Randomizer {
 
 	void appendOneBag() {
 		ArrayList<Tetrominoes> bag = new ArrayList<>();
-		for (int i = 0; i < POOL.length; i++)
-			bag.add(POOL[i]);
+		Collections.addAll(bag, POOL);
 		Collections.shuffle(bag, r);
 
 		// AC-04-3 테트로미노 7종 유지 + 펜토 1개 끼워넣기
@@ -87,19 +87,24 @@ public class SevenBagRandomizer implements Randomizer {
 
 	@Override
 	public RandomizerState saveState() {
-		Tetrominoes[] order = new Tetrominoes[queue.size()];
-		for (int i = 0; i < queue.size(); i++)
-			order[i] = queue.get(i);
-		return new RandomizerState(seed, 0, order);
+		Tetrominoes[] order = queue.toArray(new Tetrominoes[0]);
+		return new RandomizerState(seed, r.steps(), order);
 	}
 
 	@Override
 	public void restoreState(RandomizerState state) {
+		if (state == null) {
+			return;
+		}
 		seed = state.seed;
-		r = new Random(seed);
+		ReplayRandom restored = new ReplayRandom(seed);
+		restored.advance(Math.max(0, state.index));
+		r = restored;
 		queue.clear();
-		for (int i = 0; i < state.bagOrder.length; i++)
-			queue.add(state.bagOrder[i]);
+		if (state.bagOrder == null) {
+			return;
+		}
+		Collections.addAll(queue, state.bagOrder);
 	}
 
 	// 테스트용: 큐에 펜토 있는지
@@ -111,8 +116,37 @@ public class SevenBagRandomizer implements Randomizer {
 		return false;
 	}
 
+	/**
+	 * java.util.Random과 같은 수열을 유지하면서 next 호출 횟수만 기억한다.
+	 * 시드를 다시 넣고 같은 횟수만큼 진행하면 이어하기 뒤 가방이 같다.
+	 */
+	static final class ReplayRandom extends Random {
+		private int steps;
+
+		ReplayRandom(long seed) {
+			super(seed);
+		}
+
+		int steps() {
+			return steps;
+		}
+
+		void advance(int target) {
+			while (steps < target) {
+				super.next(32);
+				steps++;
+			}
+		}
+
+		@Override
+		protected int next(int bits) {
+			steps++;
+			return super.next(bits);
+		}
+	}
+
 	// bag 한 세트에 테트로미노 7종 다 있는지
-	public static boolean hasAllTetrominoes(ArrayList<Tetrominoes> bag) {
+	public static boolean hasAllTetrominoes(List<Tetrominoes> bag) {
 		HashSet<Tetrominoes> set = new HashSet<>();
 		for (Tetrominoes t : bag) {
 			if (!Shape.isPentomino(t))

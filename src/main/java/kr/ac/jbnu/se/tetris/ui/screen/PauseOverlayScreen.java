@@ -54,5 +54,6 @@ public class PauseOverlayScreen implements Screen {
 
 	@Override
 	public void onExit() {
+		// 일시정지는 게임 화면이 다시 포커스를 받는다.
 	}
 }

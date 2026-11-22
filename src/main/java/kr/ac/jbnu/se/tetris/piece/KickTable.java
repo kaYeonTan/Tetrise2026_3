@@ -23,46 +23,44 @@ public class KickTable {
 
 	static final int[][] O_ANY = { { 0, 0 } };
 
+	private static final int[][][][] JLSTZ = new int[4][4][][];
+	private static final int[][][][] I_KICKS = new int[4][4][][];
+
+	static {
+		put(JLSTZ, RotationState.SPAWN, RotationState.R, JLSTZ_0_R);
+		put(JLSTZ, RotationState.R, RotationState.SPAWN, JLSTZ_R_0);
+		put(JLSTZ, RotationState.R, RotationState.TWO, JLSTZ_R_2);
+		put(JLSTZ, RotationState.TWO, RotationState.R, JLSTZ_2_R);
+		put(JLSTZ, RotationState.TWO, RotationState.L, JLSTZ_2_L);
+		put(JLSTZ, RotationState.L, RotationState.TWO, JLSTZ_L_2);
+		put(JLSTZ, RotationState.L, RotationState.SPAWN, JLSTZ_L_0);
+		put(JLSTZ, RotationState.SPAWN, RotationState.L, JLSTZ_0_L);
+
+		put(I_KICKS, RotationState.SPAWN, RotationState.R, I_0_R);
+		put(I_KICKS, RotationState.R, RotationState.SPAWN, I_R_0);
+		put(I_KICKS, RotationState.R, RotationState.TWO, I_R_2);
+		put(I_KICKS, RotationState.TWO, RotationState.R, I_2_R);
+		put(I_KICKS, RotationState.TWO, RotationState.L, I_2_L);
+		put(I_KICKS, RotationState.L, RotationState.TWO, I_L_2);
+		put(I_KICKS, RotationState.L, RotationState.SPAWN, I_L_0);
+		put(I_KICKS, RotationState.SPAWN, RotationState.L, I_0_L);
+	}
+
+	private KickTable() {
+	}
+
 	public static int[][] offsets(KickGroup group, RotationState from, RotationState to) {
-		if (group == KickGroup.O)
+		if (group == KickGroup.O || from == null || to == null)
 			return O_ANY;
+		int[][] found = table(group)[from.ordinal()][to.ordinal()];
+		return found != null ? found : O_ANY;
+	}
 
-		if (group == KickGroup.I) {
-			if (from == RotationState.SPAWN && to == RotationState.R)
-				return I_0_R;
-			if (from == RotationState.R && to == RotationState.SPAWN)
-				return I_R_0;
-			if (from == RotationState.R && to == RotationState.TWO)
-				return I_R_2;
-			if (from == RotationState.TWO && to == RotationState.R)
-				return I_2_R;
-			if (from == RotationState.TWO && to == RotationState.L)
-				return I_2_L;
-			if (from == RotationState.L && to == RotationState.TWO)
-				return I_L_2;
-			if (from == RotationState.L && to == RotationState.SPAWN)
-				return I_L_0;
-			if (from == RotationState.SPAWN && to == RotationState.L)
-				return I_0_L;
-		}
+	private static int[][][][] table(KickGroup group) {
+		return group == KickGroup.I ? I_KICKS : JLSTZ;
+	}
 
-		if (from == RotationState.SPAWN && to == RotationState.R)
-			return JLSTZ_0_R;
-		if (from == RotationState.R && to == RotationState.SPAWN)
-			return JLSTZ_R_0;
-		if (from == RotationState.R && to == RotationState.TWO)
-			return JLSTZ_R_2;
-		if (from == RotationState.TWO && to == RotationState.R)
-			return JLSTZ_2_R;
-		if (from == RotationState.TWO && to == RotationState.L)
-			return JLSTZ_2_L;
-		if (from == RotationState.L && to == RotationState.TWO)
-			return JLSTZ_L_2;
-		if (from == RotationState.L && to == RotationState.SPAWN)
-			return JLSTZ_L_0;
-		if (from == RotationState.SPAWN && to == RotationState.L)
-			return JLSTZ_0_L;
-
-		return O_ANY;
+	private static void put(int[][][][] table, RotationState from, RotationState to, int[][] kicks) {
+		table[from.ordinal()][to.ordinal()] = kicks;
 	}
 }
