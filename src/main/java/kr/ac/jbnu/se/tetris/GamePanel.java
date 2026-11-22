@@ -743,10 +743,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     boolean raiseBoardAndPiece(int[][] board, boolean playerOne, int hole) {
-        for (int c = 0; c < 10; c++) {
-            if (board[0][c] != 0) {
-                return false;
-            }
+        if (!GarbageRows.hasEmptyTopRow(board)) {
+            return false;
         }
         int type = playerOne ? p1Type : p2Type;
         int rot = playerOne ? p1Rot : p2Rot;
@@ -756,15 +754,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
                 return false;
             }
         }
-        for (int r = 0; r < 23; r++) {
-            board[r] = board[r + 1];
-        }
-        board[23] = new int[10];
-        for (int c = 0; c < 10; c++) {
-            if (c != hole) {
-                board[23][c] = 8;
-            }
-        }
+        GarbageRows.insert(board, () -> hole);
         if (playerOne) {
             p1Y--;
         } else {
@@ -1630,21 +1620,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     boolean addGarbage(int[][] board) {
-        for (int c = 0; c < 10; c++) {
-            if (board[0][c] != 0) {
-                return false;
-            }
+        if (!GarbageRows.hasEmptyTopRow(board)) {
+            return false;
         }
-        for (int r = 0; r < 23; r++) {
-            board[r] = board[r + 1];
-        }
-        board[23] = new int[10];
-        int hole = random.nextInt(10);
-        for (int c = 0; c < 10; c++) {
-            if (c != hole) {
-                board[23][c] = 8;
-            }
-        }
+        GarbageRows.insert(board, () -> random.nextInt(board[0].length));
         return true;
     }
 

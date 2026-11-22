@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Random;
 import javax.swing.JLabel;
@@ -155,6 +156,73 @@ class GamePanelTest {
         assertEquals(9, p2GarbageBlocks);
         assertEquals(p1Y - 1, p.p1Y);
         assertEquals(p2Y - 1, p.p2Y);
+    }
+
+    @Test
+    void risingPatternLeavesBothBoardsUnchangedWhenFirstPlayerTopRowIsOccupied() {
+        p.newGame(true);
+        p.board1[0][4] = 3;
+        int[][] expectedBoard1 = new int[24][10];
+        expectedBoard1[0][4] = 3;
+        int p1Y = p.p1Y;
+        int p2Y = p.p2Y;
+
+        p.raiseBlocks(2);
+
+        assertEquals(GamePanel.SCREEN_RESULT, p.getScreen());
+        assertArrayEquals(expectedBoard1, p.board1);
+        assertArrayEquals(new int[24][10], p.board2);
+        assertEquals(p1Y, p.p1Y);
+        assertEquals(p2Y, p.p2Y);
+    }
+
+    @Test
+    void risingPatternKeepsFirstPlayerShiftWhenSecondPlayerPieceWouldCrossTop() {
+        p.newGame(true);
+        p.p1Y = 3;
+        p.p2Type = 1;
+        p.p2Rot = 0;
+        p.p2Y = 0;
+        p.board1[1][0] = 3;
+        p.board2[1][0] = 4;
+        int[][] expectedBoard1 = new int[24][10];
+        expectedBoard1[0][0] = 3;
+        Arrays.fill(expectedBoard1[23], 8);
+        expectedBoard1[23][2] = 0;
+        int[][] expectedBoard2 = new int[24][10];
+        expectedBoard2[1][0] = 4;
+
+        p.raiseBlocks(2);
+
+        assertEquals(GamePanel.SCREEN_RESULT, p.getScreen());
+        assertArrayEquals(expectedBoard1, p.board1);
+        assertArrayEquals(expectedBoard2, p.board2);
+        assertEquals(2, p.p1Y);
+        assertEquals(0, p.p2Y);
+    }
+
+    @Test
+    void addGarbageSkipsRandomHoleWhenBlockedAndShiftsRowsOnSuccess() {
+        p.random.setSeed(7L);
+        Random expectedRandom = new Random(7L);
+        int[][] board = new int[24][10];
+        board[0][4] = 3;
+        board[23][5] = 6;
+        int[][] expected = new int[24][10];
+        expected[0][4] = 3;
+        expected[23][5] = 6;
+
+        assertFalse(p.addGarbage(board));
+        assertArrayEquals(expected, board);
+
+        board[0][4] = 0;
+        assertTrue(p.addGarbage(board));
+        expected[0][4] = 0;
+        expected[22][5] = 6;
+        Arrays.fill(expected[23], 8);
+        expected[23][expectedRandom.nextInt(10)] = 0;
+        assertArrayEquals(expected, board);
+        assertEquals(expectedRandom.nextLong(), p.random.nextLong());
     }
 
     @Test
