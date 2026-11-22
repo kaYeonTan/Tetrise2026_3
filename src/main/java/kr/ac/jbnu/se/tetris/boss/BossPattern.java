@@ -15,20 +15,20 @@ public interface BossPattern {
         return Optional.empty();
     }
 
-    void attack(BossPatternTarget target);
+    void attack();
 
-    default void onBoardChanged(BossPatternTarget target) {
+    default void onBoardChanged() {
     }
 
     default boolean usesCustomVictory() {
         return false;
     }
 
-    default double progress(BossPatternTarget target) {
+    default double progress() {
         return 0.0;
     }
 
-    default int violationCount(BossPatternTarget target) {
+    default int violationCount() {
         return 0;
     }
 

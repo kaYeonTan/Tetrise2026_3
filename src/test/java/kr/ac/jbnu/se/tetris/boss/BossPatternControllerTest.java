@@ -92,6 +92,51 @@ class BossPatternControllerTest {
     }
 
     @Test
+    void risingBlockPatternCanAttackWithOnlyItsOwnTarget() {
+        List<String> events = new ArrayList<>();
+        RisingBlockTarget target = new RisingBlockTarget() {
+            @Override
+            public int selectGarbageHole() {
+                return 4;
+            }
+
+            @Override
+            public void raiseBlocks(int hole) {
+                events.add("raise at " + hole);
+            }
+
+            @Override
+            public void showBossMessage(String message) {
+                events.add("show message");
+            }
+        };
+
+        new RisingBlockPattern(target).attack();
+
+        assertEquals(List.of("raise at 4", "show message"), events);
+    }
+
+    @Test
+    void stageChangeClearsWarningAndUsesNewPattern() {
+        FakeTarget target = new FakeTarget();
+        BossPatternController controller = new BossPatternController(new Random(1));
+        controller.startStage(2, target);
+        controller.tick(17_000, target);
+        assertTrue(target.warning);
+
+        controller.startStage(4, target);
+
+        assertFalse(target.warning);
+        assertEquals(0, controller.elapsedMillis());
+        assertEquals(2, target.effectResets);
+        target.events.clear();
+        controller.tick(30_000, target);
+        assertEquals(List.of("clear warning", "STAGE_4_PATTERN"), target.events);
+        assertEquals(5_000, target.accelerationDuration);
+        assertEquals(0, target.raised);
+    }
+
+    @Test
     void stagesWithoutTimedAttackDoNothing() {
         FakeTarget target = new FakeTarget();
         BossPatternController controller = new BossPatternController(new Random(1));
@@ -132,14 +177,14 @@ class BossPatternControllerTest {
         }
         int[] forbiddenCell = findForbiddenCell(blueprint);
         target.occupied[forbiddenCell[0]][forbiddenCell[1]] = true;
-        controller.onBoardChanged(target);
+        controller.onBoardChanged();
         assertFalse(target.blueprintCompleted);
-        assertEquals(1, controller.violationCount(target));
+        assertEquals(1, controller.violationCount());
 
         target.occupied[forbiddenCell[0]][forbiddenCell[1]] = false;
-        controller.onBoardChanged(target);
+        controller.onBoardChanged();
         assertTrue(target.blueprintCompleted);
-        assertEquals(1.0, controller.progress(target));
+        assertEquals(1.0, controller.progress());
     }
 
     private int[] findForbiddenCell(Blueprint blueprint) {
@@ -182,6 +227,7 @@ class BossPatternControllerTest {
         int[] primaryMapping;
         int[] secondaryMapping;
         int keyDuration;
+        int effectResets;
         boolean[][] occupied = new boolean[Blueprint.ROWS][Blueprint.COLUMNS];
         boolean blueprintCompleted;
 
@@ -253,6 +299,7 @@ class BossPatternControllerTest {
 
         @Override
         public void resetTemporaryBossEffects() {
+            effectResets++;
         }
 
         @Override

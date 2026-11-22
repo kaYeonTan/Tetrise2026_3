@@ -974,7 +974,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             coopBridge.sendBlueprintMask(localBlueprintMask());
             return;
         }
-        bossPattern.onBoardChanged(this);
+        bossPattern.onBoardChanged();
     }
 
     long localBlueprintMask() {
@@ -1007,7 +1007,7 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             return;
         }
         if (stage == 3 && !stageClear) {
-            bossPattern.onBoardChanged(this);
+            bossPattern.onBoardChanged();
         }
     }
 
@@ -2872,8 +2872,8 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         g.setColor(new Color(0x1a1216));
         g.fillRect(barX + 16, 50, 488, 24);
         boolean customVictory = bossPattern.usesCustomVictory();
-        double progress = customVictory ? bossPattern.progress(this) : (double) bossHp / bossMax;
-        int violations = customVictory ? bossPattern.violationCount(this) : 0;
+        double progress = customVictory ? bossPattern.progress() : (double) bossHp / bossMax;
+        int violations = customVictory ? bossPattern.violationCount() : 0;
         int filled = (int) (482.0 * Math.max(0.0, Math.min(1.0, progress)));
         boolean blueprintOk = customVictory && violations == 0;
         g.setColor(blueprintOk ? new Color(0x4fa65a) : new Color(0xc9432f));

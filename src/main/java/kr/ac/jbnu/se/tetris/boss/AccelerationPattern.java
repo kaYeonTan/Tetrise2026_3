@@ -5,6 +5,12 @@ import kr.ac.jbnu.se.tetris.audio.SfxType;
 
 public final class AccelerationPattern implements BossPattern {
 
+    private final AccelerationTarget target;
+
+    public AccelerationPattern(AccelerationTarget target) {
+        this.target = target;
+    }
+
     @Override
     public int intervalMillis() {
         return 30_000;
@@ -26,7 +32,7 @@ public final class AccelerationPattern implements BossPattern {
     }
 
     @Override
-    public void attack(BossPatternTarget target) {
+    public void attack() {
         var forcedPiece = target.selectForcedPiece();
         target.replaceCurrentPiece(forcedPiece);
         target.startAcceleration(5_000, 3, 10);

@@ -10,18 +10,18 @@ final class BossPatternFactory {
         this.random = random;
     }
 
-    BossPattern create(int stage, int blueprintIndex) {
+    BossPattern create(int stage, int blueprintIndex, BossPatternTarget target) {
         if (stage == 2) {
-            return new RisingBlockPattern();
+            return new RisingBlockPattern(target);
         }
         if (stage == 3) {
-            return new BlueprintPattern(Blueprint.stageThree(blueprintIndex));
+            return new BlueprintPattern(Blueprint.stageThree(blueprintIndex), target);
         }
         if (stage == 4) {
-            return new AccelerationPattern();
+            return new AccelerationPattern(target);
         }
         if (stage == 5) {
-            return new RandomKeyPattern(random);
+            return new RandomKeyPattern(random, target);
         }
         return NoBossPattern.INSTANCE;
     }

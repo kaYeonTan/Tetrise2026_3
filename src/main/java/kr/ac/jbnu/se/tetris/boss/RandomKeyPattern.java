@@ -7,11 +7,13 @@ import kr.ac.jbnu.se.tetris.audio.SfxType;
 public final class RandomKeyPattern implements BossPattern {
 
     private final RandomKeyMappingGenerator generator;
+    private final RandomKeyTarget target;
     private int[] previousPrimaryMapping;
     private int[] previousSecondaryMapping;
 
-    public RandomKeyPattern(Random random) {
+    public RandomKeyPattern(Random random, RandomKeyTarget target) {
         generator = new RandomKeyMappingGenerator(random);
+        this.target = target;
     }
 
     @Override
@@ -35,7 +37,7 @@ public final class RandomKeyPattern implements BossPattern {
     }
 
     @Override
-    public void attack(BossPatternTarget target) {
+    public void attack() {
         int[] primaryMapping = generator.generatePermutation(
                 target.primaryOriginalKeys().length, previousPrimaryMapping);
         int[] secondaryMapping = null;
