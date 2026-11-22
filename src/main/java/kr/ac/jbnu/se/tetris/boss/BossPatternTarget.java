@@ -1,6 +1,7 @@
 package kr.ac.jbnu.se.tetris.boss;
 
 import kr.ac.jbnu.se.tetris.Tetrominoes;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
 
 public interface BossPatternTarget {
 
@@ -8,7 +9,7 @@ public interface BossPatternTarget {
 
     void clearBossWarning();
 
-    default void onBossPatternActivated() {
+    default void onBossPatternActivated(SfxType sound) {
     }
 
     void showBossMessage(String message);

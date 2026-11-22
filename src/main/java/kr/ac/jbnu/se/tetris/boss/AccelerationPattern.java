@@ -1,5 +1,8 @@
 package kr.ac.jbnu.se.tetris.boss;
 
+import java.util.Optional;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
+
 public final class AccelerationPattern implements BossPattern {
 
     @Override
@@ -15,6 +18,11 @@ public final class AccelerationPattern implements BossPattern {
     @Override
     public String warningMessage() {
         return "!! 눈보라가 몰려온다 !!";
+    }
+
+    @Override
+    public Optional<SfxType> activationSound() {
+        return Optional.of(SfxType.STAGE_4_PATTERN);
     }
 
     @Override

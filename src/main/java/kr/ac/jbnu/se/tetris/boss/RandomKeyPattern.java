@@ -1,6 +1,8 @@
 package kr.ac.jbnu.se.tetris.boss;
 
+import java.util.Optional;
 import java.util.Random;
+import kr.ac.jbnu.se.tetris.audio.SfxType;
 
 public final class RandomKeyPattern implements BossPattern {
 
@@ -25,6 +27,11 @@ public final class RandomKeyPattern implements BossPattern {
     @Override
     public String warningMessage() {
         return "!! 조작키가 뒤섞인다 !!";
+    }
+
+    @Override
+    public Optional<SfxType> activationSound() {
+        return Optional.of(SfxType.STAGE_5_PATTERN);
     }
 
     @Override

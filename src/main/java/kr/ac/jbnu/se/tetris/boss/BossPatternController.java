@@ -50,7 +50,7 @@ public final class BossPatternController {
             elapsedMillis = 0;
             warning = false;
             target.clearBossWarning();
-            target.onBossPatternActivated();
+            pattern.activationSound().ifPresent(target::onBossPatternActivated);
             pattern.attack(target);
         }
     }

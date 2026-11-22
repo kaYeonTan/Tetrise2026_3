@@ -786,13 +786,11 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
     }
 
     @Override
-    public void onBossPatternActivated() {
-        if (stage == 2) {
-            soundManager.playSfx(SfxType.STAGE_2_PATTERN);
-        } else if (stage == 4) {
-            soundManager.playManagedSfx(SfxType.STAGE_4_PATTERN);
-        } else if (stage == 5) {
-            soundManager.playSfx(SfxType.STAGE_5_PATTERN);
+    public void onBossPatternActivated(SfxType sound) {
+        if (sound.usesManagedPlayback()) {
+            soundManager.playManagedSfx(sound);
+        } else {
+            soundManager.playSfx(sound);
         }
     }
 
