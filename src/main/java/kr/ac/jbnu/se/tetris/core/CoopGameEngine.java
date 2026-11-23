@@ -61,9 +61,17 @@ public final class CoopGameEngine {
 
 	public void applyAction(int playerIndex, PlayerAction action) {
 		GameEngine e = engine(playerIndex);
-		if (!e.isStarted() || e.isPaused() || e.isInputBlocked()) {
+		if (!acceptsInput(e)) {
 			return;
 		}
+		dispatchAction(e, action);
+	}
+
+	private static boolean acceptsInput(GameEngine e) {
+		return e.isStarted() && !e.isPaused() && !e.isInputBlocked();
+	}
+
+	private static void dispatchAction(GameEngine e, PlayerAction action) {
 		switch (action) {
 			case MOVE_LEFT:
 				e.moveLeft();

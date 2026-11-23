@@ -65,14 +65,25 @@ public final class SaveService {
 		if (m == null || !m.onlineResume) {
 			return;
 		}
+		requireLogin(loginUser);
+		requireSavedAccounts(m);
+		requireParticipant(m, loginUser.trim());
+	}
+
+	private static void requireLogin(String loginUser) throws LoadException {
 		if (loginUser == null || loginUser.isBlank()) {
 			throw new LoadException("온라인 협동 저장은 로그인 후 불러올 수 있어요.");
 		}
+	}
+
+	private static void requireSavedAccounts(CoopGameMemento m) throws LoadException {
 		if (m.hostAccountId == null || m.hostAccountId.isBlank()
 				|| m.guestAccountId == null || m.guestAccountId.isBlank()) {
 			throw new LoadException("예전 형식 저장이라 온라인 이어하기를 할 수 없어요.");
 		}
-		String me = loginUser.trim();
+	}
+
+	private static void requireParticipant(CoopGameMemento m, String me) throws LoadException {
 		if (!me.equals(m.hostAccountId) && !me.equals(m.guestAccountId)) {
 			throw new LoadException("이 저장은 당시 함께 한 두 계정만 불러올 수 있어요.");
 		}
@@ -102,7 +113,10 @@ public final class SaveService {
 		if (m == null || viewerAccount == null || viewerAccount.isBlank()) {
 			return null;
 		}
-		String me = viewerAccount.trim();
+		return partnerNick(m, viewerAccount.trim());
+	}
+
+	private static String partnerNick(CoopGameMemento m, String me) {
 		if (m.hostAccountId != null && me.equals(m.hostAccountId)) {
 			return m.guestAccountId;
 		}
@@ -168,12 +182,25 @@ public final class SaveService {
 		if (m == null || !m.onlineResume) {
 			return;
 		}
+		requireBothRoomNicks(roomHostNick, roomGuestNick);
+		requireStoredAccountIds(m);
+		requireSameAccountPair(m, roomHostNick, roomGuestNick);
+	}
+
+	private static void requireBothRoomNicks(String roomHostNick, String roomGuestNick) throws LoadException {
 		if (roomHostNick == null || roomGuestNick == null || roomHostNick.isBlank() || roomGuestNick.isBlank()) {
 			throw new LoadException("온라인 협동은 2명이 함께 있을 때만 불러올 수 있어요.");
 		}
+	}
+
+	private static void requireStoredAccountIds(CoopGameMemento m) throws LoadException {
 		if (m.hostAccountId == null || m.guestAccountId == null) {
 			throw new LoadException("예전 형식 저장이라 불러올 수 없어요.");
 		}
+	}
+
+	private static void requireSameAccountPair(CoopGameMemento m, String roomHostNick, String roomGuestNick)
+			throws LoadException {
 		Set<String> saved = new HashSet<>();
 		saved.add(m.hostAccountId.trim());
 		saved.add(m.guestAccountId.trim());

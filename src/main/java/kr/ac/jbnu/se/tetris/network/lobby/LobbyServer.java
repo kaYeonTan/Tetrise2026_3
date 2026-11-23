@@ -9,8 +9,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -29,6 +31,13 @@ public class LobbyServer implements AutoCloseable {
 	static final String ROLE_GUEST = "GUEST";
 	static final String MSG_NOT_IN_GAME = "진행 중인 게임이 없어요.";
 	static final String MSG_NEED_HELLO = "먼저 HELLO로 접속해 주세요.";
+	private static final Set<LobbyMessageType> ROOM_REQUESTS = EnumSet.of(
+			LobbyMessageType.HELLO,
+			LobbyMessageType.LIST_ROOMS,
+			LobbyMessageType.CREATE_ROOM,
+			LobbyMessageType.JOIN_ROOM,
+			LobbyMessageType.LEAVE_ROOM,
+			LobbyMessageType.MY_ROOM);
 
 	private final RoomRegistry registry = new RoomRegistry();
 	private final Map<String, String> clientNicks = new ConcurrentHashMap<>();
@@ -154,12 +163,25 @@ public class LobbyServer implements AutoCloseable {
 		if (req == null || req.type == null) {
 			return error(CODE_INVALID, "잘못된 요청이에요.");
 		}
-		LobbyMessageType type;
-		try {
-			type = LobbyMessageType.valueOf(req.type);
-		} catch (IllegalArgumentException e) {
+		LobbyMessageType type = parseType(req.type);
+		if (type == null) {
 			return error(CODE_INVALID, "알 수 없는 요청이에요.");
 		}
+		if (ROOM_REQUESTS.contains(type)) {
+			return dispatchRoom(clientId, req, type);
+		}
+		return dispatchInGame(clientId, req, type);
+	}
+
+	private static LobbyMessageType parseType(String rawType) {
+		try {
+			return LobbyMessageType.valueOf(rawType);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
+	}
+
+	private LobbyMessage dispatchRoom(String clientId, LobbyMessage req, LobbyMessageType type) {
 		switch (type) {
 			case HELLO:
 				return handleHello(clientId, req);
@@ -173,6 +195,13 @@ public class LobbyServer implements AutoCloseable {
 				return handleLeaveRoom(clientId);
 			case MY_ROOM:
 				return handleMyRoom(clientId);
+			default:
+				return error(CODE_INVALID, "로비에서 지원하지 않는 요청이에요.");
+		}
+	}
+
+	private LobbyMessage dispatchInGame(String clientId, LobbyMessage req, LobbyMessageType type) {
+		switch (type) {
 			case START_GAME:
 				return handleStartGame(clientId, req);
 			case RESUME_COOP:
@@ -222,6 +251,17 @@ public class LobbyServer implements AutoCloseable {
 
 	private LobbyMessage beginInGame(String clientId, LobbyMessage req, boolean resume) {
 		LobbyRoom room = registry.roomOfClient(clientId).orElse(null);
+		LobbyMessage rejected = rejectStart(clientId, room);
+		if (rejected != null) {
+			return rejected;
+		}
+		InGameRoom game = openInGame(room, req, resume);
+		List<String> roster = playerNicksOrdered(room);
+		notifyGameStarted(room, clientId, game, roster, resume);
+		return startGameOk(room, clientId, game, roster, resume);
+	}
+
+	private LobbyMessage rejectStart(String clientId, LobbyRoom room) {
 		if (room == null) {
 			return error("NOT_IN_ROOM", "방에 들어가 있지 않아요.");
 		}
@@ -231,6 +271,10 @@ public class LobbyServer implements AutoCloseable {
 		if (room.memberClientIds.size() < LobbyConfig.MAX_PLAYERS_PER_ROOM) {
 			return error("NOT_READY", "2명이 모여야 시작할 수 있어요.");
 		}
+		return null;
+	}
+
+	private InGameRoom openInGame(LobbyRoom room, LobbyMessage req, boolean resume) {
 		InGameRoom game;
 		if (resume) {
 			long seed = req.seed > 0 ? req.seed : System.currentTimeMillis();
@@ -238,39 +282,43 @@ public class LobbyServer implements AutoCloseable {
 			game.pendingSnapshotJson = req.snapshotJson;
 			ingameByRoom.put(room.roomId, game);
 		} else {
-			game = ingameByRoom.computeIfAbsent(room.roomId, id -> new InGameRoom(room.roomId, room.hostClientId));
+			game = ingameByRoom.computeIfAbsent(room.roomId,
+					id -> new InGameRoom(room.roomId, room.hostClientId));
 		}
 		game.started = true;
+		return game;
+	}
 
-		List<String> roster = playerNicksOrdered(room);
+	private void notifyGameStarted(LobbyRoom room, String clientId, InGameRoom game, List<String> roster,
+			boolean resume) {
 		for (String member : room.memberClientIds) {
 			if (member.equals(clientId)) {
 				continue;
 			}
 			LobbyMessage push = LobbyMessage.of(LobbyMessageType.GAME_STARTED);
-			push.roomId = room.roomId;
-			push.coopId = game.coopId;
-			push.seed = game.seed;
-			fillOnlinePlayerAssignment(push, room, member);
-			push.players = roster;
-			push.resumeGame = resume;
-			if (resume) {
-				push.snapshotJson = game.pendingSnapshotJson;
-			}
+			fillStartPayload(push, room, member, game, roster, resume);
 			pushTo(member, push);
 		}
+	}
 
+	private LobbyMessage startGameOk(LobbyRoom room, String clientId, InGameRoom game, List<String> roster,
+			boolean resume) {
 		LobbyMessage ok = LobbyMessage.of(LobbyMessageType.START_GAME_OK);
-		ok.roomId = room.roomId;
-		ok.coopId = game.coopId;
-		ok.seed = game.seed;
-		fillOnlinePlayerAssignment(ok, room, clientId);
-		ok.players = roster;
-		ok.resumeGame = resume;
-		if (resume) {
-			ok.snapshotJson = game.pendingSnapshotJson;
-		}
+		fillStartPayload(ok, room, clientId, game, roster, resume);
 		return ok;
+	}
+
+	private void fillStartPayload(LobbyMessage msg, LobbyRoom room, String recipient, InGameRoom game,
+			List<String> roster, boolean resume) {
+		msg.roomId = room.roomId;
+		msg.coopId = game.coopId;
+		msg.seed = game.seed;
+		fillOnlinePlayerAssignment(msg, room, recipient);
+		msg.players = roster;
+		msg.resumeGame = resume;
+		if (resume) {
+			msg.snapshotJson = game.pendingSnapshotJson;
+		}
 	}
 
 	private LobbyMessage handlePlayerAction(String clientId, LobbyMessage req) {
@@ -429,19 +477,30 @@ public class LobbyServer implements AutoCloseable {
 			case ALREADY_IN_ROOM:
 				return error(CODE_ALREADY_IN_ROOM, "이미 이 방에 있어요.");
 			case OK:
-				LobbyRoom room = registry.find(req.roomId).orElse(null);
-				LobbyMessage joined = LobbyMessage.of(LobbyMessageType.JOINED);
-				joined.roomId = req.roomId;
-				joined.roomName = room != null ? room.name : "";
-				if (room != null) {
-					joined.visibility = room.visibility.name();
-				}
-				joined.role = room != null && clientId.equals(room.hostClientId) ? "HOST" : ROLE_GUEST;
-				joined.players = room != null ? playerNicks(room) : new ArrayList<>();
-				return joined;
+				return joinedMessage(clientId, req.roomId);
 			default:
 				return error("UNKNOWN", "입장하지 못했어요.");
 		}
+	}
+
+	private LobbyMessage joinedMessage(String clientId, String roomId) {
+		LobbyRoom room = registry.find(roomId).orElse(null);
+		LobbyMessage joined = LobbyMessage.of(LobbyMessageType.JOINED);
+		joined.roomId = roomId;
+		joined.roomName = roomName(room);
+		if (room != null) {
+			joined.visibility = room.visibility.name();
+			joined.role = clientId.equals(room.hostClientId) ? "HOST" : ROLE_GUEST;
+			joined.players = playerNicks(room);
+		} else {
+			joined.role = ROLE_GUEST;
+			joined.players = new ArrayList<>();
+		}
+		return joined;
+	}
+
+	private static String roomName(LobbyRoom room) {
+		return room != null ? room.name : "";
 	}
 
 	private LobbyMessage handleLeaveRoom(String clientId) {
