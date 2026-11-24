@@ -180,30 +180,27 @@ public final class Blueprint {
     }
 
     public double fillRatio(Occupancy occupancy) {
-        int filled = 0;
-        for (int row = 0; row < ROWS; row++) {
-            for (int column = 0; column < COLUMNS; column++) {
-                if (target[row][column] && occupancy.occupied(row, column)) {
-                    filled++;
-                }
-            }
-        }
+        int filled = countOccupiedCells(target, occupancy);
         return targetCount == 0 ? 0.0 : (double) filled / targetCount;
     }
 
     public int violationCount(Occupancy occupancy) {
-        int violations = 0;
-        for (int row = 0; row < ROWS; row++) {
-            for (int column = 0; column < COLUMNS; column++) {
-                if (mustBeEmpty[row][column] && occupancy.occupied(row, column)) {
-                    violations++;
-                }
-            }
-        }
-        return violations;
+        return countOccupiedCells(mustBeEmpty, occupancy);
     }
 
     public boolean isSatisfied(Occupancy occupancy) {
         return fillRatio(occupancy) >= 1.0 && violationCount(occupancy) == 0;
+    }
+
+    private static int countOccupiedCells(boolean[][] mask, Occupancy occupancy) {
+        int count = 0;
+        for (int row = 0; row < ROWS; row++) {
+            for (int column = 0; column < COLUMNS; column++) {
+                if (mask[row][column] && occupancy.occupied(row, column)) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 }
