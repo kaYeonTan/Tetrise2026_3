@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
@@ -119,8 +118,10 @@ public class ScreenRouter {
 		}
 		closeOverlaySilent();
 		currentScreen = to;
-		cards.show(cardHost, to.name());
-		screen(to).onEnter(params);
+		Screen shown = screen(to);
+		if (to.type == RouteType.SCREEN)
+			cards.show(cardHost, to.name());
+		shown.onEnter(params);
 		frame.revalidate();
 		frame.repaint();
 	}
@@ -141,7 +142,6 @@ public class ScreenRouter {
 	void closeOverlay() {
 		if (topOverlay == null)
 			return;
-		screen(topOverlay).onExit();
 		closeOverlaySilent();
 		frame.revalidate();
 		frame.repaint();

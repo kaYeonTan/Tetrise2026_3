@@ -298,39 +298,62 @@ public final class CoopEngineBridge implements GameEngineBridge {
 	}
 
 	public void syncGuestFromMemento(CoopGameMemento mem) {
-		if (mem == null || mem.player0 == null || mem.player1 == null) {
+		if (!hasBothPlayers(mem)) {
 			return;
 		}
-		if (engine == null) {
-			startOnlineGuest(mem.stage, mem.seed);
-		}
+		ensureGuestEngine(mem);
 		drivingHost = false;
-
-		boolean stageChanged = guestSyncedStage != mem.stage;
-		int local = panel.localPlayerIndex;
-		int remote = 1 - local;
-		SessionMemento remoteMem = remote == 0 ? mem.player0 : mem.player1;
-
-		if (stageChanged) {
-			engine.applyMementoState(mem);
-			guestSyncedStage = mem.stage;
-			guestDropTimer = 0;
-			guestAppliedGarbageSeq = mem.garbageSeq;
-		} else if (!mem.stageClear && !mem.stageAdvancePrompt) {
-			engine.applyPlayerMemento(remote, remoteMem);
-			if (mem.garbageSeq != guestAppliedGarbageSeq) {
-				int hole = local == 0 ? mem.garbageHole0 : mem.garbageHole1;
-				if (hole >= 0 && hole < GameSession.WIDTH) {
-					engine.engine(local).raiseGarbageLine(hole);
-				}
-				guestAppliedGarbageSeq = mem.garbageSeq;
-			}
-		}
-
+		applyGuestBoardSync(mem);
 		MementoMapper.applySharedCoopProgressToPanel(panel, mem);
 		applyEliminationFromMemento(mem);
 		panel.applyCoopEliminationFromSave(mem.player0Eliminated, mem.player1Eliminated, true);
 		MementoMapper.applyHudFromCoopMemento(panel, mem);
+	}
+
+	private static boolean hasBothPlayers(CoopGameMemento mem) {
+		return mem != null && mem.player0 != null && mem.player1 != null;
+	}
+
+	private void ensureGuestEngine(CoopGameMemento mem) {
+		if (engine == null) {
+			startOnlineGuest(mem.stage, mem.seed);
+		}
+	}
+
+	private void applyGuestBoardSync(CoopGameMemento mem) {
+		int local = panel.localPlayerIndex;
+		int remote = 1 - local;
+		if (guestSyncedStage != mem.stage) {
+			resetGuestToStage(mem);
+			return;
+		}
+		syncContinuingStage(mem, local, remote);
+	}
+
+	private void resetGuestToStage(CoopGameMemento mem) {
+		engine.applyMementoState(mem);
+		guestSyncedStage = mem.stage;
+		guestDropTimer = 0;
+		guestAppliedGarbageSeq = mem.garbageSeq;
+	}
+
+	private void syncContinuingStage(CoopGameMemento mem, int local, int remote) {
+		if (mem.stageClear || mem.stageAdvancePrompt) {
+			return;
+		}
+		engine.applyPlayerMemento(remote, remote == 0 ? mem.player0 : mem.player1);
+		applyPendingGarbage(mem, local);
+	}
+
+	private void applyPendingGarbage(CoopGameMemento mem, int local) {
+		if (mem.garbageSeq == guestAppliedGarbageSeq) {
+			return;
+		}
+		int hole = local == 0 ? mem.garbageHole0 : mem.garbageHole1;
+		if (hole >= 0 && hole < GameSession.WIDTH) {
+			engine.engine(local).raiseGarbageLine(hole);
+		}
+		guestAppliedGarbageSeq = mem.garbageSeq;
 	}
 
 	@Override
@@ -357,11 +380,6 @@ public final class CoopEngineBridge implements GameEngineBridge {
 		boolean isLineClearBlinkOn() {
 			return e.isLineClearAnim() && e.isBlinkPhaseOn();
 		}
-	}
-
-	public static int panelRotFromSession(GameSession s) {
-		// HUD 미니맵용 — SRS 상태를 대략 0~3으로 (렌더는 엔진 보드 사용)
-		return 0;
 	}
 
 }

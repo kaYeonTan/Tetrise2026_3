@@ -58,7 +58,7 @@ public class GameScreen implements Screen {
 
 	@Override
 	public void onEnter(RouteParams params) {
-		GameParams gp = params instanceof GameParams ? (GameParams) params : new GameParams(GameMode.SINGLE);
+		GameParams gp = params instanceof GameParams given ? given : new GameParams(GameMode.SINGLE);
 		if (!gp.resume) {
 			board.getEngine().setStage(gp.stage);
 			board.start();
@@ -74,5 +74,6 @@ public class GameScreen implements Screen {
 
 	@Override
 	public void onExit() {
+		// 보드는 라우터가 카드를 숨길 때 따로 정리하지 않는다.
 	}
 }

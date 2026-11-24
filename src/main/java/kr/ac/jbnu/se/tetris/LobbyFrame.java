@@ -323,7 +323,7 @@ public class LobbyFrame extends JDialog {
 		myRoomBox.setBorder(BorderFactory.createTitledBorder(
 				BorderFactory.createLineBorder(new Color(0x8a6a2a)), "내 대기실"));
 		myRoomBox.add(myRoomScroll, BorderLayout.CENTER);
-		startGameBtn = actionButton("게임 시작 (방장)", true, this::startCoopGame);
+		startGameBtn = actionButton(LobbyMyRoomUiState.START_BUTTON, true, this::startCoopGame);
 		startGameBtn.setEnabled(false);
 		myRoomBox.add(startGameBtn, BorderLayout.SOUTH);
 		myRoomBox.setPreferredSize(new Dimension(260, 200));
@@ -573,7 +573,7 @@ public class LobbyFrame extends JDialog {
 
 		}
 
-		return "Guest";
+		return LobbyMyRoomUiState.GUEST_NICK;
 
 	}
 
@@ -834,77 +834,63 @@ public class LobbyFrame extends JDialog {
 
 
 	private void joinSelected() {
-
 		if (!ensureConnected()) {
-
 			return;
-
 		}
+		RoomSnapshot room = selectedJoinableRoom();
+		if (room == null || !confirmJoin(room)) {
+			return;
+		}
+		String code = null;
+		if (room.visibility == RoomVisibility.PRIVATE) {
+			code = askPrivateJoinCode();
+			if (code == null) {
+				return;
+			}
+		}
+		submitJoin(room, code);
+	}
 
+	private RoomSnapshot selectedJoinableRoom() {
 		int idx = roomList.getSelectedIndex();
-
 		if (idx < 0 || idx >= lastRooms.size()) {
-
 			JOptionPane.showMessageDialog(this, "목록에서 방을 선택해 주세요.");
-
-			return;
-
+			return null;
 		}
-
 		RoomSnapshot room = lastRooms.get(idx);
-
 		if (!room.joinable) {
-
 			JOptionPane.showMessageDialog(this, "이 방은 이미 만원이에요.");
-
-			return;
-
+			return null;
 		}
+		return room;
+	}
 
+	private boolean confirmJoin(RoomSnapshot room) {
 		int confirm = JOptionPane.showConfirmDialog(this,
 				"\"" + room.name + "\" 방에 입장하시겠습니까?",
 				"방 입장", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-		if (confirm != JOptionPane.YES_OPTION) {
-			return;
-		}
-
-		String code = null;
-
-		if (room.visibility == RoomVisibility.PRIVATE) {
-
-			code = JOptionPane.showInputDialog(this, "비밀방 입장 코드를 입력하세요.", "입장 코드", JOptionPane.PLAIN_MESSAGE);
-
-			if (code == null) {
-
-				return;
-
-			}
-
-		}
-
-		try {
-
-			LobbyMessage resp = LobbyRoomFlow.joinRoom(client, room.roomId, code);
-
-			if (LobbyMessageType.ERROR.name().equals(resp.type)) {
-
-				JOptionPane.showMessageDialog(this, resp.message);
-
-				return;
-
-			}
-
-			applyMyRoomFromServer(resp);
-
-			refreshRooms();
-
-		} catch (Exception ex) {
-
-			JOptionPane.showMessageDialog(this, ex.getMessage());
-
-		}
-
+		return confirm == JOptionPane.YES_OPTION;
 	}
+
+	private String askPrivateJoinCode() {
+		return JOptionPane.showInputDialog(this, "비밀방 입장 코드를 입력하세요.", "입장 코드",
+				JOptionPane.PLAIN_MESSAGE);
+	}
+
+	private void submitJoin(RoomSnapshot room, String code) {
+		try {
+			LobbyMessage resp = LobbyRoomFlow.joinRoom(client, room.roomId, code);
+			if (LobbyMessageType.ERROR.name().equals(resp.type)) {
+				JOptionPane.showMessageDialog(this, resp.message);
+				return;
+			}
+			applyMyRoomFromServer(resp);
+			refreshRooms();
+		} catch (Exception ex) {
+			JOptionPane.showMessageDialog(this, ex.getMessage());
+		}
+	}
+
 
 	private void openCoopSaveSlots() {
 		if (!ensureLoggedInForOnline()) {

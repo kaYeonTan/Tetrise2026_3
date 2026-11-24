@@ -5,9 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +22,7 @@ public final class SaveService {
 	public static final int MAX_SLOT = 3;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	private static final DateTimeFormatter SLOT_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 	private static CoopGameRepository repository = new JsonCoopGameRepository();
 
 	private SaveService() {
@@ -63,14 +65,25 @@ public final class SaveService {
 		if (m == null || !m.onlineResume) {
 			return;
 		}
+		requireLogin(loginUser);
+		requireSavedAccounts(m);
+		requireParticipant(m, loginUser.trim());
+	}
+
+	private static void requireLogin(String loginUser) throws LoadException {
 		if (loginUser == null || loginUser.isBlank()) {
 			throw new LoadException("온라인 협동 저장은 로그인 후 불러올 수 있어요.");
 		}
+	}
+
+	private static void requireSavedAccounts(CoopGameMemento m) throws LoadException {
 		if (m.hostAccountId == null || m.hostAccountId.isBlank()
 				|| m.guestAccountId == null || m.guestAccountId.isBlank()) {
 			throw new LoadException("예전 형식 저장이라 온라인 이어하기를 할 수 없어요.");
 		}
-		String me = loginUser.trim();
+	}
+
+	private static void requireParticipant(CoopGameMemento m, String me) throws LoadException {
 		if (!me.equals(m.hostAccountId) && !me.equals(m.guestAccountId)) {
 			throw new LoadException("이 저장은 당시 함께 한 두 계정만 불러올 수 있어요.");
 		}
@@ -100,7 +113,10 @@ public final class SaveService {
 		if (m == null || viewerAccount == null || viewerAccount.isBlank()) {
 			return null;
 		}
-		String me = viewerAccount.trim();
+		return partnerNick(m, viewerAccount.trim());
+	}
+
+	private static String partnerNick(CoopGameMemento m, String me) {
 		if (m.hostAccountId != null && me.equals(m.hostAccountId)) {
 			return m.guestAccountId;
 		}
@@ -117,8 +133,9 @@ public final class SaveService {
 		if (m == null) {
 			return "슬롯 " + slot + " · 손상됨";
 		}
-		SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-		String when = m.savedAtMs > 0 ? fmt.format(new Date(m.savedAtMs)) : "?";
+		String when = m.savedAtMs > 0
+				? SLOT_TIME.format(Instant.ofEpochMilli(m.savedAtMs).atZone(ZoneId.systemDefault()))
+				: "?";
 		String kind = m.onlineResume ? "온라인 협동" : "로컬 협동";
 		String partner = coopPartnerNick(m, viewerAccount);
 		String with = partner != null && !partner.isBlank() ? " · " + partner + "와 함께" : "";
@@ -133,21 +150,23 @@ public final class SaveService {
 			Path path = slotPath(userId, s);
 			if (!Files.isRegularFile(path)) {
 				out.add(new SaveSlotMeta(s, false, "비어 있음", 0));
-				continue;
-			}
-			try {
-				CoopGameMemento m = GSON.fromJson(Files.readString(path, StandardCharsets.UTF_8), CoopGameMemento.class);
-				if (m == null) {
-					out.add(new SaveSlotMeta(s, false, "손상됨", 0));
-					continue;
-				}
-				out.add(new SaveSlotMeta(s, true,
-						formatCoopSlotSummary(m, loginUser, s), m.savedAtMs));
-			} catch (Exception e) {
-				out.add(new SaveSlotMeta(s, false, "읽기 실패", 0));
+			} else {
+				out.add(readSlotMeta(loginUser, s, path));
 			}
 		}
 		return out;
+	}
+
+	private static SaveSlotMeta readSlotMeta(String loginUser, int slot, Path path) {
+		try {
+			CoopGameMemento m = GSON.fromJson(Files.readString(path, StandardCharsets.UTF_8), CoopGameMemento.class);
+			if (m == null) {
+				return new SaveSlotMeta(slot, false, "손상됨", 0);
+			}
+			return new SaveSlotMeta(slot, true, formatCoopSlotSummary(m, loginUser, slot), m.savedAtMs);
+		} catch (Exception e) {
+			return new SaveSlotMeta(slot, false, "읽기 실패", 0);
+		}
 	}
 
 	public static void deleteSlot(String loginUser, int slot) throws IOException {
@@ -163,12 +182,25 @@ public final class SaveService {
 		if (m == null || !m.onlineResume) {
 			return;
 		}
+		requireBothRoomNicks(roomHostNick, roomGuestNick);
+		requireStoredAccountIds(m);
+		requireSameAccountPair(m, roomHostNick, roomGuestNick);
+	}
+
+	private static void requireBothRoomNicks(String roomHostNick, String roomGuestNick) throws LoadException {
 		if (roomHostNick == null || roomGuestNick == null || roomHostNick.isBlank() || roomGuestNick.isBlank()) {
 			throw new LoadException("온라인 협동은 2명이 함께 있을 때만 불러올 수 있어요.");
 		}
+	}
+
+	private static void requireStoredAccountIds(CoopGameMemento m) throws LoadException {
 		if (m.hostAccountId == null || m.guestAccountId == null) {
 			throw new LoadException("예전 형식 저장이라 불러올 수 없어요.");
 		}
+	}
+
+	private static void requireSameAccountPair(CoopGameMemento m, String roomHostNick, String roomGuestNick)
+			throws LoadException {
 		Set<String> saved = new HashSet<>();
 		saved.add(m.hostAccountId.trim());
 		saved.add(m.guestAccountId.trim());

@@ -49,26 +49,48 @@ public class GameSession {
 	}
 
 	public boolean raiseGarbageLine(int hole) {
+		if (topRowOccupied() || activePieceWouldLeaveBoard())
+			return false;
+		shiftRowsUp();
+		fillBottomGarbageRow(hole);
+		liftActivePiece();
+		return true;
+	}
+
+	private boolean topRowOccupied() {
 		for (int x = 0; x < WIDTH; x++) {
 			if (shapeAt(x, HEIGHT - 1) != Tetrominoes.NoShape)
-				return false;
+				return true;
 		}
-		if (curPiece.getShape() != Tetrominoes.NoShape) {
-			for (int i = 0; i < curPiece.blockCount(); i++) {
-				int y = curY - curPiece.y(i) + 1;
-				if (y >= HEIGHT)
-					return false;
-			}
+		return false;
+	}
+
+	private boolean activePieceWouldLeaveBoard() {
+		if (curPiece.getShape() == Tetrominoes.NoShape)
+			return false;
+		for (int i = 0; i < curPiece.blockCount(); i++) {
+			int y = curY - curPiece.y(i) + 1;
+			if (y >= HEIGHT)
+				return true;
 		}
+		return false;
+	}
+
+	private void shiftRowsUp() {
 		for (int y = HEIGHT - 1; y > 0; y--) {
 			for (int x = 0; x < WIDTH; x++)
 				cells[y * WIDTH + x] = cells[(y - 1) * WIDTH + x];
 		}
+	}
+
+	private void fillBottomGarbageRow(int hole) {
 		for (int x = 0; x < WIDTH; x++)
 			cells[x] = x == hole ? Tetrominoes.NoShape : Tetrominoes.SquareShape;
+	}
+
+	private void liftActivePiece() {
 		if (curPiece.getShape() != Tetrominoes.NoShape)
 			curY++;
-		return true;
 	}
 
 	public void unlockHold() {
@@ -165,9 +187,17 @@ public class GameSession {
 				for (int j = 0; j < WIDTH; ++j)
 					cells[(k * WIDTH) + j] = shapeAt(j, k + 1);
 			}
+			clearCeilingRow();
 		}
 		clearLineClearBlink();
 		return numFullLines;
+	}
+
+	/** 한 줄이 내려간 뒤 천장에 남은 칸을 비운다. 비우지 않으면 같은 블록이 두 줄에 남는다. */
+	private void clearCeilingRow() {
+		int top = (HEIGHT - 1) * WIDTH;
+		for (int j = 0; j < WIDTH; ++j)
+			cells[top + j] = Tetrominoes.NoShape;
 	}
 
 	// 7-Bag에서 꺼내서 스폰
@@ -187,9 +217,7 @@ public class GameSession {
 	}
 
 	public boolean oneLineDown() {
-		if (!tryMove(curPiece, curX, curY - 1))
-			return false;
-		return true;
+		return tryMove(curPiece, curX, curY - 1);
 	}
 
 	public void hardDrop() {

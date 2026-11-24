@@ -2,6 +2,7 @@ package kr.ac.jbnu.se.tetris.network.coop;
 
 
 
+import java.io.IOException;
 import java.util.function.Consumer;
 
 
@@ -34,8 +35,6 @@ import kr.ac.jbnu.se.tetris.persistence.CoopGameMemento;
 
 import kr.ac.jbnu.se.tetris.persistence.MementoMapper;
 
-import kr.ac.jbnu.se.tetris.persistence.SaveService;
-
 import kr.ac.jbnu.se.tetris.persistence.SessionMemento;
 
 
@@ -61,6 +60,8 @@ public final class CoopNetworkBridge {
 	private boolean host;
 
 	private int snapshotTick;
+
+	private boolean sendFailureReported;
 
 
 
@@ -204,89 +205,87 @@ public final class CoopNetworkBridge {
 
 
 	void onPush(LobbyMessage msg) {
-
-		if (msg == null || msg.type == null) {
-
+		LobbyMessageType type = pushType(msg);
+		if (type == null) {
 			return;
-
 		}
-
-		LobbyMessageType type;
-
-		try {
-
-			type = LobbyMessageType.valueOf(msg.type);
-
-		} catch (IllegalArgumentException e) {
-
+		if (isSavePush(type)) {
+			dispatchSavePush(msg, type);
 			return;
-
 		}
-
-		switch (type) {
-
-			case GAME_STARTED:
-
-				SwingUtilities.invokeLater(() -> beginFromStartMessage(msg));
-
-				break;
-
-			case PLAYER_ACTION:
-
-				if ("BLUEPRINT".equals(msg.action)) {
-					String mask = msg.message;
-					SwingUtilities.invokeLater(() -> panel.applyGuestBlueprintMask(mask));
-				} else {
-					SwingUtilities.invokeLater(() -> panel.applyRemoteCoopAction(msg.playerIndex, msg.action));
-				}
-
-				break;
-
-			case COOP_SNAPSHOT_PUSH:
-
-				SwingUtilities.invokeLater(() -> applySnapshotJson(msg.snapshotJson));
-
-				break;
-
-			case GUEST_BOARD_PUSH:
-
-				String boardJson = msg.snapshotJson;
-				String boardMsg = msg.message;
-				SwingUtilities.invokeLater(() -> applyGuestBoard(boardJson, boardMsg));
-
-				break;
-
-			case PEER_DISCONNECTED:
-
-				SwingUtilities.invokeLater(() -> panel.onCoopPeerDisconnected(msg.message));
-
-				break;
-
-			case COOP_SAVE_PUSH:
-
-				SwingUtilities.invokeLater(() -> panel.onHostCoopSavePush(msg.saveSlot, msg.snapshotJson));
-
-				break;
-
-			case COOP_SAVE_OPEN_PUSH:
-
-				SwingUtilities.invokeLater(() -> panel.onHostCoopSaveSessionOpen());
-
-				break;
-
-			case COOP_SAVE_CANCEL_PUSH:
-
-				SwingUtilities.invokeLater(() -> panel.onHostCoopSaveSessionCancelled());
-
-				break;
-
-			default:
-
-				break;
-
-		}
-
+		dispatchPlayPush(msg, type);
 	}
+
+	private static LobbyMessageType pushType(LobbyMessage msg) {
+		if (msg == null || msg.type == null) {
+			return null;
+		}
+		try {
+			return LobbyMessageType.valueOf(msg.type);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
+	}
+
+	private static boolean isSavePush(LobbyMessageType type) {
+		return type == LobbyMessageType.COOP_SAVE_PUSH
+				|| type == LobbyMessageType.COOP_SAVE_OPEN_PUSH
+				|| type == LobbyMessageType.COOP_SAVE_CANCEL_PUSH;
+	}
+
+	private void dispatchPlayPush(LobbyMessage msg, LobbyMessageType type) {
+		switch (type) {
+			case GAME_STARTED:
+				SwingUtilities.invokeLater(() -> beginFromStartMessage(msg));
+				break;
+			case PLAYER_ACTION:
+				dispatchPlayerAction(msg);
+				break;
+			case COOP_SNAPSHOT_PUSH:
+				SwingUtilities.invokeLater(() -> applySnapshotJson(msg.snapshotJson));
+				break;
+			case GUEST_BOARD_PUSH:
+				dispatchGuestBoard(msg);
+				break;
+			case PEER_DISCONNECTED:
+				SwingUtilities.invokeLater(() -> panel.onCoopPeerDisconnected(msg.message));
+				break;
+			default:
+				break;
+		}
+	}
+
+	private void dispatchPlayerAction(LobbyMessage msg) {
+		if ("BLUEPRINT".equals(msg.action)) {
+			String mask = msg.message;
+			SwingUtilities.invokeLater(() -> panel.applyGuestBlueprintMask(mask));
+			return;
+		}
+		SwingUtilities.invokeLater(() -> panel.applyRemoteCoopAction(msg.playerIndex, msg.action));
+	}
+
+	private void dispatchGuestBoard(LobbyMessage msg) {
+		String boardJson = msg.snapshotJson;
+		String boardMsg = msg.message;
+		SwingUtilities.invokeLater(() -> applyGuestBoard(boardJson, boardMsg));
+	}
+
+	private void dispatchSavePush(LobbyMessage msg, LobbyMessageType type) {
+		switch (type) {
+			case COOP_SAVE_PUSH:
+				SwingUtilities.invokeLater(() -> panel.onHostCoopSavePush(msg.saveSlot, msg.snapshotJson));
+				break;
+			case COOP_SAVE_OPEN_PUSH:
+				SwingUtilities.invokeLater(() -> panel.onHostCoopSaveSessionOpen());
+				break;
+			case COOP_SAVE_CANCEL_PUSH:
+				SwingUtilities.invokeLater(() -> panel.onHostCoopSaveSessionCancelled());
+				break;
+			default:
+				break;
+		}
+	}
+
 
 
 
@@ -300,7 +299,8 @@ public final class CoopNetworkBridge {
 			req.action = "BLUEPRINT";
 			req.message = Long.toHexString(mask);
 			client.sendPlayerAction(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -322,8 +322,8 @@ public final class CoopNetworkBridge {
 
 			client.sendPlayerAction(req);
 
-		} catch (Exception ignored) {
-
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 
 	}
@@ -331,49 +331,42 @@ public final class CoopNetworkBridge {
 
 
 	public void maybeSendSnapshot() {
-
-		if (!isActive() || !host) {
-
+		if (!canPushHostSnapshot()) {
 			return;
-
 		}
-
-		// 일시정지 중에도 참가자 화면·오버레이 동기화용 스냅샷 전송
-		if (panel.getScreen() != ScreenId.GAME && panel.getScreen() != ScreenId.PAUSE) {
-
-			return;
-
-		}
-
 		snapshotTick++;
-
 		try {
-
-			if (panel.useCoopEngineHost() && panel.coopEngineBridge != null) {
-
-				panel.coopEngineBridge.syncBoardsToPanel();
-
-			}
-
-			CoopGameMemento mem = panel.useCoopEngineHost() && panel.coopEngineBridge != null
-
-					? panel.coopEngineBridge.createMemento(coopId)
-
-					: panel.buildCoopMementoFromPanel();
-
+			syncHostBoardsBeforeSnapshot();
 			LobbyMessage req = LobbyMessage.of(LobbyMessageType.COOP_SNAPSHOT);
-
 			req.coopId = coopId;
-
-			req.snapshotJson = GSON.toJson(mem);
-
+			req.snapshotJson = GSON.toJson(currentCoopMemento());
 			client.sendCoopSnapshot(req);
-
-		} catch (Exception ignored) {
-
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
-
 	}
+
+	private boolean canPushHostSnapshot() {
+		if (!isActive() || !host) {
+			return false;
+		}
+		ScreenId screen = panel.getScreen();
+		return screen == ScreenId.GAME || screen == ScreenId.PAUSE;
+	}
+
+	private void syncHostBoardsBeforeSnapshot() {
+		if (panel.useCoopEngineHost() && panel.coopEngineBridge != null) {
+			panel.coopEngineBridge.syncBoardsToPanel();
+		}
+	}
+
+	private CoopGameMemento currentCoopMemento() {
+		if (panel.useCoopEngineHost() && panel.coopEngineBridge != null) {
+			return panel.coopEngineBridge.createMemento(coopId);
+		}
+		return panel.buildCoopMementoFromPanel();
+	}
+
 
 	/** 참가자: 내 보드 배열이랑 떨어지는 블록을 방장에게 보낸다. */
 	public void maybeSendMyBoard() {
@@ -387,13 +380,10 @@ public final class CoopNetworkBridge {
 		if (!isActive()) {
 			return;
 		}
-		try {
-			if (host) {
-				pushEliminationSnapshot();
-			} else if (eliminatedPlayerIndex == localPlayerIndex) {
-				sendMyBoard(true);
-			}
-		} catch (Exception ignored) {
+		if (host) {
+			pushEliminationSnapshot();
+		} else if (eliminatedPlayerIndex == localPlayerIndex) {
+			sendMyBoard(true);
 		}
 	}
 
@@ -401,13 +391,10 @@ public final class CoopNetworkBridge {
 		if (!isActive()) {
 			return;
 		}
-		try {
-			if (host) {
-				pushEliminationSnapshot();
-			} else {
-				sendMyBoard(true);
-			}
-		} catch (Exception ignored) {
+		if (host) {
+			pushEliminationSnapshot();
+		} else {
+			sendMyBoard(true);
 		}
 	}
 
@@ -427,7 +414,8 @@ public final class CoopNetworkBridge {
 			req.coopId = coopId;
 			req.snapshotJson = GSON.toJson(mem);
 			client.sendCoopSnapshot(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -446,7 +434,8 @@ public final class CoopNetworkBridge {
 			req.snapshotJson = GSON.toJson(board);
 			req.message = gameOver ? "GAMEOVER" : "";
 			client.sendCoopSnapshot(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -472,7 +461,8 @@ public final class CoopNetworkBridge {
 		}
 		try {
 			client.sendCoopSnapshot(LobbyMessage.of(LobbyMessageType.COOP_SAVE_OPEN));
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -482,7 +472,8 @@ public final class CoopNetworkBridge {
 		}
 		try {
 			client.sendCoopSnapshot(LobbyMessage.of(LobbyMessageType.COOP_SAVE_CANCEL));
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
@@ -495,11 +486,12 @@ public final class CoopNetworkBridge {
 			req.coopId = coopId != null ? coopId : mem.coopId;
 			req.snapshotJson = GSON.toJson(mem);
 			client.sendCoopSnapshot(req);
-		} catch (Exception ignored) {
+		} catch (IOException ex) {
+			reportSendFailure(ex);
 		}
 	}
 
-	public void notifySaved(int slot, CoopGameMemento mem) throws Exception {
+	public void notifySaved(int slot, CoopGameMemento mem) throws IOException {
 
 		if (!isActive() || !host) {
 
@@ -549,6 +541,18 @@ public final class CoopNetworkBridge {
 	}
 
 
+
+	private void reportSendFailure(IOException ex) {
+		if (sendFailureReported || !isActive()) {
+			return;
+		}
+		sendFailureReported = true;
+		String detail = ex.getMessage();
+		String text = detail == null || detail.isBlank()
+				? "서버와 연결이 끊어졌어요."
+				: "서버와 연결이 끊어졌어요. " + detail;
+		SwingUtilities.invokeLater(() -> panel.onCoopPeerDisconnected(text));
+	}
 
 	public static Consumer<LobbyMessage> noop() {
 
