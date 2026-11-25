@@ -158,14 +158,17 @@ public final class Blueprint {
             for (int[] direction : directions) {
                 int row = cell[0] + direction[0];
                 int column = cell[1] + direction[1];
-                if (row >= 0 && row < ROWS && column >= 0 && column < COLUMNS
-                        && target[row][column] && !visited[row][column]) {
+                if (isInBounds(row, column) && target[row][column] && !visited[row][column]) {
                     visited[row][column] = true;
                     pending.addLast(new int[]{row, column});
                 }
             }
         }
         return connectedCount;
+    }
+
+    private static boolean isInBounds(int row, int column) {
+        return row >= 0 && row < ROWS && column >= 0 && column < COLUMNS;
     }
 
     private static int countTargetCells(boolean[][] target) {
