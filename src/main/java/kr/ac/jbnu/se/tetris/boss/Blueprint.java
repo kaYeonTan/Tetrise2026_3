@@ -126,17 +126,25 @@ public final class Blueprint {
     }
 
     private static void validateTargetShape(boolean[][] target) {
-        int startColumn = -1;
+        int startColumn = requireBottomTargetColumn(target);
+        int connectedCount = countConnectedTargets(target, startColumn);
+        int targetCount = countTargetCells(target);
+
+        if (connectedCount != targetCount) {
+            throw new IllegalArgumentException("All blueprint target cells must be connected");
+        }
+    }
+
+    private static int requireBottomTargetColumn(boolean[][] target) {
         for (int column = 0; column < COLUMNS; column++) {
             if (target[ROWS - 1][column]) {
-                startColumn = column;
-                break;
+                return column;
             }
         }
-        if (startColumn < 0) {
-            throw new IllegalArgumentException("Blueprint bottom row needs at least one target cell");
-        }
+        throw new IllegalArgumentException("Blueprint bottom row needs at least one target cell");
+    }
 
+    private static int countConnectedTargets(boolean[][] target, int startColumn) {
         boolean[][] visited = new boolean[ROWS][COLUMNS];
         ArrayDeque<int[]> pending = new ArrayDeque<>();
         pending.add(new int[]{ROWS - 1, startColumn});
@@ -157,7 +165,10 @@ public final class Blueprint {
                 }
             }
         }
+        return connectedCount;
+    }
 
+    private static int countTargetCells(boolean[][] target) {
         int targetCount = 0;
         for (boolean[] row : target) {
             for (boolean cell : row) {
@@ -166,9 +177,7 @@ public final class Blueprint {
                 }
             }
         }
-        if (connectedCount != targetCount) {
-            throw new IllegalArgumentException("All blueprint target cells must be connected");
-        }
+        return targetCount;
     }
 
     public boolean isTarget(int row, int column) {
