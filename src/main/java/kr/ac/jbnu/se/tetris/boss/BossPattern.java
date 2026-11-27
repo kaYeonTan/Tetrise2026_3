@@ -15,7 +15,7 @@ public interface BossPattern {
         return Optional.empty();
     }
 
-    default void attack() { };
+    default void attack() { }
 
     default void onBoardChanged() {
     }
