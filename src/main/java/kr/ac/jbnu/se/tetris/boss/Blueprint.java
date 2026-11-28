@@ -19,7 +19,7 @@ public final class Blueprint {
                     "E---TTT--E",
                     "--ETTTT-E-",
                     "-ETTTTT--E",
-                    "E-TTTTTT--",
+                    "EETTTTTT--",
                     "-TTTTTT-E-",
                     "TTTETTT-E-"
             },
@@ -43,17 +43,17 @@ public final class Blueprint {
                     "E-TTTT---E",
                     "E-TTTTT-E-",
                     "-ETTTTTT-E",
-                    "E-TTTTTT--",
-                    "-TTTTTT-E-",
+                    "E-TTTTTT-E",
+                    "-TTT-TT-E-",
                     "TTTTETTT-E"
             },
             {
                     "E-TTT----E",
                     "-ETTTT---E",
                     "E-TTTTT-E-",
-                    "-TTTTTT-E-",
+                    "TTT-TTT-E-",
                     "E-TTTTTT--",
-                    "TTTETTT-E-"
+                    "ETTETTT-E-"
             }
     };
 
