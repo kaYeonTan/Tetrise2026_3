@@ -920,31 +920,20 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
         if (row < 0 || row >= Blueprint.ROWS || column < 0 || column >= Blueprint.COLUMNS) {
             return false;
         }
+        int engineY = Blueprint.ROWS - 1 - row;
         if (useCoopEngineHost()) {
-            GameSession hostSession = coopEngineBridge.session(0);
-            int engineY = Blueprint.ROWS - 1 - row;
-            if (hostSession != null && hostSession.shapeAt(column, engineY) != Tetrominoes.NoShape) {
+            if (isSessionCellOccupied(coopEngineBridge.session(0), column, engineY)) {
                 return true;
             }
             int bit = row * Blueprint.COLUMNS + column;
             return ((onlineGuestBlueprint >>> bit) & 1L) != 0;
         }
         if (useCoopEngineRender()) {
-            boolean occupied = false;
-            for (int player = 0; player < 2; player++) {
-                GameSession session = coopEngineBridge.session(player);
-                int engineY = Blueprint.ROWS - 1 - row;
-                if (session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape) {
-                    occupied = true;
-                    break;
-                }
-            }
-            return occupied;
+            return isSessionCellOccupied(coopEngineBridge.session(0), column, engineY)
+                    || isSessionCellOccupied(coopEngineBridge.session(1), column, engineY);
         }
         if (useAEngine()) {
-            GameSession session = aEngineBridge.session();
-            int engineY = Blueprint.ROWS - 1 - row;
-            return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
+            return isSessionCellOccupied(aEngineBridge.session(), column, engineY);
         }
         int boardRow = 18 + row;
         boolean occupied = board1[boardRow][column] != 0;
@@ -952,6 +941,10 @@ public class GamePanel extends JPanel implements ActionListener, BossPatternTarg
             occupied |= board2[boardRow][column] != 0;
         }
         return occupied;
+    }
+
+    private boolean isSessionCellOccupied(GameSession session, int column, int engineY) {
+        return session != null && session.shapeAt(column, engineY) != Tetrominoes.NoShape;
     }
 
     @Override
