@@ -44,7 +44,7 @@ class LobbyConcurrentDisconnectTest {
 	@Test
 	void bothClientsDisconnectAtOnce() throws Exception {
 		ExecutorService exec = Executors.newFixedThreadPool(2);
-		try {
+		try (AutoCloseable cleanup = exec::shutdownNow) {
 			for (int round = 0; round < 100; round++) {
 				LobbyClient host = new LobbyClient();
 				LobbyClient guest = new LobbyClient();
@@ -69,8 +69,6 @@ class LobbyConcurrentDisconnectTest {
 			assertEquals(0, server.getRegistry().roomCount(), "빈 방은 모두 삭제되어야 한다");
 			Thread.sleep(200);
 			assertTrue(workerErrors.isEmpty(), "worker 스레드 예외: " + workerErrors);
-		} finally {
-			exec.shutdownNow();
 		}
 	}
 

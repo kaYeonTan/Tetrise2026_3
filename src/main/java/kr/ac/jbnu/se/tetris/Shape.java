@@ -6,6 +6,8 @@ import kr.ac.jbnu.se.tetris.piece.RotationState;
 
 public class Shape {
 
+	private static final Random RANDOM = new Random();
+
 	private Tetrominoes pieceShape;
 	private int coords[][];
 	private int blockCount;
@@ -102,8 +104,7 @@ public class Shape {
 	}
 
 	public void setRandomShape() {
-		Random r = new Random();
-		int x = Math.abs(r.nextInt()) % 7 + 1;
+		int x = RANDOM.nextInt(7) + 1;
 		Tetrominoes[] values = Tetrominoes.values();
 		setShape(values[x]);
 	}
