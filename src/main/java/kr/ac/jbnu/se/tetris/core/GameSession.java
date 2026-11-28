@@ -49,26 +49,48 @@ public class GameSession {
 	}
 
 	public boolean raiseGarbageLine(int hole) {
+		if (topRowOccupied() || activePieceWouldLeaveBoard())
+			return false;
+		shiftRowsUp();
+		fillBottomGarbageRow(hole);
+		liftActivePiece();
+		return true;
+	}
+
+	private boolean topRowOccupied() {
 		for (int x = 0; x < WIDTH; x++) {
 			if (shapeAt(x, HEIGHT - 1) != Tetrominoes.NoShape)
-				return false;
+				return true;
 		}
-		if (curPiece.getShape() != Tetrominoes.NoShape) {
-			for (int i = 0; i < curPiece.blockCount(); i++) {
-				int y = curY - curPiece.y(i) + 1;
-				if (y >= HEIGHT)
-					return false;
-			}
+		return false;
+	}
+
+	private boolean activePieceWouldLeaveBoard() {
+		if (curPiece.getShape() == Tetrominoes.NoShape)
+			return false;
+		for (int i = 0; i < curPiece.blockCount(); i++) {
+			int y = curY - curPiece.y(i) + 1;
+			if (y >= HEIGHT)
+				return true;
 		}
+		return false;
+	}
+
+	private void shiftRowsUp() {
 		for (int y = HEIGHT - 1; y > 0; y--) {
 			for (int x = 0; x < WIDTH; x++)
 				cells[y * WIDTH + x] = cells[(y - 1) * WIDTH + x];
 		}
+	}
+
+	private void fillBottomGarbageRow(int hole) {
 		for (int x = 0; x < WIDTH; x++)
 			cells[x] = x == hole ? Tetrominoes.NoShape : Tetrominoes.SquareShape;
+	}
+
+	private void liftActivePiece() {
 		if (curPiece.getShape() != Tetrominoes.NoShape)
 			curY++;
-		return true;
 	}
 
 	public void unlockHold() {

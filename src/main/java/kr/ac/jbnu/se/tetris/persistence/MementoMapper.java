@@ -48,33 +48,55 @@ public final class MementoMapper {
 		}
 		s.score = m.score;
 		s.linesRemoved = m.linesRemoved;
-		for (int y = 0; y < GameSession.HEIGHT; y++) {
-			for (int x = 0; x < GameSession.WIDTH; x++) {
-				String name = m.cells[y * GameSession.WIDTH + x];
-				s.cells[y * GameSession.WIDTH + x] = Tetrominoes.valueOf(name);
-			}
-		}
-		s.curPiece.setShape(Tetrominoes.valueOf(m.activeShape));
-		if (m.activeRotation != null && !m.activeRotation.isBlank()) {
-			try {
-				s.curPiece.setRotationState(RotationState.valueOf(m.activeRotation));
-			} catch (IllegalArgumentException ignored) {
-				// legacy snapshot without valid rotation
-			}
-		}
-		if (m.activeCoords != null && m.activeCoords.length >= 2) {
-			int blocks = m.activeCoords.length / 2;
-			int[][] layout = new int[blocks][2];
-			for (int i = 0; i < blocks; i++) {
-				layout[i][0] = m.activeCoords[i * 2];
-				layout[i][1] = m.activeCoords[i * 2 + 1];
-			}
-			s.curPiece.applyLocalCoords(layout);
-		}
+		restoreCells(s, m);
+		restoreActivePiece(s, m);
 		s.curX = m.curX;
 		s.curY = m.curY;
 		s.hold.setStored(Tetrominoes.valueOf(m.holdShape));
 		s.holdLocked = m.holdLocked;
+		restoreRandomizer(s, m);
+	}
+
+	private static void restoreCells(GameSession s, SessionMemento m) {
+		for (int y = 0; y < GameSession.HEIGHT; y++) {
+			for (int x = 0; x < GameSession.WIDTH; x++) {
+				int index = y * GameSession.WIDTH + x;
+				s.cells[index] = Tetrominoes.valueOf(m.cells[index]);
+			}
+		}
+	}
+
+	private static void restoreActivePiece(GameSession s, SessionMemento m) {
+		s.curPiece.setShape(Tetrominoes.valueOf(m.activeShape));
+		restoreRotation(s, m);
+		restoreActiveCoords(s, m);
+	}
+
+	private static void restoreRotation(GameSession s, SessionMemento m) {
+		if (m.activeRotation == null || m.activeRotation.isBlank()) {
+			return;
+		}
+		try {
+			s.curPiece.setRotationState(RotationState.valueOf(m.activeRotation));
+		} catch (IllegalArgumentException ignored) {
+			// legacy snapshot without valid rotation
+		}
+	}
+
+	private static void restoreActiveCoords(GameSession s, SessionMemento m) {
+		if (m.activeCoords == null || m.activeCoords.length < 2) {
+			return;
+		}
+		int blocks = m.activeCoords.length / 2;
+		int[][] layout = new int[blocks][2];
+		for (int i = 0; i < blocks; i++) {
+			layout[i][0] = m.activeCoords[i * 2];
+			layout[i][1] = m.activeCoords[i * 2 + 1];
+		}
+		s.curPiece.applyLocalCoords(layout);
+	}
+
+	private static void restoreRandomizer(GameSession s, SessionMemento m) {
 		if (m.randomizer != null && s.randomizer != null) {
 			s.randomizer.restoreState(m.randomizer);
 		}

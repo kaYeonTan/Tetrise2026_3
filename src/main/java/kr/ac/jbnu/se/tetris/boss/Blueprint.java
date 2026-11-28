@@ -19,7 +19,7 @@ public final class Blueprint {
                     "E---TTT--E",
                     "--ETTTT-E-",
                     "-ETTTTT--E",
-                    "E-TTTTTT--",
+                    "EETTTTTT--",
                     "-TTTTTT-E-",
                     "TTTETTT-E-"
             },
@@ -43,17 +43,17 @@ public final class Blueprint {
                     "E-TTTT---E",
                     "E-TTTTT-E-",
                     "-ETTTTTT-E",
-                    "E-TTTTTT--",
-                    "-TTTTTT-E-",
+                    "E-TTTTTT-E",
+                    "-TTT-TT-E-",
                     "TTTTETTT-E"
             },
             {
                     "E-TTT----E",
                     "-ETTTT---E",
                     "E-TTTTT-E-",
-                    "-TTTTTT-E-",
+                    "TTT-TTT-E-",
                     "E-TTTTTT--",
-                    "TTTETTT-E-"
+                    "ETTETTT-E-"
             }
     };
 
@@ -126,17 +126,25 @@ public final class Blueprint {
     }
 
     private static void validateTargetShape(boolean[][] target) {
-        int startColumn = -1;
+        int startColumn = requireBottomTargetColumn(target);
+        int connectedCount = countConnectedTargets(target, startColumn);
+        int targetCount = countTargetCells(target);
+
+        if (connectedCount != targetCount) {
+            throw new IllegalArgumentException("All blueprint target cells must be connected");
+        }
+    }
+
+    private static int requireBottomTargetColumn(boolean[][] target) {
         for (int column = 0; column < COLUMNS; column++) {
             if (target[ROWS - 1][column]) {
-                startColumn = column;
-                break;
+                return column;
             }
         }
-        if (startColumn < 0) {
-            throw new IllegalArgumentException("Blueprint bottom row needs at least one target cell");
-        }
+        throw new IllegalArgumentException("Blueprint bottom row needs at least one target cell");
+    }
 
+    private static int countConnectedTargets(boolean[][] target, int startColumn) {
         boolean[][] visited = new boolean[ROWS][COLUMNS];
         ArrayDeque<int[]> pending = new ArrayDeque<>();
         pending.add(new int[]{ROWS - 1, startColumn});
@@ -150,14 +158,20 @@ public final class Blueprint {
             for (int[] direction : directions) {
                 int row = cell[0] + direction[0];
                 int column = cell[1] + direction[1];
-                if (row >= 0 && row < ROWS && column >= 0 && column < COLUMNS
-                        && target[row][column] && !visited[row][column]) {
+                if (isInBounds(row, column) && target[row][column] && !visited[row][column]) {
                     visited[row][column] = true;
                     pending.addLast(new int[]{row, column});
                 }
             }
         }
+        return connectedCount;
+    }
 
+    private static boolean isInBounds(int row, int column) {
+        return row >= 0 && row < ROWS && column >= 0 && column < COLUMNS;
+    }
+
+    private static int countTargetCells(boolean[][] target) {
         int targetCount = 0;
         for (boolean[] row : target) {
             for (boolean cell : row) {
@@ -166,9 +180,7 @@ public final class Blueprint {
                 }
             }
         }
-        if (connectedCount != targetCount) {
-            throw new IllegalArgumentException("All blueprint target cells must be connected");
-        }
+        return targetCount;
     }
 
     public boolean isTarget(int row, int column) {
@@ -180,30 +192,27 @@ public final class Blueprint {
     }
 
     public double fillRatio(Occupancy occupancy) {
-        int filled = 0;
-        for (int row = 0; row < ROWS; row++) {
-            for (int column = 0; column < COLUMNS; column++) {
-                if (target[row][column] && occupancy.occupied(row, column)) {
-                    filled++;
-                }
-            }
-        }
+        int filled = countOccupiedCells(target, occupancy);
         return targetCount == 0 ? 0.0 : (double) filled / targetCount;
     }
 
     public int violationCount(Occupancy occupancy) {
-        int violations = 0;
-        for (int row = 0; row < ROWS; row++) {
-            for (int column = 0; column < COLUMNS; column++) {
-                if (mustBeEmpty[row][column] && occupancy.occupied(row, column)) {
-                    violations++;
-                }
-            }
-        }
-        return violations;
+        return countOccupiedCells(mustBeEmpty, occupancy);
     }
 
     public boolean isSatisfied(Occupancy occupancy) {
         return fillRatio(occupancy) >= 1.0 && violationCount(occupancy) == 0;
+    }
+
+    private static int countOccupiedCells(boolean[][] mask, Occupancy occupancy) {
+        int count = 0;
+        for (int row = 0; row < ROWS; row++) {
+            for (int column = 0; column < COLUMNS; column++) {
+                if (mask[row][column] && occupancy.occupied(row, column)) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 }
