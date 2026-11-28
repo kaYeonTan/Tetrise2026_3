@@ -249,6 +249,7 @@ class BossPatternControllerTest {
 
         @Override
         public void showBossMessage(String message) {
+            //보스 패턴 동작 확인용 메서드
         }
 
         @Override
