@@ -2,7 +2,6 @@ package kr.ac.jbnu.se.tetris.audio;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URL;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -35,7 +34,6 @@ public final class SoundManager implements AutoCloseable {
     private BgmType currentBgm;
     private int pausedFrame;
     private boolean paused;
-    private volatile boolean muted;
     private boolean preloaded;
 
     public SoundManager() {
@@ -69,7 +67,7 @@ public final class SoundManager implements AutoCloseable {
             pausedFrame = 0;
         }
         paused = false;
-        if (muted || (bgmClip != null && bgmClip.isRunning())) {
+        if (bgmClip != null && bgmClip.isRunning()) {
             return;
         }
         startCurrentBgm();
@@ -93,10 +91,8 @@ public final class SoundManager implements AutoCloseable {
             return;
         }
         paused = false;
-        if (!muted) {
-            startCurrentBgm();
-            resumeManagedEffects();
-        }
+        startCurrentBgm();
+        resumeManagedEffects();
     }
 
     public synchronized void stopBgm() {
@@ -107,7 +103,7 @@ public final class SoundManager implements AutoCloseable {
     }
 
     public void playSfx(SfxType type) {
-        if (type == null || muted) {
+        if (type == null) {
             return;
         }
         AudioData data = sfxData.get(type);
@@ -135,9 +131,6 @@ public final class SoundManager implements AutoCloseable {
             return;
         }
         stopManagedSfx(type);
-        if (muted) {
-            return;
-        }
         AudioData data = sfxData.get(type);
         if (data == null) {
             return;
@@ -157,31 +150,6 @@ public final class SoundManager implements AutoCloseable {
             clip.stop();
             clip.close();
         }
-    }
-
-    public synchronized void setMuted(boolean muted) {
-        if (this.muted == muted) {
-            return;
-        }
-        this.muted = muted;
-        if (muted) {
-            if (bgmClip != null && bgmClip.isOpen()) {
-                pausedFrame = bgmClip.getFramePosition();
-                bgmClip.stop();
-            }
-            for (Clip clip : managedEffects.values()) {
-                if (clip.isRunning()) {
-                    clip.stop();
-                }
-            }
-        } else if (!paused) {
-            startCurrentBgm();
-            resumeManagedEffects();
-        }
-    }
-
-    public synchronized boolean isMuted() {
-        return muted;
     }
 
     private void startCurrentBgm() {
@@ -253,12 +221,6 @@ public final class SoundManager implements AutoCloseable {
             System.err.println("Sound file not found: " + path);
             return;
         }
-        try {
-            rejectMisnamedMp4(resource, path);
-        } catch (IOException e) {
-            logFailure(path, e);
-            return;
-        }
         try (AudioInputStream source = AudioSystem.getAudioInputStream(resource)) {
             AudioFormat base = source.getFormat();
             int channels = base.getChannels();
@@ -275,16 +237,6 @@ public final class SoundManager implements AutoCloseable {
             }
         } catch (UnsupportedAudioFileException | IOException | IllegalArgumentException e) {
             logFailure(path, e);
-        }
-    }
-
-    private static void rejectMisnamedMp4(URL resource, String path) throws IOException {
-        try (InputStream in = resource.openStream()) {
-            byte[] header = in.readNBytes(12);
-            if (header.length >= 8
-                    && header[4] == 'f' && header[5] == 't' && header[6] == 'y' && header[7] == 'p') {
-                throw new IOException(path + " is MP4/AAC (ftyp), not MP3 — re-encode as MP3 or use .m4a + decoder");
-            }
         }
     }
 
