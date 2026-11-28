@@ -15,7 +15,7 @@ public interface BossPattern {
         return Optional.empty();
     }
 
-    void attack();
+    default void attack() { }
 
     default void onBoardChanged() {
     }
@@ -36,3 +36,4 @@ public interface BossPattern {
         return null;
     }
 }
+

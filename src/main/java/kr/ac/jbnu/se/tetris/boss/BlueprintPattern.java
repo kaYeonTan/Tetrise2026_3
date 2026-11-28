@@ -27,10 +27,6 @@ public final class BlueprintPattern implements BossPattern {
     }
 
     @Override
-    public void attack() {
-    }
-
-    @Override
     public void onBoardChanged() {
         if (!completed && blueprint.isSatisfied(target::isBlueprintCellOccupied)) {
             completed = true;
