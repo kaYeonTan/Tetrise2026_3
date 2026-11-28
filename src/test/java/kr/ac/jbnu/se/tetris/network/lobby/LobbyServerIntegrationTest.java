@@ -93,7 +93,7 @@ class LobbyServerIntegrationTest {
 	@Test
 	void roomCapOnServer() throws Exception {
 		List<LobbyClient> hosts = new ArrayList<>();
-		try {
+		try (AutoCloseable cleanup = () -> hosts.forEach(LobbyClient::close)) {
 			for (int i = 0; i < LobbyConfig.MAX_ROOMS; i++) {
 				LobbyClient c = new LobbyClient();
 				hosts.add(c);
@@ -106,10 +106,6 @@ class LobbyServerIntegrationTest {
 				LobbyMessage m = extra.createRoom("no", RoomVisibility.PUBLIC);
 				assertEquals(LobbyMessageType.ERROR.name(), m.type);
 				assertEquals("ROOM_CAP", m.code);
-			}
-		} finally {
-			for (LobbyClient host : hosts) {
-				host.close();
 			}
 		}
 	}

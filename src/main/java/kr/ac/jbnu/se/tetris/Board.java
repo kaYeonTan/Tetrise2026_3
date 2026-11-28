@@ -295,60 +295,11 @@ public class Board extends JPanel implements ActionListener {
 
 
 		boolean gray = engine.isGameOver();
-		boolean blinkOn = engine.isLineClearAnim() && engine.isBlinkPhaseOn();
 
-		for (int i = 0; i < BoardHeight; ++i) {
-
-			int boardY = BoardHeight - i - 1;
-			boolean blinkRow = engine.isLineClearAnim() && s.lineClearBlinkRows[boardY];
-
-			for (int j = 0; j < BoardWidth; ++j) {
-
-				Tetrominoes shape = s.shapeAt(j, boardY);
-
-				if (shape != Tetrominoes.NoShape) {
-					if (blinkRow && blinkOn) {
-						g.setColor(Color.WHITE);
-						int x = 0 + j * squareWidth();
-						int y = boardTop + i * squareHeight();
-						g.fillRect(x + 1, y + 1, squareWidth() - 2, squareHeight() - 2);
-					} else {
-						drawSquare(g, 0 + j * squareWidth(), boardTop + i * squareHeight(), shape, gray);
-					}
-				}
-
-			}
-
-		}
-
-
+		drawLockedBlocks(g, s, boardTop, gray);
 
 		if (s.curPiece.getShape() != Tetrominoes.NoShape) {
-
-			int ghostY = s.ghostLandingY();
-
-			// 착지 위치 미리보기 (현재랑 같으면 생략)
-			int n = s.curPiece.blockCount();
-			if (ghostY != s.curY) {
-				for (int i = 0; i < n; ++i) {
-					int x = s.curX + s.curPiece.x(i);
-					int y = ghostY - s.curPiece.y(i);
-					drawGhostSquare(g, 0 + x * squareWidth(), boardTop + (BoardHeight - y - 1) * squareHeight(),
-							s.curPiece.getShape());
-				}
-			}
-
-			for (int i = 0; i < n; ++i) {
-
-				int x = s.curX + s.curPiece.x(i);
-
-				int y = s.curY - s.curPiece.y(i);
-
-				drawSquare(g, 0 + x * squareWidth(), boardTop + (BoardHeight - y - 1) * squareHeight(),
-						s.curPiece.getShape(), gray);
-
-			}
-
+			drawCurrentPiece(g, s, boardTop, gray);
 		}
 
 		if (gray) {
@@ -356,6 +307,52 @@ public class Board extends JPanel implements ActionListener {
 			g.drawString("GAME OVER", 24, boardTop + 40);
 		}
 
+	}
+
+	private void drawLockedBlocks(Graphics g, GameSession s, int boardTop, boolean gray) {
+		boolean blinkOn = engine.isLineClearAnim() && engine.isBlinkPhaseOn();
+
+		for (int i = 0; i < BoardHeight; ++i) {
+			int boardY = BoardHeight - i - 1;
+			boolean blinkRow = engine.isLineClearAnim() && s.lineClearBlinkRows[boardY];
+
+			for (int j = 0; j < BoardWidth; ++j) {
+				Tetrominoes shape = s.shapeAt(j, boardY);
+				if (shape == Tetrominoes.NoShape) {
+					continue;
+				}
+				int x = j * squareWidth();
+				int y = boardTop + i * squareHeight();
+				if (blinkRow && blinkOn) {
+					g.setColor(Color.WHITE);
+					g.fillRect(x + 1, y + 1, squareWidth() - 2, squareHeight() - 2);
+				} else {
+					drawSquare(g, x, y, shape, gray);
+				}
+			}
+		}
+	}
+
+	private void drawCurrentPiece(Graphics g, GameSession s, int boardTop, boolean gray) {
+		int ghostY = s.ghostLandingY();
+
+		// 착지 위치 미리보기 (현재랑 같으면 생략)
+		int n = s.curPiece.blockCount();
+		if (ghostY != s.curY) {
+			for (int i = 0; i < n; ++i) {
+				int x = s.curX + s.curPiece.x(i);
+				int y = ghostY - s.curPiece.y(i);
+				drawGhostSquare(g, x * squareWidth(), boardTop + (BoardHeight - y - 1) * squareHeight(),
+						s.curPiece.getShape());
+			}
+		}
+
+		for (int i = 0; i < n; ++i) {
+			int x = s.curX + s.curPiece.x(i);
+			int y = s.curY - s.curPiece.y(i);
+			drawSquare(g, x * squareWidth(), boardTop + (BoardHeight - y - 1) * squareHeight(),
+					s.curPiece.getShape(), gray);
+		}
 	}
 
 
@@ -486,6 +483,9 @@ public class Board extends JPanel implements ActionListener {
 			case '5':
 				// 테스트용 스테이지 (펜토는 3+)
 				engine.setStage(keycode - '0');
+				break;
+
+			default:
 				break;
 
 			}
